@@ -1,0 +1,11 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/ail-graph",
+    "crates/ail-types",
+    "crates/ail-contract",
+    "crates/ail-text",
+    "crates/ail-compiler",
+    "crates/ail-vm",
+    "crates/ail-cli",
+]
