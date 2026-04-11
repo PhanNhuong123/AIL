@@ -130,6 +130,18 @@ impl AilGraph {
         self.inner.edge_count()
     }
 
+    // ─── Iteration ─────────────────────────────────────────────────────────
+
+    /// Returns an iterator over all [`NodeId`]s currently in the graph.
+    pub fn node_ids(&self) -> impl Iterator<Item = NodeId> + '_ {
+        self.node_index_map.keys().copied()
+    }
+
+    /// Returns an iterator over shared references to all nodes currently in the graph.
+    pub fn all_nodes(&self) -> impl Iterator<Item = &Node> + '_ {
+        self.inner.node_weights()
+    }
+
     // ─── Search ────────────────────────────────────────────────────────────
 
     /// Build a BM25 search index over all nodes in this graph.

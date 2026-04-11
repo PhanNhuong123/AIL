@@ -1,19 +1,22 @@
 pub mod cic;
+pub mod constants;
 pub mod errors;
 pub mod graph;
 pub mod index;
 pub mod search;
 pub mod types;
+pub mod validation;
 
 pub use cic::{ContextPacket, PacketConstraint, ScopeVariable, ScopeVariableKind};
-pub use errors::GraphError;
+pub use errors::{GraphError, ValidationError};
 pub use graph::{AilGraph, AilGraphBuilder};
 pub use index::{
-    generate_folder_index_for_node, render_folder_index, ContractSummary, FolderIndex,
-    IndexEntry, IndexKind, NameResolver,
+    generate_folder_index_for_node, render_folder_index, ContractSummary, FolderIndex, IndexEntry,
+    IndexKind, NameResolver,
 };
 pub use search::{Bm25Index, SearchResult};
 pub use types::{
     Contract, ContractKind, EdgeId, EdgeKind, Expression, Field, Node, NodeId, NodeMetadata, Param,
     Pattern,
 };
+pub use validation::{validate_graph, ValidGraph};

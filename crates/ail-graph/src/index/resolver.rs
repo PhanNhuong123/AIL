@@ -148,7 +148,9 @@ mod tests {
         let mut amount_w = make_named_node(amount_w_id, Pattern::Define, "Amount");
         amount_w.metadata.base_type = Some("number".to_string());
         graph.add_node(amount_w).unwrap();
-        graph.add_edge(wallet_id, amount_w_id, EdgeKind::Ev).unwrap();
+        graph
+            .add_edge(wallet_id, amount_w_id, EdgeKind::Ev)
+            .unwrap();
 
         // wallet.Invoice
         let invoice = make_named_node(invoice_id, Pattern::Describe, "Invoice");
@@ -164,10 +166,18 @@ mod tests {
         let mut amount_b = make_named_node(amount_b_id, Pattern::Define, "Amount");
         amount_b.metadata.base_type = Some("integer".to_string());
         graph.add_node(amount_b).unwrap();
-        graph.add_edge(billing_id, amount_b_id, EdgeKind::Ev).unwrap();
+        graph
+            .add_edge(billing_id, amount_b_id, EdgeKind::Ev)
+            .unwrap();
 
         (
-            graph, root_id, wallet_id, amount_w_id, invoice_id, billing_id, amount_b_id,
+            graph,
+            root_id,
+            wallet_id,
+            amount_w_id,
+            invoice_id,
+            billing_id,
+            amount_b_id,
         )
     }
 

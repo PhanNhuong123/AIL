@@ -172,7 +172,11 @@ impl Bm25Index {
             doc_lengths.insert(node.id, tokens.len());
 
             for token in tokens {
-                *freq_map.entry(token).or_default().entry(node.id).or_insert(0) += 1;
+                *freq_map
+                    .entry(token)
+                    .or_default()
+                    .entry(node.id)
+                    .or_insert(0) += 1;
             }
         }
 
@@ -285,10 +289,7 @@ fn build_search_result(graph: &AilGraph, node_id: NodeId, score: f32) -> Option<
 }
 
 fn first_word(s: &str) -> String {
-    s.split_whitespace()
-        .next()
-        .unwrap_or(s)
-        .to_string()
+    s.split_whitespace().next().unwrap_or(s).to_string()
 }
 
 // ─── Tests ─────────────────────────────────────────────────────────────────
@@ -359,7 +360,11 @@ mod tests {
     #[test]
     fn bm25_search_finds_node_by_name() {
         let mut graph = AilGraph::new();
-        let node = make_node("Some unrelated intent text", Pattern::Do, Some("deduct_funds"));
+        let node = make_node(
+            "Some unrelated intent text",
+            Pattern::Do,
+            Some("deduct_funds"),
+        );
         let nid = graph.add_node(node).unwrap();
         graph.set_root(nid).unwrap();
 
@@ -456,7 +461,11 @@ mod tests {
     fn bm25_search_result_includes_depth_and_path() {
         let mut graph = AilGraph::new();
         let parent = make_node("Transfer money", Pattern::Do, Some("transfer_money"));
-        let child = make_node("Check balance condition", Pattern::Check, Some("check_balance"));
+        let child = make_node(
+            "Check balance condition",
+            Pattern::Check,
+            Some("check_balance"),
+        );
 
         let pid = graph.add_node(parent).unwrap();
         let cid = graph.add_node(child).unwrap();
@@ -466,7 +475,10 @@ mod tests {
         let index = Bm25Index::build_from_graph(&graph);
         let results = index.search("balance condition", 5, &graph);
 
-        let hit = results.iter().find(|r| r.node_id == cid).expect("child should match");
+        let hit = results
+            .iter()
+            .find(|r| r.node_id == cid)
+            .expect("child should match");
         assert_eq!(hit.depth, 1);
         assert_eq!(
             hit.path,
@@ -481,17 +493,41 @@ mod tests {
         let mut graph = AilGraph::new();
 
         // Root function
-        let root = make_node("Transfer money between wallets", Pattern::Do, Some("transfer_money"));
+        let root = make_node(
+            "Transfer money between wallets",
+            Pattern::Do,
+            Some("transfer_money"),
+        );
         let root_id = graph.add_node(root).unwrap();
         graph.set_root(root_id).unwrap();
 
         // Children
         let nodes: &[(&str, Pattern, &str)] = &[
-            ("Validate sender has sufficient balance", Pattern::Check, "validate_sender"),
-            ("Check wallet balance exceeds transfer amount", Pattern::Check, "check_balance"),
-            ("Save transaction record to database", Pattern::Save, "save_transaction"),
-            ("Update sender wallet balance after deduction", Pattern::Update, "update_sender"),
-            ("Update receiver wallet balance after addition", Pattern::Update, "update_receiver"),
+            (
+                "Validate sender has sufficient balance",
+                Pattern::Check,
+                "validate_sender",
+            ),
+            (
+                "Check wallet balance exceeds transfer amount",
+                Pattern::Check,
+                "check_balance",
+            ),
+            (
+                "Save transaction record to database",
+                Pattern::Save,
+                "save_transaction",
+            ),
+            (
+                "Update sender wallet balance after deduction",
+                Pattern::Update,
+                "update_sender",
+            ),
+            (
+                "Update receiver wallet balance after addition",
+                Pattern::Update,
+                "update_receiver",
+            ),
         ];
 
         for (intent, pattern, name) in nodes {
@@ -501,10 +537,18 @@ mod tests {
         }
 
         // Type and error nodes (not connected for simplicity)
-        let type_node = make_node("Defines wallet balance value type", Pattern::Define, Some("WalletBalance"));
+        let type_node = make_node(
+            "Defines wallet balance value type",
+            Pattern::Define,
+            Some("WalletBalance"),
+        );
         graph.add_node(type_node).unwrap();
 
-        let err_node = make_node("Error raised when wallet has insufficient funds", Pattern::Error, Some("InsufficientFundsError"));
+        let err_node = make_node(
+            "Error raised when wallet has insufficient funds",
+            Pattern::Error,
+            Some("InsufficientFundsError"),
+        );
         graph.add_node(err_node).unwrap();
 
         let index = Bm25Index::build_from_graph(&graph);

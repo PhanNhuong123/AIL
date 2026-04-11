@@ -238,12 +238,18 @@ mod tests {
             text.contains("define Amount:number"),
             "unexpected output:\n{text}"
         );
-        assert!(!text.contains("where"), "should not have 'where' when no constraint");
+        assert!(
+            !text.contains("where"),
+            "should not have 'where' when no constraint"
+        );
     }
 
     #[test]
     fn index011_render_describe_entry_with_fields() {
-        let entry = describe_entry("Invoice", vec![field("id", "text"), field("amount", "Amount")]);
+        let entry = describe_entry(
+            "Invoice",
+            vec![field("id", "text"), field("amount", "Amount")],
+        );
         let index = make_index(vec![entry]);
         let text = render_folder_index(&index);
         assert!(
@@ -297,7 +303,10 @@ mod tests {
         let text = render_folder_index(&index);
 
         assert!(text.contains("do create"), "unexpected output:\n{text}");
-        assert!(text.contains("  from x:Amount"), "unexpected output:\n{text}");
+        assert!(
+            text.contains("  from x:Amount"),
+            "unexpected output:\n{text}"
+        );
         assert!(text.contains("  -> Invoice"), "unexpected output:\n{text}");
         assert!(
             text.contains("  requires that x > 0"),
@@ -314,6 +323,9 @@ mod tests {
 
         assert!(text.contains("-- errors"), "expected '-- errors' section");
         assert!(!text.contains("-- types"), "unexpected '-- types' section");
-        assert!(!text.contains("-- functions"), "unexpected '-- functions' section");
+        assert!(
+            !text.contains("-- functions"),
+            "unexpected '-- functions' section"
+        );
     }
 }

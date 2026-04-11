@@ -100,7 +100,11 @@ fn build_entry_from_node(node_id: NodeId, graph: &AilGraph) -> Option<IndexEntry
         _ => return None,
     };
 
-    Some(IndexEntry { name, kind, node_id })
+    Some(IndexEntry {
+        name,
+        kind,
+        node_id,
+    })
 }
 
 // ─── tests ───────────────────────────────────────────────────────────────────
@@ -109,8 +113,7 @@ fn build_entry_from_node(node_id: NodeId, graph: &AilGraph) -> Option<IndexEntry
 mod tests {
     use super::*;
     use crate::types::{
-        Contract, ContractKind, EdgeKind, Expression, Field, Node, NodeId, Param,
-        Pattern,
+        Contract, ContractKind, EdgeKind, Expression, Field, Node, NodeId, Param, Pattern,
     };
     use crate::AilGraph;
 

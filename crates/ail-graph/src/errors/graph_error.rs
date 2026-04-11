@@ -22,5 +22,8 @@ pub enum GraphError {
     NameNotFound(String),
 
     #[error("ambiguous name: '{name}' found at multiple locations: {locations:?}")]
-    AmbiguousName { name: String, locations: Vec<String> },
+    AmbiguousName {
+        name: String,
+        locations: Vec<String>,
+    },
 }
