@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use petgraph::stable_graph::{NodeIndex, StableDiGraph};
 
 use crate::errors::GraphError;
+use crate::search::Bm25Index;
 use crate::types::{EdgeId, EdgeKind, Node, NodeId};
 
 /// The core PSSD graph.
@@ -127,6 +128,16 @@ impl AilGraph {
 
     pub fn edge_count(&self) -> usize {
         self.inner.edge_count()
+    }
+
+    // ─── Search ────────────────────────────────────────────────────────────
+
+    /// Build a BM25 search index over all nodes in this graph.
+    ///
+    /// The index is a snapshot of the current graph state. Rebuild after any
+    /// mutation (add/remove node, or changes to intent/name).
+    pub fn build_search_index(&self) -> Bm25Index {
+        Bm25Index::build_from_graph(self)
     }
 
     // ─── Internal helpers ──────────────────────────────────────────────────
