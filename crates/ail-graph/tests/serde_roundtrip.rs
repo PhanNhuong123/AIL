@@ -1,6 +1,5 @@
 use ail_graph::{
-    Contract, ContractKind, EdgeKind, Expression, Field, Node, NodeId, NodeMetadata, Param,
-    Pattern,
+    Contract, ContractKind, EdgeKind, Expression, Field, Node, NodeId, NodeMetadata, Param, Pattern,
 };
 
 fn roundtrip<T>(value: &T) -> T
@@ -20,7 +19,9 @@ fn roundtrip_node_leaf_with_expression() {
         intent: "deduct amount from sender balance".to_string(),
         pattern: Pattern::Let,
         children: None,
-        expression: Some(Expression("new_balance: WalletBalance = sender.balance - amount".to_string())),
+        expression: Some(Expression(
+            "new_balance: WalletBalance = sender.balance - amount".to_string(),
+        )),
         contracts: vec![],
         metadata: NodeMetadata::default(),
     };
@@ -52,8 +53,14 @@ fn roundtrip_node_structural_with_children() {
         metadata: NodeMetadata {
             name: Some("transfer_money".to_string()),
             params: vec![
-                Param { name: "sender".to_string(), type_ref: "User".to_string() },
-                Param { name: "amount".to_string(), type_ref: "PositiveAmount".to_string() },
+                Param {
+                    name: "sender".to_string(),
+                    type_ref: "User".to_string(),
+                },
+                Param {
+                    name: "amount".to_string(),
+                    type_ref: "PositiveAmount".to_string(),
+                },
             ],
             return_type: Some("TransferResult".to_string()),
             ..Default::default()
@@ -124,18 +131,26 @@ fn roundtrip_all_edge_kinds() {
 fn roundtrip_node_metadata_all_fields() {
     let metadata = NodeMetadata {
         name: Some("transfer_error".to_string()),
-        params: vec![
-            Param { name: "sender_id".to_string(), type_ref: "UserId".to_string() },
-        ],
+        params: vec![Param {
+            name: "sender_id".to_string(),
+            type_ref: "UserId".to_string(),
+        }],
         return_type: Some("TransferResult".to_string()),
         base_type: Some("number".to_string()),
         fields: vec![
-            Field { name: "amount".to_string(), type_ref: "PositiveAmount".to_string() },
-            Field { name: "timestamp".to_string(), type_ref: "timestamp".to_string() },
+            Field {
+                name: "amount".to_string(),
+                type_ref: "PositiveAmount".to_string(),
+            },
+            Field {
+                name: "timestamp".to_string(),
+                type_ref: "timestamp".to_string(),
+            },
         ],
-        carries: vec![
-            Field { name: "reason".to_string(), type_ref: "text".to_string() },
-        ],
+        carries: vec![Field {
+            name: "reason".to_string(),
+            type_ref: "text".to_string(),
+        }],
     };
     roundtrip(&metadata);
 }
