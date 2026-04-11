@@ -2,3 +2,11 @@
 name = "ail-graph"
 version = "0.1.0"
 edition = "2021"
+
+[dependencies]
+petgraph   = { workspace = true }
+uuid       = { workspace = true }
+serde      = { workspace = true }
+serde_json = { workspace = true }
+thiserror  = { workspace = true }
+miette     = { workspace = true }

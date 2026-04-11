@@ -1,18 +1,13 @@
 [package]
-name = "ail-cli"
+name = "ail-mcp"
 version = "0.1.0"
 edition = "2021"
-
-[[bin]]
-name = "ail"
-path = "src/main.rs"
 
 [dependencies]
 ail-graph    = { workspace = true }
 ail-types    = { workspace = true }
 ail-contract = { workspace = true }
-ail-text     = { workspace = true }
 ail-emit     = { workspace = true }
-ail-mcp      = { workspace = true }
-clap         = { workspace = true }
+serde        = { workspace = true }
+serde_json   = { workspace = true }
 thiserror    = { workspace = true }

@@ -2,3 +2,10 @@
 name = "ail-text"
 version = "0.1.0"
 edition = "2021"
+
+[dependencies]
+ail-graph   = { workspace = true }
+ail-types   = { workspace = true }
+pest        = { workspace = true }
+pest_derive = { workspace = true }
+thiserror   = { workspace = true }

@@ -5,7 +5,38 @@ members = [
     "crates/ail-types",
     "crates/ail-contract",
     "crates/ail-text",
-    "crates/ail-compiler",
-    "crates/ail-vm",
+    "crates/ail-emit",
+    "crates/ail-mcp",
     "crates/ail-cli",
 ]
+
+[workspace.dependencies]
+# graph / data
+petgraph     = { version = "0.6", features = ["serde-1"] }
+uuid         = { version = "1",   features = ["v4", "serde"] }
+
+# serialization
+serde        = { version = "1",   features = ["derive"] }
+serde_json   = "1"
+
+# errors / diagnostics
+thiserror    = "2"
+miette       = { version = "7",   features = ["fancy"] }
+
+# contract / Z3
+z3           = { version = "0.12", features = ["static-link-z3"] }
+
+# parser
+pest         = "2"
+pest_derive  = "2"
+
+# CLI
+clap         = { version = "4",   features = ["derive"] }
+
+# internal crates
+ail-graph    = { path = "crates/ail-graph" }
+ail-types    = { path = "crates/ail-types" }
+ail-contract = { path = "crates/ail-contract" }
+ail-text     = { path = "crates/ail-text" }
+ail-emit     = { path = "crates/ail-emit" }
+ail-mcp      = { path = "crates/ail-mcp" }

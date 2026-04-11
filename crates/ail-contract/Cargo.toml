@@ -2,3 +2,15 @@
 name = "ail-contract"
 version = "0.1.0"
 edition = "2021"
+
+[dependencies]
+ail-graph = { workspace = true }
+ail-types = { workspace = true }
+thiserror = { workspace = true }
+# z3 requires libclang (LLVM) for bindgen to generate FFI bindings.
+# Install LLVM from https://releases.llvm.org/ and set LIBCLANG_PATH,
+# then enable this feature: cargo build --features z3-verify
+z3 = { workspace = true, optional = true }
+
+[features]
+z3-verify = ["z3"]

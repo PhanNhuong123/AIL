@@ -2,3 +2,7 @@
 name = "ail-types"
 version = "0.1.0"
 edition = "2021"
+
+[dependencies]
+ail-graph = { workspace = true }
+thiserror = { workspace = true }

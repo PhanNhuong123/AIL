@@ -1,2 +1,8 @@
 [build]
 # Workspace build configuration
+
+# z3-sys bundles Z3 source whose CMakeLists.txt predates CMake 3.5.
+# VS 2026 ships a CMake that removed backwards-compat with < 3.5.
+# Passing this policy flag lets the build proceed unchanged.
+[env]
+CMAKE_POLICY_VERSION_MINIMUM = "3.5"

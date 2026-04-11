@@ -1,0 +1,14 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "ail-runtime"
+version = "0.1.0"
+description = "AIL runtime library for generated Python code"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+
+[project.urls]
+Homepage = "https://github.com/PMNhuong/ail"
