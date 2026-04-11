@@ -109,4 +109,42 @@ impl AilGraph {
         refs.dedup();
         Ok(refs)
     }
+
+    /// Return the ids of all nodes reached by **outgoing** `Ed` edges from
+    /// `node_id`. These are the cross-references this node declares to other
+    /// nodes (type usages, function calls, pattern/template references).
+    pub fn outgoing_diagonal_refs_of(&self, node_id: NodeId) -> Result<Vec<NodeId>, GraphError> {
+        let nx = self.resolve_node_index(node_id)?;
+        let refs = self
+            .inner()
+            .edges_directed(nx, Direction::Outgoing)
+            .filter(|e| *e.weight() == EdgeKind::Ed)
+            .map(|e| {
+                self.inner()
+                    .node_weight(e.target())
+                    .expect("target node must exist")
+                    .id
+            })
+            .collect();
+        Ok(refs)
+    }
+
+    /// Return the ids of all nodes that reach `node_id` via an **incoming**
+    /// `Ed` edge. These are the back-references — nodes that cross-reference
+    /// this one.
+    pub fn incoming_diagonal_refs_of(&self, node_id: NodeId) -> Result<Vec<NodeId>, GraphError> {
+        let nx = self.resolve_node_index(node_id)?;
+        let refs = self
+            .inner()
+            .edges_directed(nx, Direction::Incoming)
+            .filter(|e| *e.weight() == EdgeKind::Ed)
+            .map(|e| {
+                self.inner()
+                    .node_weight(e.source())
+                    .expect("source node must exist")
+                    .id
+            })
+            .collect();
+        Ok(refs)
+    }
 }

@@ -154,7 +154,11 @@ fn crud_remove_root_node_clears_root_id() {
     graph.set_root(id).unwrap();
     assert_eq!(graph.root_id(), Some(id));
     graph.remove_node(id).unwrap();
-    assert_eq!(graph.root_id(), None, "root_id must be cleared after root is removed");
+    assert_eq!(
+        graph.root_id(),
+        None,
+        "root_id must be cleared after root is removed"
+    );
 }
 
 // ─── set_root ──────────────────────────────────────────────────────────────
