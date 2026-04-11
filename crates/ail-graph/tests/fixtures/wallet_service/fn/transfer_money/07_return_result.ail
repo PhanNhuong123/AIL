@@ -1,0 +1,2 @@
+return TransferResult
+  with sender = sender, receiver = receiver, amount = amount

@@ -1,0 +1,1 @@
+let new_receiver_balance:WalletBalance = receiver.balance + amount

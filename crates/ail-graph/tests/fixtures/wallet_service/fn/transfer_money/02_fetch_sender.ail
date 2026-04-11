@@ -1,0 +1,1 @@
+fetch sender:User from database where id is sender_id

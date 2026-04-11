@@ -1,0 +1,1 @@
+let new_sender_balance:WalletBalance = sender.balance - amount

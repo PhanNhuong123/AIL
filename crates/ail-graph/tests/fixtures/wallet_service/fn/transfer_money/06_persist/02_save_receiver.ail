@@ -1,0 +1,1 @@
+update User in database where id is receiver.id set balance = new_receiver_balance

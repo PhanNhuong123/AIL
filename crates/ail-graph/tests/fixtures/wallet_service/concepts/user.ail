@@ -1,0 +1,2 @@
+describe User as
+  id:UserId, balance:WalletBalance, status:UserStatus

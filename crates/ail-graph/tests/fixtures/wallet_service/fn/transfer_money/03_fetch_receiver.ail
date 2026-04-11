@@ -1,0 +1,1 @@
+fetch receiver:User from database where id is receiver_id

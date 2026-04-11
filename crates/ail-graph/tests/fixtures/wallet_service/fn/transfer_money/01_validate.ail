@@ -1,0 +1,2 @@
+check sender_id is not receiver_id
+  otherwise raise InvalidTransferError carries user_id = sender_id

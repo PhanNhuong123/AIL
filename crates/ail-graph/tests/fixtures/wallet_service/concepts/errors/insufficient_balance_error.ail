@@ -1,0 +1,2 @@
+error InsufficientBalanceError
+  carries current_balance:WalletBalance, requested_amount:PositiveAmount
