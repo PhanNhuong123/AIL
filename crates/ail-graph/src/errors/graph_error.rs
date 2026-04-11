@@ -17,4 +17,10 @@ pub enum GraphError {
 
     #[error("I/O error: {0}")]
     Io(#[from] std::io::Error),
+
+    #[error("name not found: '{0}' is not declared in any ancestor scope")]
+    NameNotFound(String),
+
+    #[error("ambiguous name: '{name}' found at multiple locations: {locations:?}")]
+    AmbiguousName { name: String, locations: Vec<String> },
 }
