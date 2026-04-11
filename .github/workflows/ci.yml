@@ -1,0 +1,67 @@
+name: CI
+
+on:
+  push:
+    branches: [master, dev]
+  pull_request:
+    branches: [master, dev]
+
+env:
+  RUST_BACKTRACE: 1
+  CARGO_TERM_COLOR: always
+
+jobs:
+  ci:
+    name: CI (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+
+      # Ubuntu: install cmake + clang/libclang so z3-sys can build Z3 from source
+      # (static-link-z3 requires cmake to build Z3 and libclang for bindgen FFI generation)
+      - name: Install Z3 build dependencies (Ubuntu)
+        if: matrix.os == 'ubuntu-latest'
+        run: sudo apt-get update && sudo apt-get install -y cmake clang libclang-dev
+
+      # Windows: install LLVM so bindgen can find libclang.dll
+      # cmake is pre-installed on GitHub-hosted Windows runners
+      # To replicate locally: winget install LLVM.LLVM, then set LIBCLANG_PATH=C:\Program Files\LLVM\bin
+      - name: Install LLVM (Windows)
+        if: matrix.os == 'windows-latest'
+        run: choco install llvm --yes
+
+      - name: Set LIBCLANG_PATH (Windows)
+        if: matrix.os == 'windows-latest'
+        shell: bash
+        run: echo "LIBCLANG_PATH=C:/Program Files/LLVM/bin" >> $GITHUB_ENV
+
+      - name: Cache cargo artifacts
+        uses: Swatinem/rust-cache@v2
+
+      - name: Build (workspace, no features)
+        run: cargo build
+
+      - name: Build ail-contract with Z3
+        run: cargo build -p ail-contract --features z3-verify
+
+      - name: Test (workspace, no features)
+        run: cargo test
+
+      - name: Test ail-contract with Z3
+        run: cargo test -p ail-contract --features z3-verify
+
+      - name: Clippy
+        run: cargo clippy -- -D warnings
+
+      - name: Format check
+        run: cargo fmt --all -- --check
