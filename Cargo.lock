@@ -101,6 +101,8 @@ name = "ail-types"
 version = "0.1.0"
 dependencies = [
  "ail-graph",
+ "serde",
+ "serde_json",
  "thiserror",
 ]
 
