@@ -1,4 +1,8 @@
-pub fn placeholder() {}
+mod checks;
+mod errors;
+
+pub use checks::check_static_contracts;
+pub use errors::ContractError;
 
 #[cfg(test)]
 #[cfg(feature = "z3-verify")]
