@@ -5,7 +5,7 @@
 ///
 /// Tests validate that encoding is structurally correct (SAT/UNSAT outcomes match
 /// expectations) and that unsupported variants produce the right error variant.
-use ail_types::{ArithOp, CompareOp, ConstraintExpr, BuiltinSemanticType, LiteralValue, ValueExpr};
+use ail_types::{ArithOp, BuiltinSemanticType, CompareOp, ConstraintExpr, LiteralValue, ValueExpr};
 use z3::{Config, Context, SatResult, Solver};
 
 use crate::errors::EncodeError;
@@ -334,7 +334,12 @@ fn z3_encode_mod_on_real_unsupported() {
     };
     let err = encode_constraint(&expr, &enc).unwrap_err();
     assert!(
-        matches!(err, EncodeError::UnsupportedConstraint { variant: "Mod-on-Real" }),
+        matches!(
+            err,
+            EncodeError::UnsupportedConstraint {
+                variant: "Mod-on-Real"
+            }
+        ),
         "expected UnsupportedConstraint(Mod-on-Real), got {err:?}"
     );
 }
@@ -351,7 +356,10 @@ fn z3_encode_nothing_literal_unsupported() {
     };
     let err = encode_constraint(&expr, &enc).unwrap_err();
     assert!(
-        matches!(err, EncodeError::UnsupportedConstraint { variant: "Nothing" }),
+        matches!(
+            err,
+            EncodeError::UnsupportedConstraint { variant: "Nothing" }
+        ),
         "expected UnsupportedConstraint(Nothing), got {err:?}"
     );
 }
@@ -367,7 +375,10 @@ fn z3_encode_unsupported_matches() {
     };
     let err = encode_constraint(&expr, &enc).unwrap_err();
     assert!(
-        matches!(err, EncodeError::UnsupportedConstraint { variant: "Matches" }),
+        matches!(
+            err,
+            EncodeError::UnsupportedConstraint { variant: "Matches" }
+        ),
         "expected UnsupportedConstraint(Matches), got {err:?}"
     );
 }
@@ -388,7 +399,10 @@ fn z3_encode_unsupported_forall() {
     };
     let err = encode_constraint(&expr, &enc).unwrap_err();
     assert!(
-        matches!(err, EncodeError::UnsupportedConstraint { variant: "ForAll" }),
+        matches!(
+            err,
+            EncodeError::UnsupportedConstraint { variant: "ForAll" }
+        ),
         "expected UnsupportedConstraint(ForAll), got {err:?}"
     );
 }
@@ -440,8 +454,7 @@ fn z3_encode_type_constraint_percentage() {
     let solver = Solver::new(&z3);
     use z3::ast::Ast;
     let dyn_p = z3::ast::Dynamic::from_ast(&p);
-    let assertions =
-        encode_type_constraint(BuiltinSemanticType::Percentage, &dyn_p, &z3).unwrap();
+    let assertions = encode_type_constraint(BuiltinSemanticType::Percentage, &dyn_p, &z3).unwrap();
     for a in &assertions {
         solver.assert(a);
     }
@@ -460,7 +473,12 @@ fn z3_encode_type_constraint_text_unsupported() {
     let dyn_v = z3::ast::Dynamic::from_ast(&v);
     let err = encode_type_constraint(BuiltinSemanticType::NonEmptyText, &dyn_v, &z3).unwrap_err();
     assert!(
-        matches!(err, EncodeError::UnsupportedConstraint { variant: "type-text" }),
+        matches!(
+            err,
+            EncodeError::UnsupportedConstraint {
+                variant: "type-text"
+            }
+        ),
         "expected UnsupportedConstraint(type-text), got {err:?}"
     );
 }
@@ -496,13 +514,12 @@ fn z3_encode_wallet_transfer_full_packet() {
     // Type constraints
     let dyn_balance = Dynamic::from_ast(&balance);
     let dyn_amount = Dynamic::from_ast(&amount);
-    for a in encode_type_constraint(BuiltinSemanticType::NonNegativeInteger, &dyn_balance, &z3)
-        .unwrap()
+    for a in
+        encode_type_constraint(BuiltinSemanticType::NonNegativeInteger, &dyn_balance, &z3).unwrap()
     {
         solver.assert(&a);
     }
-    for a in
-        encode_type_constraint(BuiltinSemanticType::PositiveInteger, &dyn_amount, &z3).unwrap()
+    for a in encode_type_constraint(BuiltinSemanticType::PositiveInteger, &dyn_amount, &z3).unwrap()
     {
         solver.assert(&a);
     }

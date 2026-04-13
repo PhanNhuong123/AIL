@@ -55,9 +55,9 @@ pub fn encode_type_constraint<'ctx>(
         // Text-based types: not encodable in Z3 v0.1
         BuiltinSemanticType::NonEmptyText
         | BuiltinSemanticType::EmailAddress
-        | BuiltinSemanticType::Identifier => {
-            Err(EncodeError::UnsupportedConstraint { variant: "type-text" })
-        }
+        | BuiltinSemanticType::Identifier => Err(EncodeError::UnsupportedConstraint {
+            variant: "type-text",
+        }),
     }
 }
 

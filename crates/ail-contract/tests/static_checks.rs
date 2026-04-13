@@ -1,7 +1,7 @@
-use ail_contract::{ContractError, check_static_contracts};
+use ail_contract::{check_static_contracts, ContractError};
 use ail_graph::{
-    AilGraph, Contract, ContractKind, EdgeKind, Expression, Node, NodeId, Param, Pattern,
-    validate_graph,
+    validate_graph, AilGraph, Contract, ContractKind, EdgeKind, Expression, Node, NodeId, Param,
+    Pattern,
 };
 use ail_types::type_check;
 
@@ -95,7 +95,11 @@ fn raise_graph(raise_expr: &str, wire_ed: bool) -> AilGraph {
     let do_id = graph.add_node(do_node).unwrap();
 
     // Raise action (leaf inside the Do body)
-    let mut raise_node = Node::new(NodeId::new(), "raise on insufficient balance", Pattern::Raise);
+    let mut raise_node = Node::new(
+        NodeId::new(),
+        "raise on insufficient balance",
+        Pattern::Raise,
+    );
     raise_node.expression = Some(Expression(raise_expr.to_owned()));
     let raise_id = graph.add_node(raise_node).unwrap();
 
@@ -150,11 +154,7 @@ fn following_graph(template_phase_names: &[&str], impl_phase_names: &[&str]) -> 
     // Template phase children
     let mut tmpl_child_ids = Vec::new();
     for (i, &phase_name) in template_phase_names.iter().enumerate() {
-        let mut phase = Node::new(
-            NodeId::new(),
-            &format!("{phase_name} phase"),
-            Pattern::Let,
-        );
+        let mut phase = Node::new(NodeId::new(), &format!("{phase_name} phase"), Pattern::Let);
         phase.metadata.name = Some(phase_name.to_owned());
         let phase_id = graph.add_node(phase).unwrap();
         graph.add_edge(tmpl_id, phase_id, EdgeKind::Ev).unwrap();
@@ -231,9 +231,9 @@ fn has_after_illegal_ref(errors: &[ContractError], illegal_ref: &str) -> bool {
 }
 
 fn has_raise_unknown(errors: &[ContractError], error_name: &str) -> bool {
-    errors.iter().any(|e| {
-        matches!(e, ContractError::RaiseUnknownError { error_name: n, .. } if n == error_name)
-    })
+    errors.iter().any(
+        |e| matches!(e, ContractError::RaiseUnknownError { error_name: n, .. } if n == error_name),
+    )
 }
 
 fn has_parse_error(errors: &[ContractError]) -> bool {
@@ -485,10 +485,7 @@ fn c015_quantifier_bound_variable_not_flagged_as_illegal_ref() {
     do_node.contracts = vec![
         contract(ContractKind::Before, "items == items"),
         // After contract uses a ForAll quantifier: `item` is bound, not a scope var.
-        contract(
-            ContractKind::After,
-            "for all item in items, item == item",
-        ),
+        contract(ContractKind::After, "for all item in items, item == item"),
     ];
     let do_id = graph.add_node(do_node).unwrap();
 

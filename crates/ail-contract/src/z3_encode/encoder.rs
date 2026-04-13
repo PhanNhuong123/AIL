@@ -20,9 +20,7 @@ pub fn encode_constraint<'ctx>(
     ctx: &EncodeContext<'ctx>,
 ) -> Result<Bool<'ctx>, EncodeError> {
     match expr {
-        ConstraintExpr::Compare { op, left, right } => {
-            encode_compare(op, left, right, ctx)
-        }
+        ConstraintExpr::Compare { op, left, right } => encode_compare(op, left, right, ctx),
 
         ConstraintExpr::And(children) => {
             let bools: Result<Vec<Bool<'ctx>>, EncodeError> =
@@ -81,9 +79,9 @@ pub fn encode_value_int<'ctx>(
             Err(EncodeError::UnsupportedConstraint { variant: "Nothing" })
         }
 
-        ValueExpr::Literal(LiteralValue::Text(_)) => {
-            Err(EncodeError::UnsupportedConstraint { variant: "Text-literal" })
-        }
+        ValueExpr::Literal(LiteralValue::Text(_)) => Err(EncodeError::UnsupportedConstraint {
+            variant: "Text-literal",
+        }),
 
         ValueExpr::Ref(path) => {
             let dyn_var = ctx.require_var(path)?;
@@ -121,9 +119,7 @@ pub fn encode_value_real<'ctx>(
     ctx: &EncodeContext<'ctx>,
 ) -> Result<Real<'ctx>, EncodeError> {
     match expr {
-        ValueExpr::Literal(LiteralValue::Integer(n)) => {
-            Ok(Int::from_i64(ctx.z3, *n).to_real())
-        }
+        ValueExpr::Literal(LiteralValue::Integer(n)) => Ok(Int::from_i64(ctx.z3, *n).to_real()),
 
         ValueExpr::Literal(LiteralValue::Float(f)) => f64_to_real(ctx.z3, *f),
 
@@ -136,9 +132,9 @@ pub fn encode_value_real<'ctx>(
             Err(EncodeError::UnsupportedConstraint { variant: "Nothing" })
         }
 
-        ValueExpr::Literal(LiteralValue::Text(_)) => {
-            Err(EncodeError::UnsupportedConstraint { variant: "Text-literal" })
-        }
+        ValueExpr::Literal(LiteralValue::Text(_)) => Err(EncodeError::UnsupportedConstraint {
+            variant: "Text-literal",
+        }),
 
         ValueExpr::Ref(path) => {
             let dyn_var = ctx.require_var(path)?;
@@ -216,9 +212,7 @@ pub fn encode_value_bool<'ctx>(
 pub(super) fn expr_has_float(expr: &ValueExpr) -> bool {
     match expr {
         ValueExpr::Literal(LiteralValue::Float(_)) => true,
-        ValueExpr::Arithmetic { left, right, .. } => {
-            expr_has_float(left) || expr_has_float(right)
-        }
+        ValueExpr::Arithmetic { left, right, .. } => expr_has_float(left) || expr_has_float(right),
         ValueExpr::Old(inner) => expr_has_float(inner),
         ValueExpr::Call { args, .. } => args.iter().any(expr_has_float),
         ValueExpr::Set(items) => items.iter().any(expr_has_float),

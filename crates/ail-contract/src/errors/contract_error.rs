@@ -24,9 +24,7 @@ pub enum ContractError {
     ///
     /// `old()` captures pre-state values, but a before-contract *is* the
     /// pre-state. There is no prior state to snapshot.
-    #[error(
-        "AIL-C002: before contract on {node_id} uses old(), not allowed pre-execution"
-    )]
+    #[error("AIL-C002: before contract on {node_id} uses old(), not allowed pre-execution")]
     BeforeContractUsesOld {
         node_id: NodeId,
         contract_expr: String,
@@ -52,9 +50,7 @@ pub enum ContractError {
     ///
     /// Every raised error must correspond to an `Error` node connected to the
     /// enclosing `Do` node via an outgoing `Ed` edge.
-    #[error(
-        "AIL-C004: raise on {node_id} references unknown error '{error_name}'"
-    )]
+    #[error("AIL-C004: raise on {node_id} references unknown error '{error_name}'")]
     RaiseUnknownError {
         node_id: NodeId,
         error_name: String,

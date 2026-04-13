@@ -125,6 +125,30 @@ impl<'ctx> EncodeContext<'ctx> {
                 name: format!("old({})", var_key(path)),
             })
     }
+
+    /// Evaluate every registered variable in `model` and return `(name, value)` pairs.
+    ///
+    /// Both current-state (`vars`) and old-state (`old_vars`) entries are included.
+    /// The returned list is sorted by name for deterministic output in counterexamples.
+    /// Variables that the model does not interpret (e.g. unconstrained universals) are
+    /// omitted from the result.
+    pub fn format_model(&self, model: &z3::Model<'ctx>) -> Vec<(String, String)> {
+        let mut assignments: Vec<(String, String)> = Vec::new();
+
+        for (name, dyn_var) in &self.vars {
+            if let Some(interp) = model.eval(dyn_var, true) {
+                assignments.push((name.clone(), interp.to_string()));
+            }
+        }
+        for (key, dyn_var) in &self.old_vars {
+            if let Some(interp) = model.eval(dyn_var, true) {
+                assignments.push((key.clone(), interp.to_string()));
+            }
+        }
+
+        assignments.sort_by(|a, b| a.0.cmp(&b.0));
+        assignments
+    }
 }
 
 /// Join path segments into a dotted key: `["sender", "balance"]` → `"sender.balance"`.
