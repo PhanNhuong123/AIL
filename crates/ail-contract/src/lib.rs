@@ -1,8 +1,13 @@
 mod checks;
 mod errors;
 
+#[cfg(feature = "z3-verify")]
+pub mod z3_encode;
+
 pub use checks::check_static_contracts;
 pub use errors::ContractError;
+#[cfg(feature = "z3-verify")]
+pub use errors::EncodeError;
 
 #[cfg(test)]
 #[cfg(feature = "z3-verify")]
