@@ -1,5 +1,7 @@
 mod checks;
 mod errors;
+mod types;
+mod verify;
 
 #[cfg(feature = "z3-verify")]
 pub mod z3_encode;
@@ -7,11 +9,12 @@ pub mod z3_encode;
 pub mod z3_verify;
 
 pub use checks::check_static_contracts;
-pub use errors::ContractError;
+pub use errors::{ContractError, ContractStageError};
+pub use types::{BreakingChange, ContractRecord, ContractSummary, VerifiedGraph};
+pub use verify::verify;
+
 #[cfg(feature = "z3-verify")]
-pub use errors::EncodeError;
-#[cfg(feature = "z3-verify")]
-pub use errors::VerifyError;
+pub use errors::{EncodeError, VerifyError};
 #[cfg(feature = "z3-verify")]
 pub use z3_verify::verify_contracts;
 

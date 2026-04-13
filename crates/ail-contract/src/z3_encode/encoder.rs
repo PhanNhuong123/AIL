@@ -220,14 +220,45 @@ pub(super) fn expr_has_float(expr: &ValueExpr) -> bool {
     }
 }
 
-/// Encode a `Compare` constraint, choosing Int or Real based on float presence.
+/// Return `true` if any `Ref` or `Old(Ref)` in `expr` is registered as a
+/// Real-sort variable in `ctx`.
+///
+/// Used by [`encode_compare`] to promote Int-literal comparisons to Real when
+/// at least one operand variable is declared as a `number`-based type.
+fn expr_references_real_var(expr: &ValueExpr, ctx: &EncodeContext<'_>) -> bool {
+    match expr {
+        ValueExpr::Ref(path) => ctx.get_var(path).is_some_and(|v| v.as_real().is_some()),
+        ValueExpr::Old(inner) => {
+            if let ValueExpr::Ref(path) = inner.as_ref() {
+                ctx.get_old_var(path).is_some_and(|v| v.as_real().is_some())
+            } else {
+                expr_references_real_var(inner, ctx)
+            }
+        }
+        ValueExpr::Arithmetic { left, right, .. } => {
+            expr_references_real_var(left, ctx) || expr_references_real_var(right, ctx)
+        }
+        _ => false,
+    }
+}
+
+/// Encode a `Compare` constraint, choosing Int or Real based on expression sorts.
+///
+/// Uses Real encoding when either operand contains a float literal OR references
+/// a variable registered with Real sort (e.g. a `number`-typed parameter).
+/// Integer literals are promoted to Real automatically in that case.
 fn encode_compare<'ctx>(
     op: &CompareOp,
     left: &ValueExpr,
     right: &ValueExpr,
     ctx: &EncodeContext<'ctx>,
 ) -> Result<Bool<'ctx>, EncodeError> {
-    if expr_has_float(left) || expr_has_float(right) {
+    let use_real = expr_has_float(left)
+        || expr_has_float(right)
+        || expr_references_real_var(left, ctx)
+        || expr_references_real_var(right, ctx);
+
+    if use_real {
         let l = encode_value_real(left, ctx)?;
         let r = encode_value_real(right, ctx)?;
         apply_compare_real(op, &l, &r)
