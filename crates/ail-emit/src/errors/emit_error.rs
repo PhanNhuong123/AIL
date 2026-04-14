@@ -21,4 +21,19 @@ pub enum EmitError {
         expression: String,
         message: String,
     },
+
+    #[error("AIL-E006: Do node {node_id} has no name in metadata")]
+    DoNodeMissingName { node_id: NodeId },
+
+    #[error("AIL-E007: Fetch node {node_id} has no variable name in metadata")]
+    FetchNodeMissingName { node_id: NodeId },
+
+    #[error("AIL-E008: Save node {node_id} has no name in metadata")]
+    SaveNodeMissingName { node_id: NodeId },
+
+    #[error("AIL-E009: Return node {node_id} has no type name in metadata")]
+    ReturnNodeMissingName { node_id: NodeId },
+
+    #[error("AIL-E010: Raise node {node_id} has no error name in metadata")]
+    RaiseNodeMissingName { node_id: NodeId },
 }

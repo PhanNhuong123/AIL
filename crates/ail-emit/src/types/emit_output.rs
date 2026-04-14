@@ -24,6 +24,12 @@ pub(crate) struct ImportSet {
     pub needs_pre: bool,
     pub needs_post: bool,
     pub needs_datetime: bool,
+    /// `import asyncio` — needed by Together blocks and async Retry.
+    pub needs_asyncio: bool,
+    /// `import time` — needed by sync Retry.
+    pub needs_time: bool,
+    /// Adds `transaction` to the `from ail_runtime import ...` line.
+    pub needs_transaction: bool,
 }
 
 impl ImportSet {
@@ -44,6 +50,12 @@ impl ImportSet {
         if self.needs_re {
             lines.push("import re".to_owned());
         }
+        if self.needs_asyncio {
+            lines.push("import asyncio".to_owned());
+        }
+        if self.needs_time {
+            lines.push("import time".to_owned());
+        }
 
         // Collect ail_runtime imports.
         let mut runtime_imports = Vec::new();
@@ -55,6 +67,9 @@ impl ImportSet {
         }
         if self.needs_post {
             runtime_imports.push("post");
+        }
+        if self.needs_transaction {
+            runtime_imports.push("transaction");
         }
         if !runtime_imports.is_empty() {
             lines.push(format!(
@@ -87,6 +102,7 @@ mod tests {
             needs_pre: false,
             needs_post: false,
             needs_datetime: true,
+            ..Default::default()
         };
         let rendered = imports.render();
         assert!(rendered.contains("from __future__ import annotations"));

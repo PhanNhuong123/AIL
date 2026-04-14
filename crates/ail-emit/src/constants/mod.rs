@@ -6,6 +6,7 @@ pub(crate) const TYPE_MAP: &[(&str, &str)] = &[
     ("boolean", "bool"),
     ("bytes", "bytes"),
     ("timestamp", "datetime"),
+    ("void", "None"),
 ];
 
 pub(crate) const PYTHON_INDENT: &str = "    ";
