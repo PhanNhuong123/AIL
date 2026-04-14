@@ -3,3 +3,11 @@ target
 .claude
 .serena
 .codex
+
+# Private/internal docs and agent instructions
+/docs/
+CLAUDE.md
+/AGENTS.md
+/AIL-Development-Plan-v0.1.md
+/AIL-Language-Rules-v0.1.md
+/AIL-Technical-Spec-v0.1.md
