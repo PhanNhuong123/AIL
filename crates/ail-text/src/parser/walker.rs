@@ -340,6 +340,17 @@ fn walk_for_each_stmt(pair: Pair<'_, Rule>) -> Result<ParsedStatement, ParseErro
         }
     }
 
+    let body_intent_opt = if do_intent.is_empty() {
+        None
+    } else {
+        Some(do_intent.clone())
+    };
+    let collection_opt = if collection.is_empty() {
+        None
+    } else {
+        Some(collection.clone())
+    };
+
     Ok(ParsedStatement {
         indent: 0,
         pattern: Pattern::ForEach,
@@ -350,6 +361,8 @@ fn walk_for_each_stmt(pair: Pair<'_, Rule>) -> Result<ParsedStatement, ParseErro
                 name: var_name,
                 type_ref: var_type,
             }],
+            collection: collection_opt,
+            body_intent: body_intent_opt,
             ..Default::default()
         },
         expression: if do_intent.is_empty() {
@@ -423,7 +436,12 @@ fn walk_match_stmt(pair: Pair<'_, Rule>) -> Result<ParsedStatement, ParseError> 
         indent: 0,
         pattern: Pattern::Match,
         intent: format!("match {discriminant}"),
-        metadata: NodeMetadata::default(),
+        metadata: NodeMetadata {
+            discriminant: Some(discriminant),
+            arms: when_clauses,
+            otherwise_result: otherwise_expr,
+            ..Default::default()
+        },
         expression: Some(Expression(expr_parts.join(" | "))),
         contracts: vec![],
         span,

@@ -153,6 +153,17 @@ fn roundtrip_node_metadata_all_fields() {
         }],
         otherwise_error: Some("ValidationError".to_string()),
         otherwise_assigns: vec![("field".to_string(), "sender.id".to_string())],
+        collection: Some("order.items".to_string()),
+        body_intent: Some("calculate total".to_string()),
+        discriminant: Some("user.status".to_string()),
+        arms: vec![
+            ("active".to_string(), "proceed".to_string()),
+            (
+                "suspended".to_string(),
+                "raise AccountSuspendedError".to_string(),
+            ),
+        ],
+        otherwise_result: Some("raise UnknownStatusError".to_string()),
     };
     roundtrip(&metadata);
 }

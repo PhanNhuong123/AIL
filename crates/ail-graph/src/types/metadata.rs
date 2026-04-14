@@ -40,4 +40,27 @@ pub struct NodeMetadata {
     /// Field assignments in the `otherwise raise ... carries` clause.
     /// Each pair is (field_name, expression_value). Populated only for `Check` nodes.
     pub otherwise_assigns: Vec<(String, String)>,
+
+    // ── ForEach structured fields ───────────────────────────────────────
+    /// The collection expression iterated over. Populated only for `ForEach` nodes.
+    /// Example: `"order.items"`.
+    #[serde(default)]
+    pub collection: Option<String>,
+    /// The `do` intent clause following the collection. Populated only for `ForEach`
+    /// nodes that include a `do <intent>` suffix.
+    #[serde(default)]
+    pub body_intent: Option<String>,
+
+    // ── Match structured fields ─────────────────────────────────────────
+    /// The discriminant expression being matched. Populated only for `Match` nodes.
+    /// Example: `"user.status"`.
+    #[serde(default)]
+    pub discriminant: Option<String>,
+    /// When-clause arms as `(value, then_expression)` pairs. Populated only for
+    /// `Match` nodes.
+    #[serde(default)]
+    pub arms: Vec<(String, String)>,
+    /// The otherwise clause expression. Populated only for `Match` nodes.
+    #[serde(default)]
+    pub otherwise_result: Option<String>,
 }
