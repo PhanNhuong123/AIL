@@ -115,7 +115,115 @@ pub(crate) fn assemble_graph(statements: Vec<ParsedStatement>) -> Result<AilGrap
         graph.set_root(top_level_ids[0])?;
     }
 
+    // ── Resolve `following` Ed edges ─────────────────────────────────────
+    // For every Do node that carries a `following_template_name`, find the
+    // target Do node by `metadata.name` and wire an Ed diagonal edge.
+    // The `following_template_name` field is assembly-time only; after this
+    // pass it is no longer meaningful (the Ed edge is the canonical encoding).
+    resolve_following_edges(&mut graph)?;
+
+    // ── Resolve `using` Ed edges ─────────────────────────────────────────
+    // For every Do node that carries a `using_pattern_name`, find the
+    // shared-pattern Do node and wire an Ed diagonal edge so that CIC Rule 4
+    // (DIAGONAL) propagates constraints from the shared pattern.
+    resolve_using_edges(&mut graph)?;
+
     Ok(graph)
+}
+
+/// Build a lookup map: `node.intent` → node IDs for all `Do` nodes.
+///
+/// The `following` and `using` clauses store the human-readable intent text
+/// (with spaces), so we index by intent rather than the underscored `metadata.name`.
+fn build_do_name_index(graph: &AilGraph) -> HashMap<String, Vec<NodeId>> {
+    let mut index: HashMap<String, Vec<NodeId>> = HashMap::new();
+    for node in graph.all_nodes() {
+        if node.pattern == Pattern::Do {
+            index.entry(node.intent.clone()).or_default().push(node.id);
+        }
+    }
+    index
+}
+
+/// Wire Ed edges for all Do nodes that carry `following_template_name`.
+fn resolve_following_edges(graph: &mut AilGraph) -> Result<(), ParseError> {
+    // Collect work items first to avoid borrow conflicts.
+    let work: Vec<(NodeId, String)> = graph
+        .all_nodes()
+        .filter(|n| n.pattern == Pattern::Do && n.metadata.following_template_name.is_some())
+        .map(|n| {
+            (
+                n.id,
+                n.metadata.following_template_name.clone().unwrap(), // is_some() guarded above
+            )
+        })
+        .collect();
+
+    if work.is_empty() {
+        return Ok(());
+    }
+
+    let index = build_do_name_index(graph);
+
+    for (node_id, template_name) in work {
+        match index.get(&template_name) {
+            None => {
+                return Err(ParseError::FollowingTemplateNotFound { template_name });
+            }
+            Some(matches) if matches.len() > 1 => {
+                return Err(ParseError::FollowingTemplateAmbiguous {
+                    template_name,
+                    count: matches.len(),
+                });
+            }
+            Some(matches) => {
+                let template_id = matches[0];
+                graph.add_edge(node_id, template_id, EdgeKind::Ed)?;
+            }
+        }
+    }
+
+    Ok(())
+}
+
+/// Wire Ed edges for all Do nodes that carry `using_pattern_name`.
+fn resolve_using_edges(graph: &mut AilGraph) -> Result<(), ParseError> {
+    let work: Vec<(NodeId, String)> = graph
+        .all_nodes()
+        .filter(|n| n.pattern == Pattern::Do && n.metadata.using_pattern_name.is_some())
+        .map(|n| {
+            (
+                n.id,
+                n.metadata.using_pattern_name.clone().unwrap(), // is_some() guarded above
+            )
+        })
+        .collect();
+
+    if work.is_empty() {
+        return Ok(());
+    }
+
+    let index = build_do_name_index(graph);
+
+    for (node_id, pattern_name) in work {
+        match index.get(&pattern_name) {
+            None => {
+                return Err(ParseError::UsingPatternNotFound { pattern_name });
+            }
+            Some(matches) if matches.len() > 1 => {
+                return Err(ParseError::UsingPatternAmbiguous {
+                    pattern_name,
+                    count: matches.len(),
+                });
+            }
+            Some(matches) => {
+                let template_id = matches[0];
+                graph.add_edge(node_id, template_id, EdgeKind::Ed)?;
+            }
+        }
+    }
+
+    Ok(())
 }
 
 /// Create a `Node` from a `ParsedStatement` and add it to the graph.

@@ -17,6 +17,7 @@ pub(crate) fn run_all_rules(graph: &AilGraph) -> Vec<ValidationError> {
     check_type_refs_resolve(graph, &mut errors);
     check_no_duplicate_names_in_scope(graph, &mut errors);
     check_following_template_phases(graph, &mut errors);
+    check_using_do_nodes(graph, &mut errors);
     errors
 }
 
@@ -266,6 +267,11 @@ fn check_following_template_phases(graph: &AilGraph, errors: &mut Vec<Validation
         if node.pattern != Pattern::Do {
             continue;
         }
+        // using-Do nodes reference a shared pattern via Ed but do NOT implement
+        // template phases — skip them so v008 doesn't fire for using references.
+        if node.metadata.using_pattern_name.is_some() {
+            continue;
+        }
         let template_refs = graph.outgoing_diagonal_refs_of(node.id).unwrap_or_default();
 
         if template_refs.is_empty() {
@@ -306,6 +312,28 @@ fn check_following_template_phases(graph: &AilGraph, errors: &mut Vec<Validation
                     });
                 }
             }
+        }
+    }
+}
+
+// ─── v009: using-Do node constraints ─────────────────────────────────────────
+
+fn check_using_do_nodes(graph: &AilGraph, errors: &mut Vec<ValidationError>) {
+    for node in graph.all_nodes() {
+        if node.pattern != Pattern::Do {
+            continue;
+        }
+        if node.metadata.using_pattern_name.is_none() {
+            continue;
+        }
+        // A using-Do must be a leaf (children must be None).
+        if node.children.is_some() {
+            errors.push(ValidationError::UsingDoHasChildren { node_id: node.id });
+        }
+        // A using-Do must have at least one outgoing Ed edge (wired by assembler).
+        let diagonal_refs = graph.outgoing_diagonal_refs_of(node.id).unwrap_or_default();
+        if diagonal_refs.is_empty() {
+            errors.push(ValidationError::UsingDoMissingEdge { node_id: node.id });
         }
     }
 }

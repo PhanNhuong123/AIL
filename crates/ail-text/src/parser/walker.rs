@@ -785,6 +785,9 @@ fn walk_do_stmt(pair: Pair<'_, Rule>) -> Result<ParsedStatement, ParseError> {
     let mut params = Vec::new();
     let mut return_types = Vec::new();
     let mut or_error_types = Vec::new();
+    let mut following_template_name = None;
+    let mut using_pattern_name = None;
+    let mut using_params = Vec::new();
 
     for inner in pair.into_inner() {
         match inner.as_rule() {
@@ -809,6 +812,28 @@ fn walk_do_stmt(pair: Pair<'_, Rule>) -> Result<ParsedStatement, ParseError> {
                 // "or ErrorType" continuation lines
                 or_error_types.push(inner.as_str().to_string());
             }
+            Rule::following_clause => {
+                // Extract the template intent from the following clause.
+                for fc_inner in inner.into_inner() {
+                    if fc_inner.as_rule() == Rule::intent {
+                        following_template_name = Some(fc_inner.as_str().to_string());
+                    }
+                }
+            }
+            Rule::using_clause => {
+                // Extract the shared-pattern name and optional where params.
+                for uc_inner in inner.into_inner() {
+                    match uc_inner.as_rule() {
+                        Rule::intent => {
+                            using_pattern_name = Some(uc_inner.as_str().to_string());
+                        }
+                        Rule::using_params => {
+                            using_params = walk_using_params(uc_inner);
+                        }
+                        _ => {}
+                    }
+                }
+            }
             _ => {}
         }
     }
@@ -832,6 +857,9 @@ fn walk_do_stmt(pair: Pair<'_, Rule>) -> Result<ParsedStatement, ParseError> {
             name: Some(intent_text.replace(' ', "_")),
             params,
             return_type,
+            following_template_name,
+            using_pattern_name,
+            using_params,
             ..Default::default()
         },
         expression: None,
@@ -943,6 +971,26 @@ fn walk_assignment_list(pair: Pair<'_, Rule>) -> Vec<(String, String)> {
                 }
             }
             (name, value)
+        })
+        .collect()
+}
+
+/// Walk a `using_params` rule: `key is val, key2 is val2`.
+/// Uses `is` as separator (not `=`) per AIL spec.
+fn walk_using_params(pair: Pair<'_, Rule>) -> Vec<(String, String)> {
+    pair.into_inner()
+        .filter(|p| p.as_rule() == Rule::using_param)
+        .map(|up| {
+            let mut key = String::new();
+            let mut val = String::new();
+            for inner in up.into_inner() {
+                match inner.as_rule() {
+                    Rule::ident => key = inner.as_str().to_string(),
+                    Rule::value_expr => val = inner.as_str().trim().to_string(),
+                    _ => {}
+                }
+            }
+            (key, val)
         })
         .collect()
 }

@@ -328,3 +328,129 @@ fn parse_ambiguous_intent_becomes_do() {
     assert_eq!(n.pattern, Pattern::Do);
     assert_eq!(n.intent, "walk around carefully");
 }
+
+// ── Do: following clause ──────────────────────────────────────────────────────
+
+#[test]
+fn parse_do_with_following_clause_stores_template_name() {
+    // Must include the template node so the assembler can resolve the Ed edge.
+    let input = concat!(
+        "do command flow template\n",
+        "\n",
+        "do transfer money safely\n",
+        "  following command flow template"
+    );
+    let g = parse(input).unwrap_or_else(|e| panic!("parse failed: {e}"));
+    let n = g
+        .all_nodes()
+        .find(|n| n.intent == "transfer money safely")
+        .expect("implementing Do not found");
+    assert_eq!(n.pattern, Pattern::Do);
+    assert_eq!(
+        n.metadata.following_template_name.as_deref(),
+        Some("command flow template"),
+        "following_template_name should capture the template intent"
+    );
+}
+
+#[test]
+fn parse_do_following_combined_with_params_and_return() {
+    // Must include the template node so the assembler can resolve the Ed edge.
+    let input = concat!(
+        "do command flow template\n",
+        "\n",
+        "do transfer money safely\n",
+        "  from sender:User, amount:Amount\n",
+        "  -> TransferResult\n",
+        "  following command flow template"
+    );
+    let g = parse(input).unwrap_or_else(|e| panic!("parse failed: {e}"));
+    let n = g
+        .all_nodes()
+        .find(|n| n.intent == "transfer money safely")
+        .expect("implementing Do not found");
+    assert_eq!(n.pattern, Pattern::Do);
+    assert_eq!(n.metadata.params.len(), 2);
+    assert!(n.metadata.return_type.is_some());
+    assert_eq!(
+        n.metadata.following_template_name.as_deref(),
+        Some("command flow template")
+    );
+}
+
+#[test]
+fn parse_do_without_following_clause_has_none() {
+    let input = "do transfer money safely\n  from sender:User\n  -> TransferResult";
+    let g = parse_single(input);
+    let n = first_node(&g);
+    assert!(
+        n.metadata.following_template_name.is_none(),
+        "Do without following clause should have None"
+    );
+}
+
+// ── Do: using clause ─────────────────────────────────────────────────────────
+
+#[test]
+fn parse_do_with_using_clause_simple() {
+    // Must include the shared-pattern node so the assembler can resolve the Ed edge.
+    let input = concat!(
+        "do save entity to database\n",
+        "\n",
+        "do save sender balance\n",
+        "  using save entity to database"
+    );
+    let g = parse(input).unwrap_or_else(|e| panic!("parse failed: {e}"));
+    let n = g
+        .all_nodes()
+        .find(|n| n.intent == "save sender balance")
+        .expect("using-Do not found");
+    assert_eq!(n.pattern, Pattern::Do);
+    assert_eq!(
+        n.metadata.using_pattern_name.as_deref(),
+        Some("save entity to database"),
+        "using_pattern_name should capture the shared pattern name"
+    );
+    assert!(
+        n.metadata.using_params.is_empty(),
+        "no where clause → empty params"
+    );
+}
+
+#[test]
+fn parse_do_with_using_clause_and_params() {
+    // Must include the shared-pattern node so the assembler can resolve the Ed edge.
+    let input = concat!(
+        "do save entity to database\n",
+        "\n",
+        "do save sender balance\n",
+        "  using save entity to database\n",
+        "    where entity is sender, entity_id is sender.id"
+    );
+    let g = parse(input).unwrap_or_else(|e| panic!("parse failed: {e}"));
+    let n = g
+        .all_nodes()
+        .find(|n| n.intent == "save sender balance")
+        .expect("using-Do not found");
+    assert_eq!(
+        n.metadata.using_pattern_name.as_deref(),
+        Some("save entity to database")
+    );
+    assert_eq!(n.metadata.using_params.len(), 2);
+    assert_eq!(n.metadata.using_params[0].0, "entity");
+    assert_eq!(n.metadata.using_params[0].1, "sender");
+    assert_eq!(n.metadata.using_params[1].0, "entity_id");
+    assert_eq!(n.metadata.using_params[1].1, "sender.id");
+}
+
+#[test]
+fn parse_do_without_using_clause_has_none() {
+    let input = "do transfer money safely\n  from sender:User";
+    let g = parse_single(input);
+    let n = first_node(&g);
+    assert!(
+        n.metadata.using_pattern_name.is_none(),
+        "Do without using clause should have None"
+    );
+    assert!(n.metadata.using_params.is_empty());
+}

@@ -663,6 +663,135 @@ fn validate_collects_all_errors() {
     );
 }
 
+// ─── v009: using-Do node constraints ─────────────────────────────────────────
+
+/// Build a graph where a Do node has `using_pattern_name` set.
+/// Optionally add children and/or an Ed edge to a target Do node.
+fn using_do_graph(with_children: bool, with_ed_edge: bool) -> (AilGraph, NodeId) {
+    let mut graph = AilGraph::new();
+
+    // Shared-pattern Do node (the referenced one).
+    let mut shared = make_named_node(
+        "save entity to database",
+        Pattern::Do,
+        "save_entity_to_database",
+    );
+    shared.contracts.push(before_contract());
+    shared.contracts.push(after_contract());
+    let shared_id = graph.add_node(shared).unwrap();
+
+    // The using-Do node.
+    let mut root = make_named_node("save sender balance", Pattern::Do, "save_sender_balance");
+    root.contracts.push(before_contract());
+    root.contracts.push(after_contract());
+    root.metadata.using_pattern_name = Some("save_entity_to_database".to_owned());
+    root.metadata.using_params = vec![("entity".to_owned(), "sender".to_owned())];
+
+    if with_children {
+        root.children = Some(vec![]); // v009 should reject this
+    }
+
+    let root_id = graph.add_node(root).unwrap();
+    graph.set_root(root_id).unwrap();
+
+    // Shared is reachable via Ev from root (v009 checks node.children field, not Ev edges).
+    graph.add_edge(root_id, shared_id, EdgeKind::Ev).unwrap();
+
+    if with_ed_edge {
+        graph.add_edge(root_id, shared_id, EdgeKind::Ed).unwrap();
+    }
+
+    (graph, root_id)
+}
+
+#[test]
+fn v009_rejects_using_do_with_children() {
+    let (graph, _) = using_do_graph(true, true);
+    let errors = validate_graph(graph).unwrap_err();
+    assert!(
+        errors
+            .iter()
+            .any(|e| matches!(e, ValidationError::UsingDoHasChildren { .. })),
+        "expected UsingDoHasChildren error, got: {errors:?}"
+    );
+}
+
+#[test]
+fn v009_rejects_using_do_missing_ed_edge() {
+    let (graph, _) = using_do_graph(false, false); // no Ed edge
+    let errors = validate_graph(graph).unwrap_err();
+    assert!(
+        errors
+            .iter()
+            .any(|e| matches!(e, ValidationError::UsingDoMissingEdge { .. })),
+        "expected UsingDoMissingEdge error, got: {errors:?}"
+    );
+}
+
+#[test]
+fn v009_accepts_valid_using_do_leaf_with_ed_edge() {
+    let (graph, _) = using_do_graph(false, true);
+    let result = validate_graph(graph);
+    assert!(
+        result.is_ok(),
+        "valid using-Do should pass validation, got: {:?}",
+        result.unwrap_err()
+    );
+}
+
+#[test]
+fn v009_accumulates_children_and_missing_edge_errors() {
+    // A using-Do that BOTH has children AND lacks an Ed edge — both errors reported.
+    let (graph, _) = using_do_graph(true, false);
+    let errors = validate_graph(graph).unwrap_err();
+    let has_children_err = errors
+        .iter()
+        .any(|e| matches!(e, ValidationError::UsingDoHasChildren { .. }));
+    let has_edge_err = errors
+        .iter()
+        .any(|e| matches!(e, ValidationError::UsingDoMissingEdge { .. }));
+    assert!(
+        has_children_err && has_edge_err,
+        "expected both UsingDoHasChildren and UsingDoMissingEdge, got: {errors:?}"
+    );
+}
+
+#[test]
+fn v009_ignores_do_without_using_pattern_name() {
+    // A normal Do node (no using_pattern_name) must not trigger v009 errors.
+    let result = validate_graph(minimal_valid_graph());
+    assert!(
+        result.is_ok(),
+        "normal Do without using_pattern_name must not trigger v009, got: {:?}",
+        result.unwrap_err()
+    );
+}
+
+#[test]
+fn v009_ignores_other_pattern_types_with_ed_edges() {
+    // An Ed edge from a non-Do node should not trigger v009.
+    let mut graph = AilGraph::new();
+    let mut root = make_named_node("transfer money", Pattern::Do, "transfer_money");
+    root.contracts.push(before_contract());
+    root.contracts.push(after_contract());
+    root.children = Some(vec![]);
+    let root_id = graph.add_node(root).unwrap();
+    graph.set_root(root_id).unwrap();
+
+    // Describe node with an Ed edge — not a using-Do, should be fine.
+    let desc = make_named_node("user type", Pattern::Describe, "User");
+    let desc_id = graph.add_node(desc).unwrap();
+    graph.add_edge(root_id, desc_id, EdgeKind::Ev).unwrap();
+    graph.add_edge(root_id, desc_id, EdgeKind::Ed).unwrap();
+
+    let result = validate_graph(graph);
+    assert!(
+        result.is_ok(),
+        "non-Do nodes with Ed edges must not trigger v009, got: {:?}",
+        result.unwrap_err()
+    );
+}
+
 // ─── Integration: ValidGraph API ─────────────────────────────────────────────
 
 #[test]

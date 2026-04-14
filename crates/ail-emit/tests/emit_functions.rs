@@ -341,7 +341,10 @@ fn emit_do_sync_function_definition() {
         "transfer_money",
         vec![("sender_id", "UserId"), ("amount", "PositiveAmount")],
         "TransferResult",
-        vec![define_type_node("UserId", "text"), describe_type_node("TransferResult")],
+        vec![
+            define_type_node("UserId", "text"),
+            describe_type_node("TransferResult"),
+        ],
         vec![],
     );
     let output = emit_function_definitions(&verified, &sync_config()).expect("emit ok");
@@ -360,7 +363,10 @@ fn emit_do_async_function_definition() {
         "transfer_money",
         vec![("sender_id", "UserId")],
         "TransferResult",
-        vec![define_type_node("UserId", "text"), describe_type_node("TransferResult")],
+        vec![
+            define_type_node("UserId", "text"),
+            describe_type_node("TransferResult"),
+        ],
         vec![],
     );
     let output = emit_function_definitions(&verified, &async_config()).expect("emit ok");
@@ -408,9 +414,16 @@ fn emit_fetch_as_repo_get_sync() {
         "load_user",
         vec![("user_id", "UserId")],
         "User",
-        vec![define_type_node("UserId", "text"), describe_type_node("User")],
+        vec![
+            define_type_node("UserId", "text"),
+            describe_type_node("User"),
+        ],
         // No placeholder return_node — test only checks the fetch line.
-        vec![fetch_node("user", "User", "from database where id is user_id")],
+        vec![fetch_node(
+            "user",
+            "User",
+            "from database where id is user_id",
+        )],
     );
     let output = emit_function_definitions(&verified, &sync_config()).expect("emit ok");
     let content = &output.files[0].content;
@@ -424,8 +437,15 @@ fn emit_fetch_as_repo_get_async() {
         "load_user",
         vec![("user_id", "UserId")],
         "User",
-        vec![define_type_node("UserId", "text"), describe_type_node("User")],
-        vec![fetch_node("user", "User", "from database where id is user_id")],
+        vec![
+            define_type_node("UserId", "text"),
+            describe_type_node("User"),
+        ],
+        vec![fetch_node(
+            "user",
+            "User",
+            "from database where id is user_id",
+        )],
     );
     let output = emit_function_definitions(&verified, &async_config()).expect("emit ok");
     let content = &output.files[0].content;
@@ -501,7 +521,10 @@ fn emit_raise_exception_in_function() {
         vec![("amount", "number")],
         "void",
         vec![],
-        vec![raise_node("NegativeAmountError", vec![("amount", "amount")])],
+        vec![raise_node(
+            "NegativeAmountError",
+            vec![("amount", "amount")],
+        )],
     );
     let output = emit_function_definitions(&verified, &sync_config()).expect("emit ok");
     let content = &output.files[0].content;
@@ -697,7 +720,11 @@ fn emit_retry_sync_loop() {
     graph.add_node(retry_node).unwrap();
     graph.add_edge(fn_id, retry_id, EdgeKind::Ev).unwrap();
 
-    let inner_fetch = fetch_node("rate", "ExchangeRate", "from api where currency is currency");
+    let inner_fetch = fetch_node(
+        "rate",
+        "ExchangeRate",
+        "from api where currency is currency",
+    );
     let inner_id = inner_fetch.id;
     graph.add_node(inner_fetch).unwrap();
     graph.add_edge(retry_id, inner_id, EdgeKind::Ev).unwrap();
@@ -1003,7 +1030,11 @@ fn emit_wallet_transfer_function() {
             // 03: fetch receiver
             fetch_node("receiver", "User", "from database where id is receiver_id"),
             // 04: compute sender balance
-            let_node("new_sender_balance", "WalletBalance", "sender.balance - amount"),
+            let_node(
+                "new_sender_balance",
+                "WalletBalance",
+                "sender.balance - amount",
+            ),
             // 05: compute receiver balance
             let_node(
                 "new_receiver_balance",
@@ -1028,16 +1059,30 @@ fn emit_wallet_transfer_function() {
         ],
     );
 
-    let output =
-        emit_function_definitions(&verified, &sync_config()).expect("emit should succeed");
+    let output = emit_function_definitions(&verified, &sync_config()).expect("emit should succeed");
     let content = &output.files[0].content;
 
     // Function signature.
-    assert!(content.contains("def transfer_money("), "missing function def");
-    assert!(content.contains("sender_id: UserId"), "missing sender_id param");
-    assert!(content.contains("receiver_id: UserId"), "missing receiver_id param");
-    assert!(content.contains("amount: PositiveAmount"), "missing amount param");
-    assert!(content.contains("-> TransferResult:"), "missing return type");
+    assert!(
+        content.contains("def transfer_money("),
+        "missing function def"
+    );
+    assert!(
+        content.contains("sender_id: UserId"),
+        "missing sender_id param"
+    );
+    assert!(
+        content.contains("receiver_id: UserId"),
+        "missing receiver_id param"
+    );
+    assert!(
+        content.contains("amount: PositiveAmount"),
+        "missing amount param"
+    );
+    assert!(
+        content.contains("-> TransferResult:"),
+        "missing return type"
+    );
 
     // Check guard.
     assert!(content.contains("if not ("), "missing check guard");
@@ -1067,7 +1112,10 @@ fn emit_wallet_transfer_function() {
     );
 
     // Update calls.
-    assert!(content.contains("repo.update(User,"), "missing update calls");
+    assert!(
+        content.contains("repo.update(User,"),
+        "missing update calls"
+    );
     assert!(
         content.contains("\"balance\": new_sender_balance"),
         "missing sender balance update"
@@ -1165,6 +1213,423 @@ fn emit_foreach_loop_in_function() {
     assert!(content.contains("total: float = total + item.price"));
 }
 
+// ── following: phase comment injection ───────────────────────────────────────
+
+/// Build a verified graph where a top-level Do follows a template Do and has
+/// child Do nodes for each required phase.
+///
+/// Template phases: "validate", "execute".
+/// The implementing Do's children are named-Do section nodes with matching names.
+fn build_following_fn_graph(phase_names: Vec<&str>) -> ail_contract::VerifiedGraph {
+    let mut graph = AilGraph::new();
+
+    // Root container.
+    let root_id = NodeId::new();
+    let mut root = Node {
+        id: root_id,
+        intent: "root".to_owned(),
+        pattern: Pattern::Describe,
+        children: None,
+        expression: None,
+        contracts: vec![],
+        metadata: NodeMetadata::default(),
+    };
+    graph.add_node(root).expect("add root");
+    graph.set_root(root_id).expect("set root");
+
+    // Template Do node with phase children.
+    let template_id = NodeId::new();
+    let mut template = Node {
+        id: template_id,
+        intent: "command flow".to_owned(),
+        pattern: Pattern::Do,
+        children: Some(vec![]),
+        expression: None,
+        contracts: vec![
+            Contract {
+                kind: ContractKind::Before,
+                expression: Expression("true == true".to_owned()),
+            },
+            Contract {
+                kind: ContractKind::After,
+                expression: Expression("true == true".to_owned()),
+            },
+        ],
+        metadata: NodeMetadata::default(),
+    };
+    template.metadata.name = Some("command_flow".to_owned());
+    graph.add_node(template).expect("add template");
+    graph
+        .add_edge(root_id, template_id, EdgeKind::Ev)
+        .expect("Ev root→template");
+
+    let mut template_phase_ids = Vec::new();
+    for phase in &phase_names {
+        let phase_id = NodeId::new();
+        let mut phase_node = Node {
+            id: phase_id,
+            intent: phase.to_string(),
+            pattern: Pattern::Do,
+            children: None,
+            expression: None,
+            contracts: vec![],
+            metadata: NodeMetadata::default(),
+        };
+        phase_node.metadata.name = Some(phase.to_string());
+        graph.add_node(phase_node).expect("add template phase");
+        graph
+            .add_edge(template_id, phase_id, EdgeKind::Ev)
+            .expect("Ev template→phase");
+        template_phase_ids.push(phase_id);
+    }
+    {
+        let t = graph.get_node_mut(template_id).expect("template");
+        t.children = Some(template_phase_ids);
+    }
+
+    // Implementing Do node.
+    let fn_id = NodeId::new();
+    let mut fn_node = Node {
+        id: fn_id,
+        intent: "process_order".to_owned(),
+        pattern: Pattern::Do,
+        children: Some(vec![]),
+        expression: None,
+        contracts: vec![
+            Contract {
+                kind: ContractKind::Before,
+                expression: Expression("true == true".to_owned()),
+            },
+            Contract {
+                kind: ContractKind::After,
+                expression: Expression("true == true".to_owned()),
+            },
+        ],
+        metadata: NodeMetadata::default(),
+    };
+    fn_node.metadata.name = Some("process_order".to_owned());
+    fn_node.metadata.return_type = Some("void".to_owned());
+    graph.add_node(fn_node).expect("add fn");
+    graph
+        .add_edge(root_id, fn_id, EdgeKind::Ev)
+        .expect("Ev root→fn");
+    graph
+        .add_edge(template_id, fn_id, EdgeKind::Eh)
+        .expect("Eh template→fn");
+    // Ed edge: implementing Do → template Do (the "following" link).
+    graph
+        .add_edge(fn_id, template_id, EdgeKind::Ed)
+        .expect("Ed fn→template");
+
+    // Add a matching child Do for each phase (with a leaf inside each).
+    let mut impl_phase_ids = Vec::new();
+    let mut prev_phase: Option<NodeId> = None;
+    for phase in &phase_names {
+        let phase_id = NodeId::new();
+        let mut phase_node = Node {
+            id: phase_id,
+            intent: format!("do {phase}"),
+            pattern: Pattern::Do,
+            children: Some(vec![]),
+            expression: None,
+            contracts: vec![],
+            metadata: NodeMetadata::default(),
+        };
+        phase_node.metadata.name = Some(phase.to_string());
+        graph.add_node(phase_node).expect("add impl phase");
+        graph
+            .add_edge(fn_id, phase_id, EdgeKind::Ev)
+            .expect("Ev fn→phase");
+        if let Some(prev) = prev_phase {
+            graph
+                .add_edge(prev, phase_id, EdgeKind::Eh)
+                .expect("Eh phase chain");
+        }
+        prev_phase = Some(phase_id);
+
+        // Add a leaf Let node inside the phase.
+        let leaf = let_node("x", "number", "1 + 1");
+        let leaf_id = leaf.id;
+        graph.add_node(leaf).expect("add leaf");
+        graph
+            .add_edge(phase_id, leaf_id, EdgeKind::Ev)
+            .expect("Ev phase→leaf");
+        {
+            let p = graph.get_node_mut(phase_id).expect("phase");
+            p.children = Some(vec![leaf_id]);
+        }
+
+        impl_phase_ids.push(phase_id);
+    }
+    {
+        let f = graph.get_node_mut(fn_id).expect("fn");
+        f.children = Some(impl_phase_ids.clone());
+    }
+    {
+        let r = graph.get_node_mut(root_id).expect("root");
+        r.children = Some(vec![template_id, fn_id]);
+    }
+
+    let valid = validate_graph(graph).expect("validation");
+    let typed = type_check(valid, &[]).expect("type check");
+    verify(typed).expect("verification")
+}
+
+#[test]
+fn emit_do_following_injects_phase_comment() {
+    let verified = build_following_fn_graph(vec!["validate", "execute"]);
+    let output = emit_function_definitions(&verified, &sync_config()).expect("emit ok");
+    let content = &output.files[0].content;
+
+    assert!(
+        content.contains("# === [Phase: validate] ==="),
+        "expected phase comment for 'validate', got:\n{content}"
+    );
+}
+
+#[test]
+fn emit_do_following_injects_all_phases_in_order() {
+    let verified = build_following_fn_graph(vec!["validate", "execute"]);
+    let output = emit_function_definitions(&verified, &sync_config()).expect("emit ok");
+    let content = &output.files[0].content;
+
+    let validate_pos = content.find("# === [Phase: validate] ===");
+    let execute_pos = content.find("# === [Phase: execute] ===");
+
+    assert!(
+        validate_pos.is_some(),
+        "expected phase comment for 'validate'"
+    );
+    assert!(
+        execute_pos.is_some(),
+        "expected phase comment for 'execute'"
+    );
+    assert!(
+        validate_pos.unwrap() < execute_pos.unwrap(),
+        "validate phase must appear before execute phase"
+    );
+}
+
+#[test]
+fn emit_do_no_template_no_phase_comments() {
+    // A normal Do without a following template must not emit phase comments.
+    let verified = build_verified_fn_graph(
+        "process_order",
+        vec![],
+        "void",
+        vec![],
+        vec![save_node("data", "store")],
+    );
+    let output = emit_function_definitions(&verified, &sync_config()).expect("emit ok");
+    let content = &output.files[0].content;
+
+    assert!(
+        !content.contains("# === [Phase:"),
+        "no phase comments expected for plain Do:\n{content}"
+    );
+}
+
+// ── using: inline expansion ───────────────────────────────────────────────────
+
+/// Build a graph with a shared-pattern Do and a using-Do that references it.
+/// The using-Do gets an Ed edge to the shared pattern. The shared pattern has
+/// a single Let leaf with `entity_name`.
+fn build_using_fn_graph(
+    pattern_intent: &str,
+    pattern_name: &str,
+    using_params: Vec<(String, String)>,
+) -> ail_contract::VerifiedGraph {
+    let mut graph = AilGraph::new();
+
+    // Root container.
+    let root_id = NodeId::new();
+    let root = Node {
+        id: root_id,
+        intent: "root".to_owned(),
+        pattern: Pattern::Describe,
+        children: None,
+        expression: None,
+        contracts: vec![],
+        metadata: NodeMetadata::default(),
+    };
+    graph.add_node(root).expect("add root");
+    graph.set_root(root_id).expect("set root");
+
+    // Shared-pattern Do node.
+    let shared_id = NodeId::new();
+    let mut shared = Node {
+        id: shared_id,
+        intent: pattern_intent.to_owned(),
+        pattern: Pattern::Do,
+        children: Some(vec![]),
+        expression: None,
+        contracts: vec![
+            Contract {
+                kind: ContractKind::Before,
+                expression: Expression("true == true".to_owned()),
+            },
+            Contract {
+                kind: ContractKind::After,
+                expression: Expression("true == true".to_owned()),
+            },
+        ],
+        metadata: NodeMetadata::default(),
+    };
+    shared.metadata.name = Some(pattern_name.to_owned());
+    shared.metadata.return_type = Some("void".to_owned());
+    graph.add_node(shared).expect("add shared");
+    graph
+        .add_edge(root_id, shared_id, EdgeKind::Ev)
+        .expect("Ev root→shared");
+
+    // Add a let leaf in the shared pattern.
+    let leaf = let_node("entity_log", "text", "entity.id");
+    let leaf_id = leaf.id;
+    graph.add_node(leaf).expect("add leaf");
+    graph
+        .add_edge(shared_id, leaf_id, EdgeKind::Ev)
+        .expect("Ev shared→leaf");
+    {
+        let s = graph.get_node_mut(shared_id).expect("shared");
+        s.children = Some(vec![leaf_id]);
+    }
+
+    // The using-Do node (leaf, no children).
+    let fn_id = NodeId::new();
+    let mut fn_node = Node {
+        id: fn_id,
+        intent: "save sender entity".to_owned(),
+        pattern: Pattern::Do,
+        children: None, // using-Do is a leaf
+        expression: None,
+        contracts: vec![
+            Contract {
+                kind: ContractKind::Before,
+                expression: Expression("true == true".to_owned()),
+            },
+            Contract {
+                kind: ContractKind::After,
+                expression: Expression("true == true".to_owned()),
+            },
+        ],
+        metadata: NodeMetadata::default(),
+    };
+    fn_node.metadata.name = Some("save_sender_entity".to_owned());
+    fn_node.metadata.return_type = Some("void".to_owned());
+    fn_node.metadata.using_pattern_name = Some(pattern_name.to_owned());
+    fn_node.metadata.using_params = using_params;
+    graph.add_node(fn_node).expect("add fn");
+    graph
+        .add_edge(root_id, fn_id, EdgeKind::Ev)
+        .expect("Ev root→fn");
+    graph
+        .add_edge(shared_id, fn_id, EdgeKind::Eh)
+        .expect("Eh shared→fn");
+    // Ed edge: using-Do → shared-pattern (the "using" link).
+    graph
+        .add_edge(fn_id, shared_id, EdgeKind::Ed)
+        .expect("Ed fn→shared");
+
+    {
+        let r = graph.get_node_mut(root_id).expect("root");
+        r.children = Some(vec![shared_id, fn_id]);
+    }
+
+    let valid = validate_graph(graph).expect("validation");
+    let typed = type_check(valid, &[]).expect("type check");
+    verify(typed).expect("verification")
+}
+
+#[test]
+fn emit_using_do_inlines_template_body() {
+    // No params — the shared pattern's body appears verbatim.
+    let verified =
+        build_using_fn_graph("save entity to database", "save_entity_to_database", vec![]);
+    let output = emit_function_definitions(&verified, &sync_config()).expect("emit ok");
+    let content = &output.files[0].content;
+
+    // The using-Do function should contain the inlined leaf: entity_log = entity.id
+    assert!(
+        content.contains("entity_log"),
+        "inlined body must contain 'entity_log':\n{content}"
+    );
+    assert!(
+        content.contains("entity.id"),
+        "inlined body must contain 'entity.id':\n{content}"
+    );
+}
+
+#[test]
+fn emit_using_do_substitutes_param() {
+    // entity → sender substitution.
+    let verified = build_using_fn_graph(
+        "save entity to database",
+        "save_entity_to_database",
+        vec![("entity".to_owned(), "sender".to_owned())],
+    );
+    let output = emit_function_definitions(&verified, &sync_config()).expect("emit ok");
+    // The using-Do function for save_sender_entity.
+    let content = &output.files[0].content;
+
+    // After substitution: "entity.id" in the let expression becomes "sender.id".
+    assert!(
+        content.contains("sender.id"),
+        "substituted body must contain 'sender.id':\n{content}"
+    );
+}
+
+#[test]
+fn emit_using_do_whole_word_no_partial_substitution() {
+    // entity_log must NOT be substituted when substituting "entity" → "sender".
+    // Because "entity_log" has an underscore after "entity", it is not a whole-word match.
+    let verified = build_using_fn_graph(
+        "save entity to database",
+        "save_entity_to_database",
+        vec![("entity".to_owned(), "sender".to_owned())],
+    );
+    let output = emit_function_definitions(&verified, &sync_config()).expect("emit ok");
+    let content = &output.files[0].content;
+
+    // entity_log must remain as entity_log (not sender_log).
+    assert!(
+        content.contains("entity_log"),
+        "entity_log (with underscore) must not be partially substituted:\n{content}"
+    );
+    // And sender.id must be there from substituting the dot-path expression.
+    assert!(
+        content.contains("sender.id"),
+        "entity.id should have been substituted to sender.id:\n{content}"
+    );
+}
+
+#[test]
+fn emit_using_do_generates_one_function_definition() {
+    // The using-Do should produce exactly one function def for save_sender_entity.
+    let verified =
+        build_using_fn_graph("save entity to database", "save_entity_to_database", vec![]);
+    let output = emit_function_definitions(&verified, &sync_config()).expect("emit ok");
+    let content = &output.files[0].content;
+
+    let fn_defs: Vec<_> = content.match_indices("def ").collect();
+    // 2 function defs expected: save_entity_to_database (shared) + save_sender_entity (using)
+    assert_eq!(
+        fn_defs.len(),
+        2,
+        "expected 2 function defs, got {}: {content}",
+        fn_defs.len()
+    );
+    assert!(
+        content.contains("def save_sender_entity("),
+        "missing save_sender_entity def"
+    );
+}
+
+// ── using.rs unit tests: replace_whole_word ───────────────────────────────────
+
+// These are in the ail-emit crate's using module — tested here via integration
+// since replace_whole_word is pub(crate) in the emitter.
+// The behavior is indirectly verified by the emit_using_do_* tests above.
+
 // ── Python syntax verification ─────────────────────────────────────────────────
 
 #[test]
@@ -1191,7 +1656,11 @@ fn emit_generated_python_functions_valid_syntax() {
             ),
             fetch_node("sender", "User", "from database where id is sender_id"),
             fetch_node("receiver", "User", "from database where id is receiver_id"),
-            let_node("new_sender_balance", "WalletBalance", "sender.balance - amount"),
+            let_node(
+                "new_sender_balance",
+                "WalletBalance",
+                "sender.balance - amount",
+            ),
             let_node(
                 "new_receiver_balance",
                 "WalletBalance",

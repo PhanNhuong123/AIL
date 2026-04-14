@@ -55,4 +55,22 @@ pub enum ParseError {
         message: String,
         path: Option<String>,
     },
+
+    /// AIL-P010: `following` clause references a template name that does not
+    /// match any `Do` node in the graph.
+    #[error("AIL-P010 following template '{template_name}' not found in graph")]
+    FollowingTemplateNotFound { template_name: String },
+
+    /// AIL-P011: `following` clause matches more than one `Do` node by name.
+    #[error("AIL-P011 following template '{template_name}' is ambiguous (matched {count} nodes)")]
+    FollowingTemplateAmbiguous { template_name: String, count: usize },
+
+    /// AIL-P012: `using` clause references a shared-pattern name that does not
+    /// match any `Do` node in the graph.
+    #[error("AIL-P012 using pattern '{pattern_name}' not found in graph")]
+    UsingPatternNotFound { pattern_name: String },
+
+    /// AIL-P013: `using` clause matches more than one `Do` node by name.
+    #[error("AIL-P013 using pattern '{pattern_name}' is ambiguous (matched {count} nodes)")]
+    UsingPatternAmbiguous { pattern_name: String, count: usize },
 }

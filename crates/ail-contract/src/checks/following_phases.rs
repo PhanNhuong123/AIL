@@ -20,6 +20,12 @@ pub(crate) fn check_following_template_phases(
     node: &Node,
     errors: &mut Vec<ContractError>,
 ) {
+    // using-Do nodes reference a shared pattern via Ed for CIC propagation but
+    // do NOT implement template phases — skip them to avoid false positives.
+    if node.metadata.using_pattern_name.is_some() {
+        return;
+    }
+
     let template_refs: Vec<NodeId> = graph
         .outgoing_diagonal_refs_of(node.id)
         .unwrap_or_default()

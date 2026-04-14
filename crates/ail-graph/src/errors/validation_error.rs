@@ -52,4 +52,11 @@ pub enum ValidationError {
     // ─── v008: following template phases ──────────────────────────────────
     #[error("Do node {node_id} is missing required template phase '{phase}'")]
     MissingTemplatePhase { node_id: NodeId, phase: String },
+
+    // ─── v009: using-Do node constraints ──────────────────────────────────
+    #[error("Do node {node_id} has using_pattern_name set but also has children (must be a leaf)")]
+    UsingDoHasChildren { node_id: NodeId },
+
+    #[error("Do node {node_id} has using_pattern_name set but no outgoing Ed edge (assembler must wire the reference)")]
+    UsingDoMissingEdge { node_id: NodeId },
 }

@@ -85,7 +85,7 @@ time_unit       =  { ("second" | "minute") ~ "s"? }
 
 continuation_kw = _{
     "from" | "given" | "->" | "producing" | "or" | "carries" |
-    "otherwise" | "set" | "where" | "with"
+    "otherwise" | "set" | "where" | "with" | "following" | "using"
 }
 
 // ── Pattern rule helpers ──────────────────────────────────────────────────────
@@ -300,13 +300,35 @@ retry_stmt = {
 //
 // Negative lookahead for all pattern keywords prevents document-style do from
 // swallowing lines that should have matched an earlier pattern.
+// 17b. following clause (continuation of do_stmt) ────────────────────────────
+// Code:    do transfer money safely
+//            following command flow template
+// Meaning: the Do node follows a named structure template; the assembler
+//          wires an Ed edge from this Do to the template Do node by name.
+following_clause = { "following" ~ intent }
+
+// 17c. using clause (continuation of do_stmt) ─────────────────────────────────
+// Code:    save sender balance
+//            using save entity to database
+//              where entity is sender, entity_id is sender.id
+// Meaning: the Do node delegates its body to a shared-pattern Do node.
+//          The assembler wires an Ed edge; the emitter inlines the pattern body
+//          with param substitution. Values use `is` (not `=`) per AIL spec.
+using_param  = { ident ~ "is" ~ value_expr }
+using_params = { using_param ~ ("," ~ using_param)* }
+using_clause = {
+    "using" ~ intent ~
+    (cont2 ~ "where" ~ using_params)?
+}
+
 do_keyword_prefix = _{
     "define" | "describe" | "error" | "promise" | "requires" | "guarantees" | "must" |
     "let" | "calculate" | "check" | "ensure" | "verify" |
     "for" | "match" | "depending" | "fetch" | "look" |
     "save" | "store" | "persist" | "update" | "change" | "modify" |
     "remove" | "delete" | "drop" | "return" | "respond" |
-    "raise" | "reject" | "fail" | "together" | "atomically" | "retry" | "attempt"
+    "raise" | "reject" | "fail" | "together" | "atomically" | "retry" | "attempt" |
+    "following" | "using"
 }
 do_stmt = {
     (
@@ -315,7 +337,9 @@ do_stmt = {
     ) ~
     (cont2 ~ &continuation_kw ~ ("from" | "given") ~ param_list)? ~
     (cont2 ~ &continuation_kw ~ return_clause)? ~
-    (cont2 ~ &continuation_kw ~ "or" ~ type_ref)*
+    (cont2 ~ &continuation_kw ~ "or" ~ type_ref)* ~
+    (cont2 ~ &continuation_kw ~ following_clause)? ~
+    (cont2 ~ &continuation_kw ~ using_clause)?
 }
 
 // ── Statement and file ────────────────────────────────────────────────────────

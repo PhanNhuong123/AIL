@@ -19,11 +19,7 @@ pub(crate) fn emit_let(
     indent: &str,
     imports: &mut ImportSet,
 ) -> Result<String, EmitError> {
-    let expr = node
-        .expression
-        .as_ref()
-        .map(|e| e.0.as_str())
-        .unwrap_or("");
+    let expr = node.expression.as_ref().map(|e| e.0.as_str()).unwrap_or("");
 
     // Variable name and type from metadata (populated by ail-text parser).
     let var_name = node.metadata.name.as_deref().unwrap_or("_");
@@ -83,9 +79,7 @@ pub(crate) fn emit_check(
         format!("{inner}raise {error_type}({args})")
     };
 
-    Ok(format!(
-        "{indent}if not ({py_cond}):\n{raise_call}"
-    ))
+    Ok(format!("{indent}if not ({py_cond}):\n{raise_call}"))
 }
 
 /// Emit a `match` expression as Python 3.10+ structural pattern matching.
@@ -423,8 +417,7 @@ mod tests {
         let mut node = make_node(Pattern::Check, "validate sender");
         node.expression = Some(Expression("sender_id is not receiver_id".to_owned()));
         node.metadata.otherwise_error = Some("InvalidTransferError".to_owned());
-        node.metadata.otherwise_assigns =
-            vec![("user_id".to_owned(), "sender_id".to_owned())];
+        node.metadata.otherwise_assigns = vec![("user_id".to_owned(), "sender_id".to_owned())];
         let mut imports = ImportSet::new();
         let result = emit_check(&node, "    ", &mut imports).unwrap();
         assert!(result.contains("if not ("));
@@ -511,10 +504,7 @@ mod tests {
         node.expression = Some(Expression("from database where id is sender_id".to_owned()));
         let mut imports = ImportSet::new();
         let result = emit_fetch(&node, "    ", &sync_config(), &mut imports).unwrap();
-        assert_eq!(
-            result,
-            "    sender = repo.get(User, {\"id\": sender_id})"
-        );
+        assert_eq!(result, "    sender = repo.get(User, {\"id\": sender_id})");
         assert!(!imports.needs_asyncio);
     }
 
@@ -573,7 +563,9 @@ mod tests {
     fn emit_remove_with_condition() {
         let mut node = make_node(Pattern::Remove, "remove session");
         node.metadata.return_type = Some("Session".to_owned());
-        node.expression = Some(Expression("from store where token is expired_token".to_owned()));
+        node.expression = Some(Expression(
+            "from store where token is expired_token".to_owned(),
+        ));
         let mut imports = ImportSet::new();
         let result = emit_remove(&node, "    ", &sync_config(), &mut imports).unwrap();
         assert_eq!(

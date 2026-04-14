@@ -30,21 +30,30 @@ fn read_fixture(name: &str) -> String {
 fn roundtrip_fixture_positive_amount() {
     let content = read_fixture("positive_amount.ail");
     let output = roundtrip(&content);
-    assert_eq!(output, content, "positive_amount.ail did not roundtrip identically");
+    assert_eq!(
+        output, content,
+        "positive_amount.ail did not roundtrip identically"
+    );
 }
 
 #[test]
 fn roundtrip_fixture_transfer_money() {
     let content = read_fixture("transfer_money.ail");
     let output = roundtrip(&content);
-    assert_eq!(output, content, "transfer_money.ail did not roundtrip identically");
+    assert_eq!(
+        output, content,
+        "transfer_money.ail did not roundtrip identically"
+    );
 }
 
 #[test]
 fn roundtrip_fixture_transfer_result() {
     let content = read_fixture("transfer_result.ail");
     let output = roundtrip(&content);
-    assert_eq!(output, content, "transfer_result.ail did not roundtrip identically");
+    assert_eq!(
+        output, content,
+        "transfer_result.ail did not roundtrip identically"
+    );
 }
 
 #[test]
@@ -58,7 +67,10 @@ fn roundtrip_fixture_user() {
 fn roundtrip_fixture_wallet_balance() {
     let content = read_fixture("wallet_balance.ail");
     let output = roundtrip(&content);
-    assert_eq!(output, content, "wallet_balance.ail did not roundtrip identically");
+    assert_eq!(
+        output, content,
+        "wallet_balance.ail did not roundtrip identically"
+    );
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -96,9 +108,8 @@ fn roundtrip_directory_render_is_idempotent() {
         parse_directory(fixture_dir).unwrap_or_else(|e| panic!("parse_directory failed: {e}"));
     let first = render(&graph, usize::MAX);
 
-    let graph2 = parse(&first).unwrap_or_else(|e| {
-        panic!("re-parse of rendered directory output failed: {e}")
-    });
+    let graph2 = parse(&first)
+        .unwrap_or_else(|e| panic!("re-parse of rendered directory output failed: {e}"));
     let second = render(&graph2, usize::MAX);
 
     assert_eq!(
@@ -164,11 +175,17 @@ retry 3 times with delay 1 second
 ";
 
     let output = roundtrip(source);
-    assert_eq!(output, source, "all-pattern combined source did not roundtrip identically");
+    assert_eq!(
+        output, source,
+        "all-pattern combined source did not roundtrip identically"
+    );
 
     // Also verify double roundtrip stability
     let second = roundtrip(&output);
-    assert_eq!(output, second, "all-pattern combined: not idempotent after second pass");
+    assert_eq!(
+        output, second,
+        "all-pattern combined: not idempotent after second pass"
+    );
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -274,5 +291,8 @@ define WalletBalance:number where value >= 0
 
     // The canonical (no-comment) form roundtrips identically
     let re_rendered = roundtrip(&output);
-    assert_eq!(output, re_rendered, "canonical form without comment is not stable");
+    assert_eq!(
+        output, re_rendered,
+        "canonical form without comment is not stable"
+    );
 }

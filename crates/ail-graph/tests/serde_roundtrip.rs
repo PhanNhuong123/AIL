@@ -164,6 +164,12 @@ fn roundtrip_node_metadata_all_fields() {
             ),
         ],
         otherwise_result: Some("raise UnknownStatusError".to_string()),
+        following_template_name: Some("command flow template".to_string()),
+        using_pattern_name: Some("save entity to database".to_string()),
+        using_params: vec![
+            ("entity".to_string(), "sender".to_string()),
+            ("entity_id".to_string(), "sender.id".to_string()),
+        ],
     };
     roundtrip(&metadata);
 }

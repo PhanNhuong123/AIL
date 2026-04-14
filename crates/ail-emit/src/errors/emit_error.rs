@@ -36,4 +36,16 @@ pub enum EmitError {
 
     #[error("AIL-E010: Raise node {node_id} has no error name in metadata")]
     RaiseNodeMissingName { node_id: NodeId },
+
+    #[error("AIL-E011: Do node {node_id} has using_pattern_name but no outgoing Ed edge (assembler must resolve the reference before emission)")]
+    UsingDoMissingEdge { node_id: NodeId },
+
+    #[error("AIL-E012: Do node {node_id} references using pattern '{pattern_name}' which cannot be found in the graph")]
+    UsingDoUnresolvedPattern {
+        node_id: NodeId,
+        pattern_name: String,
+    },
+
+    #[error("AIL-E013: Do node {node_id} is missing required template phase '{phase}' at emit time (should have been caught by v008 validation)")]
+    MissingTemplatePhase { node_id: NodeId, phase: String },
 }

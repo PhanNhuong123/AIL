@@ -87,6 +87,30 @@ fn render_do(node: &Node) -> String {
         }
     }
 
+    // Render `following` clause if present.
+    if let Some(ref tmpl) = node.metadata.following_template_name {
+        let _ = write!(out, "\n  following {tmpl}");
+    }
+
+    // Render `using` clause if present.
+    if let Some(ref pattern_name) = node.metadata.using_pattern_name {
+        if node.metadata.using_params.is_empty() {
+            let _ = write!(out, "\n  using {pattern_name}");
+        } else {
+            let params: Vec<String> = node
+                .metadata
+                .using_params
+                .iter()
+                .map(|(k, v)| format!("{k} is {v}"))
+                .collect();
+            let _ = write!(
+                out,
+                "\n  using {pattern_name}\n    where {}",
+                params.join(", ")
+            );
+        }
+    }
+
     out
 }
 

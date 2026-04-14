@@ -63,4 +63,26 @@ pub struct NodeMetadata {
     /// The otherwise clause expression. Populated only for `Match` nodes.
     #[serde(default)]
     pub otherwise_result: Option<String>,
+
+    // ── Following structured fields ─────────────────────────────────────────
+    /// The template name from `following <name>` in a `Do` statement.
+    /// Set by the walker; the assembler wires a corresponding `Ed` edge.
+    /// Downstream crates navigate the `Ed` edge for phase validation and
+    /// emission; this field is retained for rendering (round-trip fidelity).
+    #[serde(default)]
+    pub following_template_name: Option<String>,
+
+    // ── Using structured fields ─────────────────────────────────────────────
+    /// The name of the shared-pattern `Do` node whose body is inlined.
+    /// Populated only on `Do` nodes that carry a `using` clause.
+    #[serde(default)]
+    pub using_pattern_name: Option<String>,
+    /// Parameter substitution pairs `(placeholder_name, concrete_value)`.
+    /// Applied as whole-word text substitution on the inlined pattern body.
+    ///
+    /// v0.1 limitation: values should be simple identifiers or dotted paths
+    /// (e.g., `sender`, `sender.id`). Multi-token expressions may cause
+    /// incorrect substitution.
+    #[serde(default)]
+    pub using_params: Vec<(String, String)>,
 }

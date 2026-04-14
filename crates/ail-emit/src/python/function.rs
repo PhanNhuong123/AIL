@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use ail_graph::{AilGraph, Node, NodeId, Pattern};
 
 use crate::constants::PYTHON_INDENT;
@@ -8,6 +10,7 @@ use crate::python::statement::{
     emit_update,
 };
 use crate::python::type_map::resolve_python_type;
+use crate::python::using::{collect_required_phases, emit_using_do};
 use crate::types::{EmitConfig, ImportSet};
 
 // ── Public helpers ────────────────────────────────────────────────────────────
@@ -96,9 +99,33 @@ pub(crate) fn emit_do_function(
         format!("{PYTHON_INDENT}\"\"\"{}\"\"\"", node.intent),
     ];
 
-    // Emit body from children.
+    // If this Do node uses a shared pattern, inline its body with substitutions
+    // instead of emitting the node's own (absent) children.
+    if node.metadata.using_pattern_name.is_some() {
+        let using_lines = emit_using_do(graph, node, 1, config, imports)?;
+        if using_lines.is_empty() {
+            lines.push(format!("{PYTHON_INDENT}pass"));
+        } else {
+            lines.extend(using_lines);
+        }
+        return Ok(lines.join("\n"));
+    }
+
+    // Collect required phase names from template refs (following pattern).
+    // These are the names of child Do nodes that must be present.
+    let required_phases = collect_required_phases(graph, node.id);
+
+    // Emit body from children, injecting phase comments where needed.
     if let Some(children) = &node.children {
-        let body_lines = emit_do_body(graph, children, 1, config, imports)?;
+        let body_lines = emit_do_body_phased(
+            graph,
+            node.id,
+            children,
+            1,
+            config,
+            imports,
+            &required_phases,
+        )?;
         if body_lines.is_empty() {
             lines.push(format!("{PYTHON_INDENT}pass"));
         } else {
@@ -115,6 +142,10 @@ pub(crate) fn emit_do_function(
 ///
 /// Processes each child node in order, dispatching to the appropriate emitter.
 /// Returns a flat list of indented Python lines.
+///
+/// This is the public variant used by block emitters (foreach, together, retry)
+/// that do not carry `following` template refs. It delegates to
+/// `emit_do_body_phased` with an empty phase-marker set.
 pub(crate) fn emit_do_body(
     graph: &AilGraph,
     children: &[NodeId],
@@ -122,9 +153,37 @@ pub(crate) fn emit_do_body(
     config: &EmitConfig,
     imports: &mut ImportSet,
 ) -> Result<Vec<String>, Vec<EmitError>> {
+    emit_do_body_phased(
+        graph,
+        NodeId::default(),
+        children,
+        indent_level,
+        config,
+        imports,
+        &HashSet::new(),
+    )
+}
+
+/// Emit the body of a `do` node, injecting `# === [Phase: X] ===` comments
+/// before children whose `metadata.name` is in `phase_markers`.
+///
+/// `parent_node_id` is the implementing Do node's id; it is used only in the
+/// defensive `MissingTemplatePhase` errors so that error messages point to the
+/// correct node. In practice v008 validation guarantees this check cannot fire.
+fn emit_do_body_phased(
+    graph: &AilGraph,
+    parent_node_id: NodeId,
+    children: &[NodeId],
+    indent_level: usize,
+    config: &EmitConfig,
+    imports: &mut ImportSet,
+    phase_markers: &HashSet<String>,
+) -> Result<Vec<String>, Vec<EmitError>> {
     let indent = PYTHON_INDENT.repeat(indent_level);
     let mut lines = Vec::new();
     let mut errors = Vec::new();
+    // Track which required phases were emitted for the completeness check.
+    let mut seen_phases: HashSet<String> = HashSet::new();
 
     for &child_id in children {
         let child = match graph.get_node(child_id) {
@@ -135,8 +194,24 @@ pub(crate) fn emit_do_body(
             Err(_) => continue,
         };
 
+        // Inject phase separator comment before matching children.
+        if let Some(ref name) = child.metadata.name {
+            if phase_markers.contains(name.as_str()) {
+                lines.push(format!("{indent}# === [Phase: {name}] ==="));
+                seen_phases.insert(name.clone());
+            }
+        }
+
         match child.pattern {
-            // Nested Do → section comment + recurse at same level.
+            // Nested Do → section comment + recurse at same level (no phase markers at nested depth).
+            Pattern::Do if child.metadata.using_pattern_name.is_some() => {
+                // A using-Do nested inside a function body: inline the shared pattern.
+                match emit_using_do(graph, child, indent_level, config, imports) {
+                    Ok(block_lines) => lines.extend(block_lines),
+                    Err(errs) => errors.extend(errs),
+                }
+            }
+
             Pattern::Do => {
                 lines.push(format!("{indent}# --- {} ---", child.intent));
                 if let Some(grandchildren) = &child.children {
@@ -206,16 +281,27 @@ pub(crate) fn emit_do_body(
                 }
             }
 
-            Pattern::Retry => {
-                match emit_retry_block(graph, child, indent_level, config, imports) {
-                    Ok(block_lines) => lines.extend(block_lines),
-                    Err(errs) => errors.extend(errs),
-                }
-            }
+            Pattern::Retry => match emit_retry_block(graph, child, indent_level, config, imports) {
+                Ok(block_lines) => lines.extend(block_lines),
+                Err(errs) => errors.extend(errs),
+            },
 
             // Promise is emitted in 5a.3 (contract injection); skip here.
             // Define, Describe, Error are emitted in emit_types; skip here.
             _ => {}
+        }
+    }
+
+    // Defensive completeness check: every required phase must have appeared
+    // among the children. v008 validation guarantees this for verified graphs.
+    if !phase_markers.is_empty() {
+        for phase in phase_markers {
+            if !seen_phases.contains(phase) {
+                errors.push(EmitError::MissingTemplatePhase {
+                    node_id: parent_node_id,
+                    phase: phase.clone(),
+                });
+            }
         }
     }
 
@@ -441,7 +527,10 @@ mod tests {
 
     #[test]
     fn slugify_name_space_separated() {
-        assert_eq!(slugify_name("transfer money safely"), "transfer_money_safely");
+        assert_eq!(
+            slugify_name("transfer money safely"),
+            "transfer_money_safely"
+        );
     }
 
     #[test]
@@ -464,10 +553,8 @@ mod tests {
     #[test]
     fn resolve_return_type_union() {
         let mut imports = ImportSet::new();
-        let result = resolve_return_type(
-            "TransferResult or InsufficientBalanceError",
-            &mut imports,
-        );
+        let result =
+            resolve_return_type("TransferResult or InsufficientBalanceError", &mut imports);
         assert_eq!(result, "TransferResult | InsufficientBalanceError");
     }
 
@@ -524,9 +611,7 @@ mod tests {
         );
         let do_id = do_node.id;
         graph.add_node(do_node).unwrap();
-        graph
-            .add_edge(root_id, do_id, EdgeKind::Ev)
-            .unwrap();
+        graph.add_edge(root_id, do_id, EdgeKind::Ev).unwrap();
 
         let do_node_ref = graph.get_node(do_id).unwrap();
         let config = EmitConfig { async_mode: false };

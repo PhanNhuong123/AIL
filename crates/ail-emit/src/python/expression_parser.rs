@@ -278,8 +278,9 @@ mod tests {
 
     #[test]
     fn parse_return_with_multiple_fields() {
-        let fields =
-            parse_return_with_expression("with sender = sender, receiver = receiver, amount = amount");
+        let fields = parse_return_with_expression(
+            "with sender = sender, receiver = receiver, amount = amount",
+        );
         assert_eq!(fields.len(), 3);
         assert_eq!(fields[0], ("sender".to_owned(), "sender".to_owned()));
         assert_eq!(fields[1], ("receiver".to_owned(), "receiver".to_owned()));
