@@ -4,13 +4,12 @@ use pest::Parser;
 // ── Helper ────────────────────────────────────────────────────────────────────
 
 fn parse_file(input: &str) {
-    AilParser::parse(Rule::file, input)
-        .unwrap_or_else(|e| panic!("parse failed:\n{e}"));
+    AilParser::parse(Rule::file, input).unwrap_or_else(|e| panic!("parse failed:\n{e}"));
 }
 
 fn parse_stmt(input: &str) -> Rule {
-    let pairs = AilParser::parse(Rule::file, input)
-        .unwrap_or_else(|e| panic!("parse failed:\n{e}"));
+    let pairs =
+        AilParser::parse(Rule::file, input).unwrap_or_else(|e| panic!("parse failed:\n{e}"));
     // file → statement → line_indent + statement_body
     // walk down to the statement_body's inner rule
     let stmt = pairs
@@ -77,7 +76,9 @@ fn parse_describe_user() {
 #[test]
 fn parse_describe_transfer_result() {
     assert_eq!(
-        parse_stmt("describe TransferResult as\n  sender:User, receiver:User, amount:PositiveAmount"),
+        parse_stmt(
+            "describe TransferResult as\n  sender:User, receiver:User, amount:PositiveAmount"
+        ),
         Rule::describe_stmt
     );
 }
@@ -177,9 +178,7 @@ fn parse_promise_always() {
 #[test]
 fn parse_save_stmt() {
     assert_eq!(
-        parse_stmt(
-            "save notification to queue with user_id = user.id, message = msg"
-        ),
+        parse_stmt("save notification to queue with user_id = user.id, message = msg"),
         Rule::save_stmt
     );
 }
@@ -296,10 +295,7 @@ fn parse_synonym_atomically() {
 
 #[test]
 fn parse_check_no_otherwise() {
-    assert_eq!(
-        parse_stmt("check sender.balance >= 0"),
-        Rule::check_stmt
-    );
+    assert_eq!(parse_stmt("check sender.balance >= 0"), Rule::check_stmt);
 }
 
 #[test]

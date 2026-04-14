@@ -128,12 +128,8 @@ impl BuiltinSemanticType {
             BuiltinSemanticType::PositiveAmount => &["value > 0"],
             BuiltinSemanticType::Percentage => &["value >= 0", "value <= 100"],
             BuiltinSemanticType::NonEmptyText => &["length > 0"],
-            BuiltinSemanticType::EmailAddress => {
-                &[r#"value matches /^[^@\s]+@[^@\s]+\.[^@\s]+$/"#]
-            }
-            BuiltinSemanticType::Identifier => {
-                &[r#"value matches /^[a-zA-Z_][a-zA-Z0-9_]*$/"#]
-            }
+            BuiltinSemanticType::EmailAddress => &[r#"value matches /^[^@\s]+@[^@\s]+\.[^@\s]+$/"#],
+            BuiltinSemanticType::Identifier => &[r#"value matches /^[a-zA-Z_][a-zA-Z0-9_]*$/"#],
         }
     }
 
@@ -182,16 +178,12 @@ impl BuiltinSemanticType {
 /// Pattern: at least one non-whitespace/non-@ char, then `@`, then domain with a `.`.
 fn email_regex() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
-    RE.get_or_init(|| {
-        Regex::new(r"^[^@\s]+@[^@\s]+\.[^@\s]+$").expect("email regex is valid")
-    })
+    RE.get_or_init(|| Regex::new(r"^[^@\s]+@[^@\s]+\.[^@\s]+$").expect("email regex is valid"))
 }
 
 /// Compiled regex for `Identifier` validation.
 /// Pattern: starts with letter or `_`, followed by letters, digits, or `_`.
 fn identifier_regex() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
-    RE.get_or_init(|| {
-        Regex::new(r"^[a-zA-Z_][a-zA-Z0-9_]*$").expect("identifier regex is valid")
-    })
+    RE.get_or_init(|| Regex::new(r"^[a-zA-Z_][a-zA-Z0-9_]*$").expect("identifier regex is valid"))
 }

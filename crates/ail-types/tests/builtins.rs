@@ -28,7 +28,10 @@ fn valid(ty: BuiltinSemanticType, value: Value) -> bool {
 fn t023_from_name_returns_all_known_types() {
     let cases = [
         ("PositiveInteger", BuiltinSemanticType::PositiveInteger),
-        ("NonNegativeInteger", BuiltinSemanticType::NonNegativeInteger),
+        (
+            "NonNegativeInteger",
+            BuiltinSemanticType::NonNegativeInteger,
+        ),
         ("PositiveAmount", BuiltinSemanticType::PositiveAmount),
         ("Percentage", BuiltinSemanticType::Percentage),
         ("NonEmptyText", BuiltinSemanticType::NonEmptyText),
@@ -57,7 +60,12 @@ fn t023_from_name_returns_none_for_unknown() {
 fn t023_name_roundtrips_through_from_name() {
     for &ty in BuiltinSemanticType::ALL {
         let roundtripped = BuiltinSemanticType::from_name(ty.name());
-        assert_eq!(roundtripped, Some(ty), "name() → from_name() roundtrip failed for {:?}", ty);
+        assert_eq!(
+            roundtripped,
+            Some(ty),
+            "name() → from_name() roundtrip failed for {:?}",
+            ty
+        );
     }
 }
 
@@ -68,7 +76,10 @@ fn t023_name_roundtrips_through_from_name() {
 #[test]
 fn t023_base_type_numeric_types_are_integer_or_number() {
     assert_eq!(BuiltinSemanticType::PositiveInteger.base_type(), "integer");
-    assert_eq!(BuiltinSemanticType::NonNegativeInteger.base_type(), "integer");
+    assert_eq!(
+        BuiltinSemanticType::NonNegativeInteger.base_type(),
+        "integer"
+    );
     assert_eq!(BuiltinSemanticType::PositiveAmount.base_type(), "number");
     assert_eq!(BuiltinSemanticType::Percentage.base_type(), "number");
 }
@@ -98,7 +109,11 @@ fn t023_constraint_exprs_are_non_empty_for_all_types() {
 #[test]
 fn t023_percentage_has_two_constraint_exprs() {
     let exprs = BuiltinSemanticType::Percentage.constraint_exprs();
-    assert_eq!(exprs.len(), 2, "Percentage needs both lower and upper bound");
+    assert_eq!(
+        exprs.len(),
+        2,
+        "Percentage needs both lower and upper bound"
+    );
     assert!(exprs.iter().any(|e| e.contains(">=")));
     assert!(exprs.iter().any(|e| e.contains("<=")));
 }
@@ -110,7 +125,7 @@ fn t023_percentage_has_two_constraint_exprs() {
 #[test]
 fn t023_positive_integer_valid() {
     let ty = BuiltinSemanticType::PositiveInteger;
-    assert!(valid(ty, int(1)));      // minimum valid
+    assert!(valid(ty, int(1))); // minimum valid
     assert!(valid(ty, int(100)));
     assert!(valid(ty, int(i64::MAX)));
 }
@@ -142,7 +157,7 @@ fn t023_positive_integer_wrong_kind_invalid() {
 #[test]
 fn t023_non_negative_integer_valid() {
     let ty = BuiltinSemanticType::NonNegativeInteger;
-    assert!(valid(ty, int(0)));   // boundary — zero is valid
+    assert!(valid(ty, int(0))); // boundary — zero is valid
     assert!(valid(ty, int(1)));
     assert!(valid(ty, int(1_000_000)));
 }
@@ -201,7 +216,10 @@ fn t023_positive_amount_nan_invalid() {
 
 #[test]
 fn t023_positive_amount_infinity_invalid() {
-    assert!(!valid(BuiltinSemanticType::PositiveAmount, float(f64::INFINITY)));
+    assert!(!valid(
+        BuiltinSemanticType::PositiveAmount,
+        float(f64::INFINITY)
+    ));
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -211,7 +229,7 @@ fn t023_positive_amount_infinity_invalid() {
 #[test]
 fn t023_percentage_valid_integer_range() {
     let ty = BuiltinSemanticType::Percentage;
-    assert!(valid(ty, int(0)));    // lower bound
+    assert!(valid(ty, int(0))); // lower bound
     assert!(valid(ty, int(50)));
     assert!(valid(ty, int(100))); // upper bound
 }
@@ -291,14 +309,26 @@ fn t023_email_valid() {
 
 #[test]
 fn t023_email_missing_at_invalid() {
-    assert!(!valid(BuiltinSemanticType::EmailAddress, text("notanemail")));
-    assert!(!valid(BuiltinSemanticType::EmailAddress, text("no-at-sign")));
+    assert!(!valid(
+        BuiltinSemanticType::EmailAddress,
+        text("notanemail")
+    ));
+    assert!(!valid(
+        BuiltinSemanticType::EmailAddress,
+        text("no-at-sign")
+    ));
 }
 
 #[test]
 fn t023_email_missing_dot_in_domain_invalid() {
-    assert!(!valid(BuiltinSemanticType::EmailAddress, text("user@nodot")));
-    assert!(!valid(BuiltinSemanticType::EmailAddress, text("missing.dot@nodot")));
+    assert!(!valid(
+        BuiltinSemanticType::EmailAddress,
+        text("user@nodot")
+    ));
+    assert!(!valid(
+        BuiltinSemanticType::EmailAddress,
+        text("missing.dot@nodot")
+    ));
 }
 
 #[test]
@@ -364,6 +394,10 @@ fn t023_all_slice_has_seven_entries() {
 fn t023_all_slice_contains_no_duplicates() {
     let mut seen = std::collections::HashSet::new();
     for ty in BuiltinSemanticType::ALL {
-        assert!(seen.insert(ty.name()), "duplicate entry in ALL: {}", ty.name());
+        assert!(
+            seen.insert(ty.name()),
+            "duplicate entry in ALL: {}",
+            ty.name()
+        );
     }
 }

@@ -1,8 +1,8 @@
 use ail_graph::{
-    AilGraph, Contract, ContractKind, ContextPacket, EdgeKind, Expression, Field, Node, NodeId,
-    Param, Pattern, ScopeVariable, ScopeVariableKind, ValidGraph, validate_graph,
+    validate_graph, AilGraph, ContextPacket, Contract, ContractKind, EdgeKind, Expression, Field,
+    Node, NodeId, Param, Pattern, ScopeVariable, ScopeVariableKind, ValidGraph,
 };
-use ail_types::{TypeError, TypedGraph, type_check};
+use ail_types::{type_check, TypeError, TypedGraph};
 
 // ─── Graph-building helpers ───────────────────────────────────────────────────
 
@@ -68,10 +68,7 @@ fn wallet_type_graph() -> (ValidGraph, WalletIds) {
         &mut graph,
         "transfer",
         "transfer",
-        vec![
-            param("sender", "User"),
-            param("amount", "PositiveAmt"),
-        ],
+        vec![param("sender", "User"), param("amount", "PositiveAmt")],
         "TransferResult",
     );
 
@@ -123,24 +120,14 @@ fn add_define(graph: &mut AilGraph, intent: &str, name: &str, base_type: &str) -
     graph.add_node(node).unwrap()
 }
 
-fn add_describe(
-    graph: &mut AilGraph,
-    intent: &str,
-    name: &str,
-    fields: Vec<Field>,
-) -> NodeId {
+fn add_describe(graph: &mut AilGraph, intent: &str, name: &str, fields: Vec<Field>) -> NodeId {
     let mut node = Node::new(NodeId::new(), intent, Pattern::Describe);
     node.metadata.name = Some(name.to_owned());
     node.metadata.fields = fields;
     graph.add_node(node).unwrap()
 }
 
-fn add_error(
-    graph: &mut AilGraph,
-    intent: &str,
-    name: &str,
-    carries: Vec<Field>,
-) -> NodeId {
+fn add_error(graph: &mut AilGraph, intent: &str, name: &str, carries: Vec<Field>) -> NodeId {
     let mut node = Node::new(NodeId::new(), intent, Pattern::Error);
     node.metadata.name = Some(name.to_owned());
     node.metadata.carries = carries;
@@ -189,11 +176,7 @@ fn param(name: &str, type_ref: &str) -> Param {
 // ─── ContextPacket helpers ────────────────────────────────────────────────────
 
 /// Create a ContextPacket with a single scope variable.
-fn packet_with_scope(
-    node_id: NodeId,
-    var_name: &str,
-    type_ref: &str,
-) -> ContextPacket {
+fn packet_with_scope(node_id: NodeId, var_name: &str, type_ref: &str) -> ContextPacket {
     ContextPacket {
         node_id,
         intent_chain: vec![],
@@ -230,11 +213,15 @@ fn packet_with_must_produce(node_id: NodeId, must_produce: &str) -> ContextPacke
 // ─── Check: is every error a specific variant? ────────────────────────────────
 
 fn has_undefined_type(errors: &[TypeError], name: &str) -> bool {
-    errors.iter().any(|e| matches!(e, TypeError::UndefinedType { name: n, .. } if n == name))
+    errors
+        .iter()
+        .any(|e| matches!(e, TypeError::UndefinedType { name: n, .. } if n == name))
 }
 
 fn has_undefined_field(errors: &[TypeError], field: &str) -> bool {
-    errors.iter().any(|e| matches!(e, TypeError::UndefinedField { field: f, .. } if f == field))
+    errors
+        .iter()
+        .any(|e| matches!(e, TypeError::UndefinedField { field: f, .. } if f == field))
 }
 
 fn has_type_mismatch(errors: &[TypeError], expected: &str, actual: &str) -> bool {
@@ -245,7 +232,9 @@ fn has_type_mismatch(errors: &[TypeError], expected: &str, actual: &str) -> bool
 }
 
 fn has_param_mismatch(errors: &[TypeError], param: &str) -> bool {
-    errors.iter().any(|e| matches!(e, TypeError::ParamTypeMismatch { param: p, .. } if p == param))
+    errors
+        .iter()
+        .any(|e| matches!(e, TypeError::ParamTypeMismatch { param: p, .. } if p == param))
 }
 
 // ─── t024 — minimal valid graph ──────────────────────────────────────────────
@@ -479,7 +468,11 @@ fn t038_matching_return_type_and_must_produce_passes() {
     let mut packet = packet_with_must_produce(ids.transfer, "TransferResult");
     packet.node_id = ids.transfer;
     let result = type_check(valid, &[packet]);
-    assert!(result.is_ok(), "matching types should pass: {:?}", result.err());
+    assert!(
+        result.is_ok(),
+        "matching types should pass: {:?}",
+        result.err()
+    );
 }
 
 #[test]

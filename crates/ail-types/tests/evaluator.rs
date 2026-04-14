@@ -1,9 +1,8 @@
 use std::collections::HashMap;
 
 use ail_types::{
-    EvalContext, EvalError, Value,
-    eval_constraint, eval_value,
-    parse_constraint_expr, parse_value_expr,
+    eval_constraint, eval_value, parse_constraint_expr, parse_value_expr, EvalContext, EvalError,
+    Value,
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -13,13 +12,22 @@ fn empty_ctx() -> EvalContext {
 }
 
 fn ctx_with(pairs: &[(&str, Value)]) -> EvalContext {
-    let bindings = pairs.iter().map(|(k, v)| (k.to_string(), v.clone())).collect();
+    let bindings = pairs
+        .iter()
+        .map(|(k, v)| (k.to_string(), v.clone()))
+        .collect();
     EvalContext::new(bindings)
 }
 
 fn ctx_with_old(current: &[(&str, Value)], old: &[(&str, Value)]) -> EvalContext {
-    let cur = current.iter().map(|(k, v)| (k.to_string(), v.clone())).collect();
-    let old = old.iter().map(|(k, v)| (k.to_string(), v.clone())).collect();
+    let cur = current
+        .iter()
+        .map(|(k, v)| (k.to_string(), v.clone()))
+        .collect();
+    let old = old
+        .iter()
+        .map(|(k, v)| (k.to_string(), v.clone()))
+        .collect();
     EvalContext::with_old(cur, old)
 }
 
@@ -35,7 +43,10 @@ fn eval_v(expr: &str, ctx: &EvalContext) -> Result<Value, EvalError> {
 
 fn record(fields: &[(&str, Value)]) -> Value {
     Value::Record(
-        fields.iter().map(|(k, v)| (k.to_string(), v.clone())).collect(),
+        fields
+            .iter()
+            .map(|(k, v)| (k.to_string(), v.clone()))
+            .collect(),
     )
 }
 
@@ -144,10 +155,7 @@ fn eval_old_snapshot() {
 fn eval_old_field_access() {
     let old_sender = record(&[("balance", Value::Integer(50))]);
     let new_sender = record(&[("balance", Value::Integer(30))]);
-    let ctx = ctx_with_old(
-        &[("sender", new_sender)],
-        &[("sender", old_sender)],
-    );
+    let ctx = ctx_with_old(&[("sender", new_sender)], &[("sender", old_sender)]);
     assert!(eval_c("old(sender.balance) == 50", &ctx).unwrap());
     assert!(eval_c("sender.balance == 30", &ctx).unwrap());
 }
@@ -165,7 +173,11 @@ fn eval_old_outside_context() {
 fn eval_call_len_list() {
     let ctx = ctx_with(&[(
         "items",
-        list(vec![Value::Integer(1), Value::Integer(2), Value::Integer(3)]),
+        list(vec![
+            Value::Integer(1),
+            Value::Integer(2),
+            Value::Integer(3),
+        ]),
     )]);
     assert!(eval_c("len(items) == 3", &ctx).unwrap());
 }
@@ -185,8 +197,11 @@ fn eval_call_unknown_function() {
 #[test]
 fn eval_call_wrong_arg_count() {
     // len requires exactly 1 arg; pass 0 by building the AST manually
-    use ail_types::{ValueExpr, eval_value};
-    let expr = ValueExpr::Call { name: "len".into(), args: vec![] };
+    use ail_types::{eval_value, ValueExpr};
+    let expr = ValueExpr::Call {
+        name: "len".into(),
+        args: vec![],
+    };
     let result = eval_value(&expr, &empty_ctx());
     assert!(
         matches!(result, Err(EvalError::WrongArgCount { name, expected: 1, actual: 0 }) if name == "len")
@@ -260,7 +275,7 @@ fn eval_compare_is_eq_equivalent() {
 #[test]
 fn eval_compare_nothing_ordering_is_error() {
     // nothing > 5 must return TypeMismatch, not a boolean
-    use ail_types::{ConstraintExpr, CompareOp, ValueExpr, LiteralValue};
+    use ail_types::{CompareOp, ConstraintExpr, LiteralValue, ValueExpr};
     let expr = ConstraintExpr::Compare {
         op: CompareOp::Gt,
         left: Box::new(ValueExpr::Literal(LiteralValue::Nothing)),
@@ -305,7 +320,7 @@ fn eval_and_short_circuit() {
     // false and undefined_var — should return false without evaluating the second operand
     let ctx = empty_ctx();
     // Build manually to ensure short-circuit: false AND (something that would error)
-    use ail_types::{ConstraintExpr, CompareOp, ValueExpr, LiteralValue};
+    use ail_types::{CompareOp, ConstraintExpr, LiteralValue, ValueExpr};
     let false_expr = ConstraintExpr::Compare {
         op: CompareOp::Eq,
         left: Box::new(ValueExpr::Literal(LiteralValue::Integer(1))),
@@ -325,7 +340,7 @@ fn eval_and_short_circuit() {
 fn eval_or_short_circuit() {
     // true or undefined_var — should return true without evaluating the second operand
     let ctx = empty_ctx();
-    use ail_types::{ConstraintExpr, CompareOp, ValueExpr, LiteralValue};
+    use ail_types::{CompareOp, ConstraintExpr, LiteralValue, ValueExpr};
     let true_expr = ConstraintExpr::Compare {
         op: CompareOp::Eq,
         left: Box::new(ValueExpr::Literal(LiteralValue::Integer(1))),
@@ -352,7 +367,11 @@ fn eval_not() {
 fn eval_forall_all_pass() {
     let ctx = ctx_with(&[(
         "prices",
-        list(vec![Value::Integer(10), Value::Integer(20), Value::Integer(5)]),
+        list(vec![
+            Value::Integer(10),
+            Value::Integer(20),
+            Value::Integer(5),
+        ]),
     )]);
     assert!(eval_c("for all p in prices, p > 0", &ctx).unwrap());
 }
@@ -361,7 +380,11 @@ fn eval_forall_all_pass() {
 fn eval_forall_one_fails() {
     let ctx = ctx_with(&[(
         "prices",
-        list(vec![Value::Integer(10), Value::Integer(-1), Value::Integer(5)]),
+        list(vec![
+            Value::Integer(10),
+            Value::Integer(-1),
+            Value::Integer(5),
+        ]),
     )]);
     assert!(!eval_c("for all p in prices, p > 0", &ctx).unwrap());
 }
@@ -376,7 +399,11 @@ fn eval_forall_empty_collection_vacuous_true() {
 fn eval_exists_one_passes() {
     let ctx = ctx_with(&[(
         "scores",
-        list(vec![Value::Integer(40), Value::Integer(90), Value::Integer(55)]),
+        list(vec![
+            Value::Integer(40),
+            Value::Integer(90),
+            Value::Integer(55),
+        ]),
     )]);
     assert!(eval_c("exists s in scores where s >= 90", &ctx).unwrap());
 }
@@ -385,7 +412,11 @@ fn eval_exists_one_passes() {
 fn eval_exists_none_pass() {
     let ctx = ctx_with(&[(
         "scores",
-        list(vec![Value::Integer(40), Value::Integer(60), Value::Integer(55)]),
+        list(vec![
+            Value::Integer(40),
+            Value::Integer(60),
+            Value::Integer(55),
+        ]),
     )]);
     assert!(!eval_c("exists s in scores where s >= 90", &ctx).unwrap());
 }
@@ -417,5 +448,9 @@ fn eval_complex_wallet_postcondition() {
         &[("sender", old_sender)],
     );
 
-    assert!(eval_c("result.sender.balance == old(sender.balance) - amount", &ctx).unwrap());
+    assert!(eval_c(
+        "result.sender.balance == old(sender.balance) - amount",
+        &ctx
+    )
+    .unwrap());
 }

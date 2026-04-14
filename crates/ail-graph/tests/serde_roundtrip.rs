@@ -151,6 +151,8 @@ fn roundtrip_node_metadata_all_fields() {
             name: "reason".to_string(),
             type_ref: "text".to_string(),
         }],
+        otherwise_error: Some("ValidationError".to_string()),
+        otherwise_assigns: vec![("field".to_string(), "sender.id".to_string())],
     };
     roundtrip(&metadata);
 }

@@ -26,7 +26,11 @@ pub enum EvalError {
 
     /// A built-in function was called with the wrong number of arguments.
     #[error("wrong argument count for {name}: expected {expected}, got {actual}")]
-    WrongArgCount { name: String, expected: usize, actual: usize },
+    WrongArgCount {
+        name: String,
+        expected: usize,
+        actual: usize,
+    },
 
     /// Integer or float division by zero.
     #[error("division by zero")]

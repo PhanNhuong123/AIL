@@ -16,7 +16,10 @@ pub struct EvalContext {
 impl EvalContext {
     /// Create a context with current bindings only (pre-condition or always context).
     pub fn new(bindings: HashMap<String, Value>) -> Self {
-        Self { bindings, old_bindings: None }
+        Self {
+            bindings,
+            old_bindings: None,
+        }
     }
 
     /// Create a context with both current and old bindings (post-condition context).
@@ -24,7 +27,10 @@ impl EvalContext {
         bindings: HashMap<String, Value>,
         old_bindings: HashMap<String, Value>,
     ) -> Self {
-        Self { bindings, old_bindings: Some(old_bindings) }
+        Self {
+            bindings,
+            old_bindings: Some(old_bindings),
+        }
     }
 
     /// Return a new context with an additional binding — used for quantifier variable scoping.
@@ -33,7 +39,10 @@ impl EvalContext {
     pub fn bind(&self, name: impl Into<String>, value: Value) -> Self {
         let mut new_bindings = self.bindings.clone();
         new_bindings.insert(name.into(), value);
-        Self { bindings: new_bindings, old_bindings: self.old_bindings.clone() }
+        Self {
+            bindings: new_bindings,
+            old_bindings: self.old_bindings.clone(),
+        }
     }
 
     /// Return a context where `bindings` are the old snapshot values.
@@ -42,7 +51,10 @@ impl EvalContext {
     /// Returns `EvalError::OldOutsidePostCondition` if no old bindings are available.
     pub fn as_old_context(&self) -> Result<Self, EvalError> {
         match &self.old_bindings {
-            Some(old) => Ok(Self { bindings: old.clone(), old_bindings: None }),
+            Some(old) => Ok(Self {
+                bindings: old.clone(),
+                old_bindings: None,
+            }),
             None => Err(EvalError::OldOutsidePostCondition),
         }
     }

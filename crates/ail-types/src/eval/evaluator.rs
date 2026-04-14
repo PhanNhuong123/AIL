@@ -39,9 +39,8 @@ pub fn eval_constraint(expr: &ConstraintExpr, ctx: &EvalContext) -> Result<bool,
             let val = eval_value(value, ctx)?;
             match val {
                 Value::Text(s) => {
-                    let re = Regex::new(pattern).map_err(|e| {
-                        EvalError::InvalidRegex(pattern.clone(), e.to_string())
-                    })?;
+                    let re = Regex::new(pattern)
+                        .map_err(|e| EvalError::InvalidRegex(pattern.clone(), e.to_string()))?;
                     Ok(re.is_match(&s))
                 }
                 other => Err(EvalError::TypeMismatch {
@@ -72,7 +71,11 @@ pub fn eval_constraint(expr: &ConstraintExpr, ctx: &EvalContext) -> Result<bool,
 
         ConstraintExpr::Not(inner) => Ok(!eval_constraint(inner, ctx)?),
 
-        ConstraintExpr::ForAll { variable, collection, condition } => {
+        ConstraintExpr::ForAll {
+            variable,
+            collection,
+            condition,
+        } => {
             let coll = eval_value(collection, ctx)?;
             let items = require_list(coll)?;
             for item in items {
@@ -84,7 +87,11 @@ pub fn eval_constraint(expr: &ConstraintExpr, ctx: &EvalContext) -> Result<bool,
             Ok(true) // vacuously true for empty collection
         }
 
-        ConstraintExpr::Exists { variable, collection, condition } => {
+        ConstraintExpr::Exists {
+            variable,
+            collection,
+            condition,
+        } => {
             let coll = eval_value(collection, ctx)?;
             let items = require_list(coll)?;
             for item in items {
@@ -115,12 +122,12 @@ pub fn eval_value(expr: &ValueExpr, ctx: &EvalContext) -> Result<Value, EvalErro
             for field in path.iter().skip(1) {
                 match current {
                     Value::Record(map) => {
-                        current = map.get(field.as_str()).ok_or_else(|| {
-                            EvalError::UndefinedField {
-                                field: field.clone(),
-                                value_kind: "record".into(),
-                            }
-                        })?;
+                        current =
+                            map.get(field.as_str())
+                                .ok_or_else(|| EvalError::UndefinedField {
+                                    field: field.clone(),
+                                    value_kind: "record".into(),
+                                })?;
                     }
                     other => {
                         return Err(EvalError::UndefinedField {
@@ -303,26 +310,30 @@ fn compare_order(left: &Value, right: &Value) -> Result<i32, EvalError> {
     match (left, right) {
         (Value::Integer(a), Value::Integer(b)) => Ok(ordering_to_int(a.cmp(b))),
         (Value::Float(a), Value::Float(b)) => {
-            a.partial_cmp(b).map(ordering_to_int).ok_or(EvalError::TypeMismatch {
-                expected: "non-NaN number".into(),
-                actual: "NaN".into(),
-                value_preview: format!("{a} or {b}"),
-            })
+            a.partial_cmp(b)
+                .map(ordering_to_int)
+                .ok_or(EvalError::TypeMismatch {
+                    expected: "non-NaN number".into(),
+                    actual: "NaN".into(),
+                    value_preview: format!("{a} or {b}"),
+                })
         }
-        (Value::Integer(a), Value::Float(b)) => {
-            (*a as f64).partial_cmp(b).map(ordering_to_int).ok_or(EvalError::TypeMismatch {
+        (Value::Integer(a), Value::Float(b)) => (*a as f64)
+            .partial_cmp(b)
+            .map(ordering_to_int)
+            .ok_or(EvalError::TypeMismatch {
                 expected: "non-NaN number".into(),
                 actual: "NaN".into(),
                 value_preview: b.to_string(),
-            })
-        }
-        (Value::Float(a), Value::Integer(b)) => {
-            a.partial_cmp(&(*b as f64)).map(ordering_to_int).ok_or(EvalError::TypeMismatch {
+            }),
+        (Value::Float(a), Value::Integer(b)) => a
+            .partial_cmp(&(*b as f64))
+            .map(ordering_to_int)
+            .ok_or(EvalError::TypeMismatch {
                 expected: "non-NaN number".into(),
                 actual: "NaN".into(),
                 value_preview: a.to_string(),
-            })
-        }
+            }),
         (Value::Text(a), Value::Text(b)) => Ok(ordering_to_int(a.cmp(b))),
         _ => Err(EvalError::TypeMismatch {
             expected: "number or text".into(),

@@ -19,7 +19,10 @@ fn roundtrip_constraint(s: &str) {
     let rendered = ast.to_string();
     let ast2 = parse_constraint_expr(&rendered)
         .unwrap_or_else(|e| panic!("re-parse of {rendered:?} failed: {e}"));
-    assert_eq!(ast, ast2, "roundtrip failed for {s:?}: rendered as {rendered:?}");
+    assert_eq!(
+        ast, ast2,
+        "roundtrip failed for {s:?}: rendered as {rendered:?}"
+    );
 }
 
 fn roundtrip_value(s: &str) {
@@ -27,7 +30,10 @@ fn roundtrip_value(s: &str) {
     let rendered = ast.to_string();
     let ast2 = parse_value_expr(&rendered)
         .unwrap_or_else(|e| panic!("re-parse of {rendered:?} failed: {e}"));
-    assert_eq!(ast, ast2, "roundtrip failed for {s:?}: rendered as {rendered:?}");
+    assert_eq!(
+        ast, ast2,
+        "roundtrip failed for {s:?}: rendered as {rendered:?}"
+    );
 }
 
 // ── Literal tests ─────────────────────────────────────────────────────────────
@@ -39,7 +45,10 @@ fn parse_literal_integer() {
 
 #[test]
 fn parse_literal_float() {
-    assert_eq!(parse_v("3.14"), ValueExpr::Literal(LiteralValue::Float(3.14)));
+    assert_eq!(
+        parse_v("3.14"),
+        ValueExpr::Literal(LiteralValue::Float(3.14))
+    );
 }
 
 #[test]
@@ -52,20 +61,32 @@ fn parse_literal_text() {
 
 #[test]
 fn parse_literal_bool() {
-    assert_eq!(parse_v("true"), ValueExpr::Literal(LiteralValue::Bool(true)));
-    assert_eq!(parse_v("false"), ValueExpr::Literal(LiteralValue::Bool(false)));
+    assert_eq!(
+        parse_v("true"),
+        ValueExpr::Literal(LiteralValue::Bool(true))
+    );
+    assert_eq!(
+        parse_v("false"),
+        ValueExpr::Literal(LiteralValue::Bool(false))
+    );
 }
 
 #[test]
 fn parse_literal_nothing() {
-    assert_eq!(parse_v("nothing"), ValueExpr::Literal(LiteralValue::Nothing));
+    assert_eq!(
+        parse_v("nothing"),
+        ValueExpr::Literal(LiteralValue::Nothing)
+    );
 }
 
 // ── Ref tests ─────────────────────────────────────────────────────────────────
 
 #[test]
 fn parse_ref_simple_identifier() {
-    assert_eq!(parse_v("balance"), ValueExpr::Ref(vec!["balance".to_owned()]));
+    assert_eq!(
+        parse_v("balance"),
+        ValueExpr::Ref(vec!["balance".to_owned()])
+    );
 }
 
 #[test]
@@ -160,7 +181,10 @@ fn parse_compare_gte() {
         ast,
         ConstraintExpr::Compare {
             op: CompareOp::Gte,
-            left: Box::new(ValueExpr::Ref(vec!["sender".to_owned(), "balance".to_owned()])),
+            left: Box::new(ValueExpr::Ref(vec![
+                "sender".to_owned(),
+                "balance".to_owned()
+            ])),
             right: Box::new(ValueExpr::Literal(LiteralValue::Integer(0))),
         }
     );
@@ -169,7 +193,13 @@ fn parse_compare_gte() {
 #[test]
 fn parse_compare_lte() {
     let ast = parse_c("x <= 100");
-    assert!(matches!(ast, ConstraintExpr::Compare { op: CompareOp::Lte, .. }));
+    assert!(matches!(
+        ast,
+        ConstraintExpr::Compare {
+            op: CompareOp::Lte,
+            ..
+        }
+    ));
 }
 
 #[test]
@@ -204,13 +234,25 @@ fn parse_compare_is_not_inequality() {
 #[test]
 fn parse_compare_eq_double_equals() {
     let ast = parse_c("x == 42");
-    assert!(matches!(ast, ConstraintExpr::Compare { op: CompareOp::Eq, .. }));
+    assert!(matches!(
+        ast,
+        ConstraintExpr::Compare {
+            op: CompareOp::Eq,
+            ..
+        }
+    ));
 }
 
 #[test]
 fn parse_compare_neq_bang_equals() {
     let ast = parse_c("x != 0");
-    assert!(matches!(ast, ConstraintExpr::Compare { op: CompareOp::Neq, .. }));
+    assert!(matches!(
+        ast,
+        ConstraintExpr::Compare {
+            op: CompareOp::Neq,
+            ..
+        }
+    ));
 }
 
 // ── In tests ──────────────────────────────────────────────────────────────────

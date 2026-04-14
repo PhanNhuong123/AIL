@@ -116,13 +116,7 @@ pub(super) fn check_contract_field_access(
                 continue;
             };
 
-            collect_constraint_field_errors(
-                &constraint,
-                &scope_type,
-                graph,
-                node.id,
-                errors,
-            );
+            collect_constraint_field_errors(&constraint, &scope_type, graph, node.id, errors);
         }
     }
 }
@@ -284,7 +278,13 @@ fn resolve_field_chain(
     };
 
     // Recurse for the remaining parts.
-    resolve_field_chain(&remaining_parts[1..], &field.type_ref, graph, node_id, errors);
+    resolve_field_chain(
+        &remaining_parts[1..],
+        &field.type_ref,
+        graph,
+        node_id,
+        errors,
+    );
 }
 
 // ─── Check 3 ─────────────────────────────────────────────────────────────────
@@ -350,7 +350,10 @@ pub(super) fn check_data_flow_types(
         };
 
         // Normalise by stripping namespace prefix for comparison.
-        let actual = return_type.rsplit('.').next().unwrap_or(return_type.as_str());
+        let actual = return_type
+            .rsplit('.')
+            .next()
+            .unwrap_or(return_type.as_str());
         let expected = must.rsplit('.').next().unwrap_or(must);
 
         if actual != expected {
@@ -426,11 +429,7 @@ pub(super) fn check_do_param_types_from_ed_edges(
                 // different type, that is a mismatch.
                 if let Some(&caller_type) = caller_scope.get(param.name.as_str()) {
                     let caller_norm = caller_type.rsplit('.').next().unwrap_or(caller_type);
-                    let callee_norm = param
-                        .type_ref
-                        .rsplit('.')
-                        .next()
-                        .unwrap_or(&param.type_ref);
+                    let callee_norm = param.type_ref.rsplit('.').next().unwrap_or(&param.type_ref);
                     if caller_norm != callee_norm {
                         errors.push(TypeError::ParamTypeMismatch {
                             node_id: caller_id,

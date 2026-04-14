@@ -151,10 +151,18 @@ impl fmt::Display for ConstraintExpr {
                 write!(f, "not ")?;
                 write_constraint_with_parens(f, inner, ConstraintPrecedence::Not)
             }
-            ConstraintExpr::ForAll { variable, collection, condition } => {
+            ConstraintExpr::ForAll {
+                variable,
+                collection,
+                condition,
+            } => {
                 write!(f, "for all {variable} in {collection}, {condition}")
             }
-            ConstraintExpr::Exists { variable, collection, condition } => {
+            ConstraintExpr::Exists {
+                variable,
+                collection,
+                condition,
+            } => {
                 write!(f, "exists {variable} in {collection} where {condition}")
             }
         }

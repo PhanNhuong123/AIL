@@ -34,4 +34,10 @@ pub struct NodeMetadata {
     pub fields: Vec<Field>,
     /// Error payload field list — populated for `Error` nodes.
     pub carries: Vec<Field>,
+    /// Error type raised when a `Check` condition fails (`otherwise raise <type>`).
+    /// Populated only for `Check` nodes.
+    pub otherwise_error: Option<String>,
+    /// Field assignments in the `otherwise raise ... carries` clause.
+    /// Each pair is (field_name, expression_value). Populated only for `Check` nodes.
+    pub otherwise_assigns: Vec<(String, String)>,
 }

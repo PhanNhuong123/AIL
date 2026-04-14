@@ -80,7 +80,10 @@ struct Lexer<'a> {
 
 impl<'a> Lexer<'a> {
     fn new(src: &'a str) -> Self {
-        Self { src: src.as_bytes(), pos: 0 }
+        Self {
+            src: src.as_bytes(),
+            pos: 0,
+        }
     }
 
     fn peek(&self) -> Option<u8> {
@@ -112,17 +115,18 @@ impl<'a> Lexer<'a> {
             match self.advance() {
                 None => return Err(ParseError::UnterminatedString),
                 Some(c) if c == quote => break,
-                Some(b'\\') => {
-                    match self.advance() {
-                        Some(b'n') => s.push('\n'),
-                        Some(b't') => s.push('\t'),
-                        Some(b'\\') => s.push('\\'),
-                        Some(b'"') => s.push('"'),
-                        Some(b'\'') => s.push('\''),
-                        Some(c) => { s.push('\\'); s.push(c as char); }
-                        None => return Err(ParseError::UnterminatedString),
+                Some(b'\\') => match self.advance() {
+                    Some(b'n') => s.push('\n'),
+                    Some(b't') => s.push('\t'),
+                    Some(b'\\') => s.push('\\'),
+                    Some(b'"') => s.push('"'),
+                    Some(b'\'') => s.push('\''),
+                    Some(c) => {
+                        s.push('\\');
+                        s.push(c as char);
                     }
-                }
+                    None => return Err(ParseError::UnterminatedString),
+                },
                 Some(c) => s.push(c as char),
             }
         }
@@ -152,7 +156,10 @@ impl<'a> Lexer<'a> {
     fn lex_number(&mut self, _first: u8) -> Result<Token, ParseError> {
         let start = self.pos - 1;
         let mut has_dot = false;
-        while matches!(self.peek(), Some(b'0'..=b'9' | b'.' | b'e' | b'E' | b'+' | b'-')) {
+        while matches!(
+            self.peek(),
+            Some(b'0'..=b'9' | b'.' | b'e' | b'E' | b'+' | b'-')
+        ) {
             if self.peek() == Some(b'.') {
                 if has_dot {
                     break;
@@ -180,7 +187,10 @@ impl<'a> Lexer<'a> {
 
     fn lex_ident(&mut self, _first: u8) -> Token {
         let start = self.pos - 1;
-        while matches!(self.peek(), Some(b'a'..=b'z' | b'A'..=b'Z' | b'0'..=b'9' | b'_')) {
+        while matches!(
+            self.peek(),
+            Some(b'a'..=b'z' | b'A'..=b'Z' | b'0'..=b'9' | b'_')
+        ) {
             self.advance();
         }
         let word = std::str::from_utf8(&self.src[start..self.pos]).unwrap();
@@ -306,7 +316,10 @@ impl Parser {
     }
 
     fn peek_pos(&self) -> usize {
-        self.tokens.get(self.pos).map(|(_, p)| *p).unwrap_or(usize::MAX)
+        self.tokens
+            .get(self.pos)
+            .map(|(_, p)| *p)
+            .unwrap_or(usize::MAX)
     }
 
     fn advance(&mut self) -> Option<&Token> {
@@ -419,35 +432,95 @@ impl Parser {
         let left = self.parse_additive()?;
 
         match self.peek().cloned() {
-            Some(Token::Gte) => { self.advance(); let r = self.parse_additive()?; Ok(ConstraintExpr::Compare { op: CompareOp::Gte, left: Box::new(left), right: Box::new(r) }) }
-            Some(Token::Lte) => { self.advance(); let r = self.parse_additive()?; Ok(ConstraintExpr::Compare { op: CompareOp::Lte, left: Box::new(left), right: Box::new(r) }) }
-            Some(Token::Gt)  => { self.advance(); let r = self.parse_additive()?; Ok(ConstraintExpr::Compare { op: CompareOp::Gt,  left: Box::new(left), right: Box::new(r) }) }
-            Some(Token::Lt)  => { self.advance(); let r = self.parse_additive()?; Ok(ConstraintExpr::Compare { op: CompareOp::Lt,  left: Box::new(left), right: Box::new(r) }) }
-            Some(Token::DoubleEq) => { self.advance(); let r = self.parse_additive()?; Ok(ConstraintExpr::Compare { op: CompareOp::Eq,  left: Box::new(left), right: Box::new(r) }) }
-            Some(Token::BangEq)   => { self.advance(); let r = self.parse_additive()?; Ok(ConstraintExpr::Compare { op: CompareOp::Neq, left: Box::new(left), right: Box::new(r) }) }
+            Some(Token::Gte) => {
+                self.advance();
+                let r = self.parse_additive()?;
+                Ok(ConstraintExpr::Compare {
+                    op: CompareOp::Gte,
+                    left: Box::new(left),
+                    right: Box::new(r),
+                })
+            }
+            Some(Token::Lte) => {
+                self.advance();
+                let r = self.parse_additive()?;
+                Ok(ConstraintExpr::Compare {
+                    op: CompareOp::Lte,
+                    left: Box::new(left),
+                    right: Box::new(r),
+                })
+            }
+            Some(Token::Gt) => {
+                self.advance();
+                let r = self.parse_additive()?;
+                Ok(ConstraintExpr::Compare {
+                    op: CompareOp::Gt,
+                    left: Box::new(left),
+                    right: Box::new(r),
+                })
+            }
+            Some(Token::Lt) => {
+                self.advance();
+                let r = self.parse_additive()?;
+                Ok(ConstraintExpr::Compare {
+                    op: CompareOp::Lt,
+                    left: Box::new(left),
+                    right: Box::new(r),
+                })
+            }
+            Some(Token::DoubleEq) => {
+                self.advance();
+                let r = self.parse_additive()?;
+                Ok(ConstraintExpr::Compare {
+                    op: CompareOp::Eq,
+                    left: Box::new(left),
+                    right: Box::new(r),
+                })
+            }
+            Some(Token::BangEq) => {
+                self.advance();
+                let r = self.parse_additive()?;
+                Ok(ConstraintExpr::Compare {
+                    op: CompareOp::Neq,
+                    left: Box::new(left),
+                    right: Box::new(r),
+                })
+            }
             Some(Token::Is) => {
                 self.advance();
                 if matches!(self.peek(), Some(Token::Not)) {
                     self.advance();
                     let r = self.parse_additive()?;
-                    Ok(ConstraintExpr::Compare { op: CompareOp::IsNot, left: Box::new(left), right: Box::new(r) })
+                    Ok(ConstraintExpr::Compare {
+                        op: CompareOp::IsNot,
+                        left: Box::new(left),
+                        right: Box::new(r),
+                    })
                 } else {
                     let r = self.parse_additive()?;
-                    Ok(ConstraintExpr::Compare { op: CompareOp::Is, left: Box::new(left), right: Box::new(r) })
+                    Ok(ConstraintExpr::Compare {
+                        op: CompareOp::Is,
+                        left: Box::new(left),
+                        right: Box::new(r),
+                    })
                 }
             }
             Some(Token::In) => {
                 self.advance();
                 let collection = self.parse_in_target()?;
-                Ok(ConstraintExpr::In { value: Box::new(left), collection: Box::new(collection) })
+                Ok(ConstraintExpr::In {
+                    value: Box::new(left),
+                    collection: Box::new(collection),
+                })
             }
             Some(Token::Matches) => {
                 self.advance();
                 // The lexer emits Token::Regex immediately after Token::Matches.
                 match self.advance().cloned() {
-                    Some(Token::Regex(pattern)) => {
-                        Ok(ConstraintExpr::Matches { value: Box::new(left), pattern })
-                    }
+                    Some(Token::Regex(pattern)) => Ok(ConstraintExpr::Matches {
+                        value: Box::new(left),
+                        pattern,
+                    }),
                     other => Err(ParseError::Expected(
                         "/pattern/".to_owned(),
                         format!("{other:?}"),
@@ -473,7 +546,9 @@ impl Parser {
                 }
                 elements.push(self.parse_additive()?);
                 match self.peek() {
-                    Some(Token::Comma) => { self.advance(); }
+                    Some(Token::Comma) => {
+                        self.advance();
+                    }
                     Some(Token::RBrace) => {}
                     other => {
                         return Err(ParseError::Expected(
@@ -528,8 +603,24 @@ impl Parser {
         let mut left = self.parse_multiplicative()?;
         loop {
             match self.peek() {
-                Some(Token::Plus)  => { self.advance(); let r = self.parse_multiplicative()?; left = ValueExpr::Arithmetic { op: ArithOp::Add, left: Box::new(left), right: Box::new(r) }; }
-                Some(Token::Minus) => { self.advance(); let r = self.parse_multiplicative()?; left = ValueExpr::Arithmetic { op: ArithOp::Sub, left: Box::new(left), right: Box::new(r) }; }
+                Some(Token::Plus) => {
+                    self.advance();
+                    let r = self.parse_multiplicative()?;
+                    left = ValueExpr::Arithmetic {
+                        op: ArithOp::Add,
+                        left: Box::new(left),
+                        right: Box::new(r),
+                    };
+                }
+                Some(Token::Minus) => {
+                    self.advance();
+                    let r = self.parse_multiplicative()?;
+                    left = ValueExpr::Arithmetic {
+                        op: ArithOp::Sub,
+                        left: Box::new(left),
+                        right: Box::new(r),
+                    };
+                }
                 _ => break,
             }
         }
@@ -540,9 +631,33 @@ impl Parser {
         let mut left = self.parse_primary()?;
         loop {
             match self.peek() {
-                Some(Token::Star)    => { self.advance(); let r = self.parse_primary()?; left = ValueExpr::Arithmetic { op: ArithOp::Mul, left: Box::new(left), right: Box::new(r) }; }
-                Some(Token::Slash)   => { self.advance(); let r = self.parse_primary()?; left = ValueExpr::Arithmetic { op: ArithOp::Div, left: Box::new(left), right: Box::new(r) }; }
-                Some(Token::Percent) => { self.advance(); let r = self.parse_primary()?; left = ValueExpr::Arithmetic { op: ArithOp::Mod, left: Box::new(left), right: Box::new(r) }; }
+                Some(Token::Star) => {
+                    self.advance();
+                    let r = self.parse_primary()?;
+                    left = ValueExpr::Arithmetic {
+                        op: ArithOp::Mul,
+                        left: Box::new(left),
+                        right: Box::new(r),
+                    };
+                }
+                Some(Token::Slash) => {
+                    self.advance();
+                    let r = self.parse_primary()?;
+                    left = ValueExpr::Arithmetic {
+                        op: ArithOp::Div,
+                        left: Box::new(left),
+                        right: Box::new(r),
+                    };
+                }
+                Some(Token::Percent) => {
+                    self.advance();
+                    let r = self.parse_primary()?;
+                    left = ValueExpr::Arithmetic {
+                        op: ArithOp::Mod,
+                        left: Box::new(left),
+                        right: Box::new(r),
+                    };
+                }
                 _ => break,
             }
         }
@@ -551,12 +666,30 @@ impl Parser {
 
     fn parse_primary(&mut self) -> Result<ValueExpr, ParseError> {
         match self.peek().cloned() {
-            Some(Token::Int(n))   => { self.advance(); Ok(ValueExpr::Literal(LiteralValue::Integer(n))) }
-            Some(Token::Float(f)) => { self.advance(); Ok(ValueExpr::Literal(LiteralValue::Float(f))) }
-            Some(Token::Str(s))   => { self.advance(); Ok(ValueExpr::Literal(LiteralValue::Text(s))) }
-            Some(Token::True)     => { self.advance(); Ok(ValueExpr::Literal(LiteralValue::Bool(true))) }
-            Some(Token::False)    => { self.advance(); Ok(ValueExpr::Literal(LiteralValue::Bool(false))) }
-            Some(Token::Nothing)  => { self.advance(); Ok(ValueExpr::Literal(LiteralValue::Nothing)) }
+            Some(Token::Int(n)) => {
+                self.advance();
+                Ok(ValueExpr::Literal(LiteralValue::Integer(n)))
+            }
+            Some(Token::Float(f)) => {
+                self.advance();
+                Ok(ValueExpr::Literal(LiteralValue::Float(f)))
+            }
+            Some(Token::Str(s)) => {
+                self.advance();
+                Ok(ValueExpr::Literal(LiteralValue::Text(s)))
+            }
+            Some(Token::True) => {
+                self.advance();
+                Ok(ValueExpr::Literal(LiteralValue::Bool(true)))
+            }
+            Some(Token::False) => {
+                self.advance();
+                Ok(ValueExpr::Literal(LiteralValue::Bool(false)))
+            }
+            Some(Token::Nothing) => {
+                self.advance();
+                Ok(ValueExpr::Literal(LiteralValue::Nothing))
+            }
             Some(Token::Old) => {
                 self.advance();
                 self.expect_token(&Token::LParen)?;
