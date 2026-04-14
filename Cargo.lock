@@ -89,6 +89,7 @@ dependencies = [
 name = "ail-text"
 version = "0.1.0"
 dependencies = [
+ "ail-contract",
  "ail-graph",
  "ail-types",
  "pest",

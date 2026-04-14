@@ -1,10 +1,13 @@
 mod assembler;
+pub(crate) mod directory;
 mod walker;
 
 use pest::Parser;
 
 use crate::errors::ParseError;
 use crate::grammar::{AilParser, Rule};
+
+pub use directory::parse_directory;
 
 /// Parse `.ail` source text into an `AilGraph`.
 ///

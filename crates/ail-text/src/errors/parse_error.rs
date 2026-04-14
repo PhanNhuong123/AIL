@@ -48,4 +48,11 @@ pub enum ParseError {
     /// AIL-P008: promise statement not under a Do node.
     #[error("AIL-P008 promise must be child of a Do node at line {}", span.line)]
     PromiseWithoutDo { span: SourceSpan },
+
+    /// AIL-P009: I/O error reading `.ail` files or directories.
+    #[error("AIL-P009 I/O error: {message}")]
+    IoError {
+        message: String,
+        path: Option<String>,
+    },
 }

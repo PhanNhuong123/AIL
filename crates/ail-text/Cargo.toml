@@ -9,3 +9,6 @@ ail-types   = { workspace = true }
 pest        = { workspace = true }
 pest_derive = { workspace = true }
 thiserror   = { workspace = true }
+
+[dev-dependencies]
+ail-contract = { workspace = true }
