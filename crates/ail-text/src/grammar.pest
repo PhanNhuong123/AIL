@@ -1,0 +1,351 @@
+// AIL PEG Grammar — Phase 4, Task 4.1
+//
+// Strategy:
+//   WHITESPACE = spaces/tabs only (NOT newlines).  Newlines are explicit so
+//   continuation detection is unambiguous.
+//   Continuation lines (cont2) are @-atomic — WHITESPACE is NOT inserted inside
+//   them, so they match exactly "\n  " without consuming any surrounding spaces.
+//
+// Expression philosophy (v0.1):
+//   Expressions are captured as raw text; ail-types validates expression syntax
+//   in task 4.2.  Grammar guarantees structural correctness (pattern shape,
+//   keywords, field lists).  Known limitation: where_expr_update may misparse
+//   if a value string contains the substring " set ".
+
+// ── Automatic skipping ───────────────────────────────────────────────────────
+
+WHITESPACE = _{ " " | "\t" }
+COMMENT    = _{ "--" ~ (!"\n" ~ ANY)* }
+NEWLINE    = _{ "\n" | "\r\n" }
+
+// ── Atomic primitives ─────────────────────────────────────────────────────────
+
+// Newline + exact 2-space indent (continuation / shallow child)
+cont2 = @{ ("\n" | "\r\n") ~ "  " }
+
+// PascalCase user-defined type: User, WalletBalance, list<Item>
+type_ref = @{ ASCII_ALPHA_UPPER ~ (ASCII_ALPHANUMERIC | "_")* ~ ("<" ~ type_ref ~ ">")? }
+
+// Lowercase base type from the AIL builtin set: number, text, integer, boolean, etc.
+// May carry a generic parameter: list<Item>, option<T>
+base_type = @{ ASCII_ALPHA_LOWER ~ (ASCII_ALPHANUMERIC | "_")* ~ ("<" ~ type_ref ~ ">")? }
+
+// snake_case / camelCase identifier, may have dot access: sender, sender.balance
+ident = @{ ASCII_ALPHA_LOWER ~ (ASCII_ALPHANUMERIC | "_" | ".")* }
+
+// Multi-word natural language name (for do intent, together body, etc.)
+// Atomic: spaces are explicit, not WHITESPACE-skipped.
+intent = @{
+    ASCII_ALPHA ~ (ASCII_ALPHANUMERIC | "_")* ~
+    (" " ~ ASCII_ALPHA ~ (ASCII_ALPHANUMERIC | "_")*)*
+}
+
+integer_lit = @{ ASCII_DIGIT+ }
+
+// ── Context-specific expression captures ─────────────────────────────────────
+//
+// Each raw-capture variant stops at the right boundary for its context.
+// All return opaque text; structural validation is deferred to ail-types.
+
+// General line-end capture (define where, let rhs, fetch where, etc.)
+raw_expr = @{ (!("\n" | "\r\n") ~ ANY)+ }
+
+// Check condition: space-prefixed keywords as word boundary prevents false
+// match inside identifiers like "is_otherwise_flag".
+check_cond_expr = @{ (!(" otherwise" | " if not" | "\n" | "\r\n") ~ ANY)+ }
+
+// Update where clause: stop at " set " (word boundary) or newline.
+// v0.1 limitation: misparsed if value contains " set " as substring.
+where_expr_update = @{ (!(" set " | "\n" | "\r\n") ~ ANY)+ }
+
+// When clause condition: stop at colon separator.
+when_val_expr = @{ (!(":" | "\n" | "\r\n") ~ ANY)+ }
+
+// Assignment right-hand side: stop at comma or newline.
+value_expr = @{ (!("," | "\n" | "\r\n") ~ ANY)+ }
+
+// ── Structured helpers ────────────────────────────────────────────────────────
+
+typed_param     =  { ident ~ ":" ~ type_ref }
+typed_field     =  { ident ~ ":" ~ type_ref }
+field_list      =  { typed_field ~ ("," ~ typed_field)* }
+param_list      =  { typed_param ~ ("," ~ typed_param)* }
+assignment      =  { ident ~ "=" ~ value_expr }
+assignment_list =  { assignment ~ ("," ~ assignment)* }
+ret_type_list   =  { type_ref ~ ("or" ~ type_ref)* }
+return_clause   =  { ("->" | "producing") ~ ret_type_list }
+time_unit       =  { ("second" | "minute") ~ "s"? }
+
+// ── Continuation keyword lookahead ────────────────────────────────────────────
+//
+// A cont2 line that starts with one of these keywords is a *continuation* of
+// the parent statement (e.g. "from", "->", "or").  Lines that do NOT start
+// with a continuation keyword are *child statements* and belong to a nested
+// do / together / retry body — the file-level loop handles them.
+
+continuation_kw = _{
+    "from" | "given" | "->" | "producing" | "or" | "carries" |
+    "otherwise" | "set" | "where" | "with"
+}
+
+// ── Pattern rule helpers ──────────────────────────────────────────────────────
+
+// otherwise clause shared by check and raise
+otherwise_clause = {
+    ("otherwise" | "if" ~ "not") ~
+    ("raise" | "reject" ~ "with") ~
+    type_ref ~
+    ("carries" ~ assignment_list)?
+}
+
+// ── 17 Pattern rules ──────────────────────────────────────────────────────────
+//
+// Ordered most-specific → least-specific.  do_stmt is LAST because its
+// document-style variant (no keyword) is a catch-all for natural-language lines.
+
+// 1. define ──────────────────────────────────────────────────────────────────
+// Code:     define WalletBalance:number where value >= 0
+// Document: WalletBalance is a number that is never negative
+//
+// The base type (after ":") uses base_type (lowercase) because AIL builtins
+// are number, text, integer, boolean, list<T>, option<T>, bytes, timestamp.
+define_stmt = {
+    ("define" ~ type_ref ~ ":" ~ base_type ~ ("where" ~ raw_expr)?) |
+    (type_ref ~ "is" ~ "a" ~ base_type ~ (("that" | "where" | "which") ~ raw_expr)?)
+}
+
+// 2. describe ────────────────────────────────────────────────────────────────
+// Code:     describe User as
+//             id:UserId, balance:WalletBalance
+// Document: User consists of
+//             id (UserId), name (NonEmptyText)
+describe_stmt = {
+    (
+        ("describe" ~ type_ref ~ ("as" | "with")) |
+        (type_ref ~ ("consists" ~ "of" | "has"))
+    ) ~
+    cont2 ~ field_list
+}
+
+// 3. error ────────────────────────────────────────────────────────────────────
+// Code:     error InsufficientBalanceError
+//             carries current_balance:WalletBalance, requested_amount:PositiveAmount
+// Document: InsufficientBalanceError occurs with current balance (WalletBalance) ...
+error_stmt = {
+    ("error" ~ type_ref ~ (cont2 ~ "carries" ~ field_list)?) |
+    (type_ref ~ "occurs" ~ "with" ~ raw_expr)
+}
+
+// 4. promise ──────────────────────────────────────────────────────────────────
+// Code:     promise before: sender.status is "active"
+//           promise after: result is old(balance) - amount
+//           promise always: balance >= 0
+// Synonyms: requires, guarantees, must always
+promise_before = {
+    ("promise" ~ "before" ~ ":") |
+    ("requires" ~ "that"?)
+}
+promise_after = {
+    ("promise" ~ "after" ~ ":") |
+    ("guarantees" ~ "that"?)
+}
+promise_always = {
+    ("promise" ~ "always" ~ ":") |
+    ("must" ~ "always" ~ ("satisfy")?)
+}
+promise_stmt = {
+    (promise_before ~ raw_expr) |
+    (promise_after  ~ raw_expr) |
+    (promise_always ~ raw_expr)
+}
+
+// 5. let ──────────────────────────────────────────────────────────────────────
+// Code:     let new_balance:WalletBalance = sender.balance - amount
+// Document: calculate new balance as sender balance minus amount
+let_stmt = {
+    ("let" ~ typed_param ~ "=" ~ raw_expr) |
+    ("calculate" ~ raw_expr ~ "as" ~ raw_expr)
+}
+
+// 6. check ────────────────────────────────────────────────────────────────────
+// Code:     check sender.status is "active"
+//             otherwise raise InvalidUserError carries user_id = sender.id
+// Synonyms: ensure, verify; if not
+check_stmt = {
+    ("check" | "ensure" | "verify") ~
+    check_cond_expr ~
+    (cont2 ~ otherwise_clause)?
+}
+
+// 7. for each ─────────────────────────────────────────────────────────────────
+// Code:     for each item:OrderItem in order.items do calculate total
+// Document: for every item in order items, calculate total
+for_each_stmt = {
+    "for" ~ ("each" | "every") ~
+    (typed_param | ident) ~
+    "in" ~ (ident | raw_expr) ~
+    (("do" | ",") ~ intent)?
+}
+
+// 8. match ─────────────────────────────────────────────────────────────────────
+// Code:     match user.status
+//             when "active": proceed
+//             when "suspended": raise AccountSuspendedError
+//             otherwise: raise UnknownStatusError
+// Document: depending on user status, if active: proceed
+when_clause = { ("when" | "if") ~ when_val_expr ~ ":" ~ raw_expr }
+match_stmt = {
+    ("match" | "depending" ~ "on") ~ raw_expr ~
+    (cont2 ~ when_clause)+ ~
+    (cont2 ~ "otherwise" ~ ":" ~ raw_expr)?
+}
+
+// 9. fetch ─────────────────────────────────────────────────────────────────────
+// Code:     fetch user:User from database where id is user_id
+// Document: look up user from database where id matches user_id
+fetch_stmt = {
+    ("fetch" | "look" ~ "up") ~
+    (typed_param | ident) ~
+    "from" ~ ident ~
+    ("where" ~ raw_expr)?
+}
+
+// 10. save ────────────────────────────────────────────────────────────────────
+// Code:     save notification to queue with user_id = user.id, message = msg
+// Synonyms: store, persist
+save_stmt = {
+    ("save" | "store" | "persist") ~
+    ident ~
+    "to" ~ ident ~
+    ("with" ~ assignment_list)?
+}
+
+// 11. update ──────────────────────────────────────────────────────────────────
+// Code:     update User in database where id is sender.id set balance = new_balance
+// Synonyms: change, modify
+update_stmt = {
+    ("update" | "change" | "modify") ~
+    type_ref ~
+    "in" ~ ident ~
+    ("where" ~ where_expr_update)? ~
+    ("set" ~ assignment_list)?
+}
+
+// 12. remove ──────────────────────────────────────────────────────────────────
+// Code:     remove Session from store where token is expired_token
+// Synonyms: delete, drop
+remove_stmt = {
+    ("remove" | "delete" | "drop") ~
+    type_ref ~
+    "from" ~ ident ~
+    ("where" ~ raw_expr)?
+}
+
+// 13. return ──────────────────────────────────────────────────────────────────
+// Code:     return TransferResult
+//             with sender = updated_sender, receiver = updated_receiver
+// Document: respond with transfer result containing ...
+return_stmt = {
+    (
+        ("return" ~ type_ref) |
+        ("respond" ~ "with" ~ raw_expr)
+    ) ~
+    (cont2 ~ "with" ~ assignment_list)?
+}
+
+// 14. raise ───────────────────────────────────────────────────────────────────
+// Code:     raise InsufficientBalanceError
+//             carries current_balance = sender.balance, requested_amount = amount
+// Synonyms: reject with, fail with
+raise_stmt = {
+    ("raise" | "reject" ~ "with" | "fail" ~ "with") ~
+    type_ref ~
+    (
+        ("carries" ~ assignment_list) |
+        (cont2 ~ "carries" ~ assignment_list)
+    )?
+}
+
+// 15. together ────────────────────────────────────────────────────────────────
+// Code:     together
+//             update User in database where id is sender.id set balance = x
+//             update User in database where id is receiver.id set balance = y
+// Synonym:  atomically
+together_stmt = {
+    ("together" | "atomically") ~
+    (cont2 ~ !continuation_kw ~ statement_body)+
+}
+
+// 16. retry ───────────────────────────────────────────────────────────────────
+// Code:     retry 3 times with delay 1 second
+//             fetch rate:ExchangeRate from external_api where currency is "USD"
+// Synonym:  attempt up to N times, waiting N second between attempts
+retry_stmt = {
+    ("retry" | "attempt" ~ "up" ~ "to") ~
+    integer_lit ~ "times" ~
+    (
+        ("with" ~ "delay" ~ integer_lit ~ time_unit) |
+        ("," ~ "waiting" ~ integer_lit ~ time_unit ~ ("between" ~ "attempts")?)
+    )? ~
+    (cont2 ~ !continuation_kw ~ statement_body)?
+}
+
+// 17. do ──────────────────────────────────────────────────────────────────────
+// Code:     do transfer money safely
+//             from sender:User, receiver:User, amount:PositiveAmount
+//             -> TransferResult or InsufficientBalanceError
+// Document: transfer money safely
+//             given sender is a User, ...
+//             producing TransferResult or InsufficientBalanceError
+//
+// Negative lookahead for all pattern keywords prevents document-style do from
+// swallowing lines that should have matched an earlier pattern.
+do_keyword_prefix = _{
+    "define" | "describe" | "error" | "promise" | "requires" | "guarantees" | "must" |
+    "let" | "calculate" | "check" | "ensure" | "verify" |
+    "for" | "match" | "depending" | "fetch" | "look" |
+    "save" | "store" | "persist" | "update" | "change" | "modify" |
+    "remove" | "delete" | "drop" | "return" | "respond" |
+    "raise" | "reject" | "fail" | "together" | "atomically" | "retry" | "attempt"
+}
+do_stmt = {
+    (
+        ("do" ~ intent) |
+        (!do_keyword_prefix ~ intent)
+    ) ~
+    (cont2 ~ &continuation_kw ~ ("from" | "given") ~ param_list)? ~
+    (cont2 ~ &continuation_kw ~ return_clause)? ~
+    (cont2 ~ &continuation_kw ~ "or" ~ type_ref)*
+}
+
+// ── Statement and file ────────────────────────────────────────────────────────
+
+// statement_body: most-specific first; do_stmt LAST (document-style catch-all)
+statement_body = {
+    define_stmt  |
+    describe_stmt |
+    error_stmt   |
+    promise_stmt |
+    let_stmt     |
+    check_stmt   |
+    for_each_stmt |
+    match_stmt   |
+    fetch_stmt   |
+    save_stmt    |
+    update_stmt  |
+    remove_stmt  |
+    return_stmt  |
+    raise_stmt   |
+    together_stmt |
+    retry_stmt   |
+    do_stmt
+}
+
+// line_indent captures depth in spaces; the parser (task 4.2) uses this to
+// reconstruct the nested tree from the flat list of statements.
+line_indent  = @{ " "* }
+comment_tail = @{ "--" ~ (!"\n" ~ ANY)* }
+
+statement = { line_indent ~ statement_body ~ comment_tail? }
+
+file = { SOI ~ NEWLINE* ~ (statement ~ (NEWLINE+ | EOI))* ~ NEWLINE* ~ EOI }
