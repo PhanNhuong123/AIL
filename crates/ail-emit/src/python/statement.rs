@@ -8,7 +8,7 @@ use crate::python::expression_parser::{
     parse_assignments, parse_fetch_expression, parse_return_with_expression,
     parse_update_expression,
 };
-use crate::python::type_map::resolve_python_type;
+use crate::python::type_map::{register_cross_file_type, resolve_python_type};
 use crate::types::{EmitConfig, ImportSet};
 
 /// Emit a `let` binding as a typed Python assignment.
@@ -62,6 +62,10 @@ pub(crate) fn emit_check(
         .otherwise_error
         .as_deref()
         .unwrap_or("AssertionError");
+
+    // Register user-defined error types for cross-file import.
+    // "AssertionError" is a Python builtin and is filtered by register_cross_file_type.
+    register_cross_file_type(error_type, imports);
 
     // Build the raise arguments from otherwise_assigns.
     let args = node
@@ -145,6 +149,10 @@ pub(crate) fn emit_fetch(
 
     let entity_type = node.metadata.return_type.as_deref().unwrap_or("object");
 
+    // Register user-defined entity types for cross-file import.
+    // The type is passed as a runtime value to repo.get(T, ...).
+    register_cross_file_type(entity_type, imports);
+
     let raw_expr = node.expression.as_ref().map(|e| e.0.as_str()).unwrap_or("");
     let (_source, conditions) = parse_fetch_expression(raw_expr);
 
@@ -201,6 +209,10 @@ pub(crate) fn emit_update(
 ) -> Result<String, EmitError> {
     let entity_type = node.metadata.return_type.as_deref().unwrap_or("object");
 
+    // Register user-defined entity types for cross-file import.
+    // The type is passed as a runtime value to repo.update(T, ...).
+    register_cross_file_type(entity_type, imports);
+
     let raw_expr = node.expression.as_ref().map(|e| e.0.as_str()).unwrap_or("");
     let (_source, conditions, set_assignments) = parse_update_expression(raw_expr);
 
@@ -231,6 +243,10 @@ pub(crate) fn emit_remove(
 ) -> Result<String, EmitError> {
     let entity_type = node.metadata.return_type.as_deref().unwrap_or("object");
 
+    // Register user-defined entity types for cross-file import.
+    // The type is passed as a runtime value to repo.delete(T, ...).
+    register_cross_file_type(entity_type, imports);
+
     let raw_expr = node.expression.as_ref().map(|e| e.0.as_str()).unwrap_or("");
     let (_source, conditions) = parse_fetch_expression(raw_expr);
 
@@ -256,13 +272,18 @@ pub(crate) fn emit_remove(
 pub(crate) fn emit_return(
     node: &Node,
     indent: &str,
-    _imports: &mut ImportSet,
+    imports: &mut ImportSet,
 ) -> Result<String, EmitError> {
     let type_name = node
         .metadata
         .name
         .as_deref()
         .ok_or(EmitError::ReturnNodeMissingName { node_id: node.id })?;
+
+    // Register the return type for cross-file import.
+    // `return with TransferResult(...)` is a runtime constructor call, so the
+    // class must be imported — `from __future__ import annotations` does not help here.
+    register_cross_file_type(type_name, imports);
 
     let raw_expr = node.expression.as_ref().map(|e| e.0.as_str()).unwrap_or("");
     let fields = parse_return_with_expression(raw_expr);
@@ -286,13 +307,17 @@ pub(crate) fn emit_return(
 pub(crate) fn emit_raise(
     node: &Node,
     indent: &str,
-    _imports: &mut ImportSet,
+    imports: &mut ImportSet,
 ) -> Result<String, EmitError> {
     let error_type = node
         .metadata
         .name
         .as_deref()
         .ok_or(EmitError::RaiseNodeMissingName { node_id: node.id })?;
+
+    // Register the error type for cross-file import.
+    // `raise InsufficientBalanceError(...)` is a runtime constructor call.
+    register_cross_file_type(error_type, imports);
 
     // carries fields come from metadata.carries (populated by ail-text parser).
     // The values should be in node.expression or otherwise_assigns.
@@ -492,6 +517,82 @@ mod tests {
         let mut imports = ImportSet::new();
         let err = emit_raise(&node, "    ", &mut imports).unwrap_err();
         assert!(matches!(err, EmitError::RaiseNodeMissingName { .. }));
+    }
+
+    // ── Cross-file import registration ───────────────────────────────────────
+
+    #[test]
+    fn emit_return_registers_cross_file_type() {
+        let mut node = make_node(Pattern::Return, "return result");
+        node.metadata.name = Some("TransferResult".to_owned());
+        let mut imports = ImportSet::new();
+        emit_return(&node, "    ", &mut imports).unwrap();
+        assert!(imports.cross_file_types.contains("TransferResult"));
+    }
+
+    #[test]
+    fn emit_raise_registers_cross_file_type() {
+        let mut node = make_node(Pattern::Raise, "raise error");
+        node.metadata.name = Some("InsufficientBalanceError".to_owned());
+        let mut imports = ImportSet::new();
+        emit_raise(&node, "    ", &mut imports).unwrap();
+        assert!(imports.cross_file_types.contains("InsufficientBalanceError"));
+    }
+
+    #[test]
+    fn emit_check_registers_error_type() {
+        let mut node = make_node(Pattern::Check, "validate amount");
+        node.expression = Some(Expression("amount > 0".to_owned()));
+        node.metadata.otherwise_error = Some("NegativeAmountError".to_owned());
+        let mut imports = ImportSet::new();
+        emit_check(&node, "    ", &mut imports).unwrap();
+        assert!(imports.cross_file_types.contains("NegativeAmountError"));
+    }
+
+    #[test]
+    fn emit_check_builtin_error_not_registered() {
+        let mut node = make_node(Pattern::Check, "guard");
+        node.expression = Some(Expression("x > 0".to_owned()));
+        // Default error is AssertionError — a Python builtin, must NOT be cross-imported.
+        let mut imports = ImportSet::new();
+        emit_check(&node, "    ", &mut imports).unwrap();
+        assert!(imports.cross_file_types.is_empty());
+    }
+
+    #[test]
+    fn emit_fetch_registers_entity_type() {
+        let mut node = make_node(Pattern::Fetch, "fetch user");
+        node.metadata.name = Some("user".to_owned());
+        node.metadata.return_type = Some("User".to_owned());
+        node.expression = Some(Expression("from db where id is user_id".to_owned()));
+        let config = EmitConfig { async_mode: false, ..Default::default() };
+        let mut imports = ImportSet::new();
+        emit_fetch(&node, "    ", &config, &mut imports).unwrap();
+        assert!(imports.cross_file_types.contains("User"));
+    }
+
+    #[test]
+    fn emit_update_registers_entity_type() {
+        let mut node = make_node(Pattern::Update, "update account");
+        node.metadata.return_type = Some("Account".to_owned());
+        node.expression = Some(Expression(
+            "in db where id is account.id set balance = new_balance".to_owned(),
+        ));
+        let config = EmitConfig { async_mode: false, ..Default::default() };
+        let mut imports = ImportSet::new();
+        emit_update(&node, "    ", &config, &mut imports).unwrap();
+        assert!(imports.cross_file_types.contains("Account"));
+    }
+
+    #[test]
+    fn emit_remove_registers_entity_type() {
+        let mut node = make_node(Pattern::Remove, "remove session");
+        node.metadata.return_type = Some("Session".to_owned());
+        node.expression = Some(Expression("from store where token is expired".to_owned()));
+        let config = EmitConfig { async_mode: false, ..Default::default() };
+        let mut imports = ImportSet::new();
+        emit_remove(&node, "    ", &config, &mut imports).unwrap();
+        assert!(imports.cross_file_types.contains("Session"));
     }
 
     // ── Fetch ─────────────────────────────────────────────────────────────────

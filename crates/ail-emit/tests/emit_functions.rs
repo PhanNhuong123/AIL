@@ -1,5 +1,5 @@
 use ail_contract::verify;
-use ail_emit::{emit_function_definitions, ContractMode, EmitConfig, EmitError};
+use ail_emit::{emit_function_definitions, ContractMode, EmitConfig, EmitError, FileOwnership};
 use ail_graph::{
     validate_graph, AilGraph, Contract, ContractKind, EdgeKind, Expression, Node, NodeId,
     NodeMetadata, Param, Pattern,
@@ -1227,7 +1227,7 @@ fn build_following_fn_graph(phase_names: Vec<&str>) -> ail_contract::VerifiedGra
 
     // Root container.
     let root_id = NodeId::new();
-    let mut root = Node {
+    let root = Node {
         id: root_id,
         intent: "root".to_owned(),
         pattern: Pattern::Describe,
@@ -2051,4 +2051,110 @@ fn emit_source_map_json_is_valid() {
     assert!(map_file.content.contains("\"python_name\""));
     assert!(map_file.content.contains("\"pay\""));
     assert!(map_file.content.contains("\"version\": \"1.0\""));
+}
+
+// ── File ownership tests ──────────────────────────────────────────────────────
+
+#[test]
+fn file_ownership_all_generated_files() {
+    let verified = build_verified_fn_graph("transfer", vec![], "number", vec![], vec![]);
+    let config = EmitConfig::default();
+    let output = emit_function_definitions(&verified, &config).expect("emit ok");
+    for file in &output.files {
+        assert_eq!(
+            file.ownership,
+            FileOwnership::Generated,
+            "file {} should be Generated",
+            file.path
+        );
+    }
+}
+
+#[test]
+fn generated_init_py_emitted() {
+    let verified = build_verified_fn_graph("transfer", vec![], "number", vec![], vec![]);
+    let config = EmitConfig::default();
+    let output = emit_function_definitions(&verified, &config).expect("emit ok");
+    let init_file = output
+        .files
+        .iter()
+        .find(|f| f.path == "generated/__init__.py");
+    assert!(init_file.is_some(), "generated/__init__.py must be emitted");
+    let content = &init_file.unwrap().content;
+    assert!(content.contains("from .types import *"));
+    assert!(content.contains("from .functions import *"));
+}
+
+#[test]
+fn functions_py_has_all_list() {
+    let verified = build_verified_fn_graph("transfer", vec![], "number", vec![], vec![]);
+    let config = EmitConfig::default();
+    let output = emit_function_definitions(&verified, &config).expect("emit ok");
+    let functions_file = output
+        .files
+        .iter()
+        .find(|f| f.path == "generated/functions.py")
+        .expect("functions.py must be present");
+    assert!(
+        functions_file.content.contains("__all__"),
+        "functions.py must have __all__"
+    );
+    assert!(
+        functions_file.content.contains("\"transfer\""),
+        "__all__ must include the slugified function name"
+    );
+}
+
+#[test]
+fn cross_file_import_in_functions_preamble() {
+    // A function that has a `return with TransferResult(...)` call should emit
+    // `from .types import TransferResult` in functions.py.
+    //
+    // Return type annotation uses a primitive (`number`) to pass graph validation.
+    // The cross-file import is triggered by the runtime constructor call in the
+    // Return node, not by the annotation (PEP 563 defers annotations to strings).
+    let verified = build_verified_fn_graph(
+        "transfer",
+        vec![],
+        "number",                                        // annotation — not type-checked
+        vec![],
+        vec![return_node("TransferResult", Some("a=1"))], // runtime constructor call
+    );
+    let config = EmitConfig::default();
+    let output = emit_function_definitions(&verified, &config).expect("emit ok");
+    let functions_file = output
+        .files
+        .iter()
+        .find(|f| f.path == "generated/functions.py")
+        .expect("functions.py must be present");
+    assert!(
+        functions_file.content.contains("from .types import TransferResult"),
+        "Return constructor call must add cross-file import: {}",
+        functions_file.content
+    );
+}
+
+#[test]
+fn no_empty_output_when_no_top_level_do() {
+    // Regression: a graph with no Do nodes produces empty files (not an error).
+    let mut graph = AilGraph::new();
+    let root = Node {
+        id: NodeId::new(),
+        intent: "root".to_owned(),
+        pattern: Pattern::Describe,
+        children: None,
+        expression: None,
+        contracts: vec![],
+        metadata: NodeMetadata::default(),
+    };
+    let root_id = root.id;
+    graph.add_node(root).unwrap();
+    graph.set_root(root_id).unwrap();
+    let valid = validate_graph(graph).unwrap();
+    let typed = type_check(valid, &[]).unwrap();
+    let verified = verify(typed).unwrap();
+
+    let config = EmitConfig::default();
+    let output = emit_function_definitions(&verified, &config).expect("emit ok");
+    assert!(output.files.is_empty());
 }

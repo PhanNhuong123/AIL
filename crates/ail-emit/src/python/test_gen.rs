@@ -2,7 +2,7 @@ use ail_contract::VerifiedGraph;
 use ail_graph::{ContractKind, Pattern};
 
 use crate::python::function::slugify_name;
-use crate::types::{EmitConfig, EmittedFile};
+use crate::types::{EmitConfig, EmittedFile, FileOwnership};
 
 // ── Public entry point ────────────────────────────────────────────────────────
 
@@ -127,6 +127,7 @@ pub(crate) fn emit_test_file(
     Some(EmittedFile {
         path: "generated/test_contracts.py".to_owned(),
         content,
+        ownership: FileOwnership::Generated,
     })
 }
 

@@ -1,5 +1,5 @@
 use ail_contract::verify;
-use ail_emit::{emit_type_definitions, EmitError};
+use ail_emit::{emit_type_definitions, EmitError, FileOwnership};
 use ail_graph::{
     validate_graph, AilGraph, Contract, ContractKind, EdgeKind, Expression, Field, Node, NodeId,
     NodeMetadata, Pattern,
@@ -323,4 +323,41 @@ fn emit_generated_python_is_valid_syntax() {
         String::from_utf8_lossy(&output.stderr),
         code
     );
+}
+
+// ── File ownership + __all__ tests ────────────────────────────────────────────
+
+#[test]
+fn types_py_has_generated_ownership() {
+    let node = define_node("WalletBalance", "number", None);
+    let verified = build_verified_types_graph(vec![node]);
+    let output = emit_type_definitions(&verified).unwrap();
+    assert_eq!(output.files[0].ownership, FileOwnership::Generated);
+}
+
+#[test]
+fn types_py_has_all_list() {
+    let node = define_node("WalletBalance", "number", None);
+    let verified = build_verified_types_graph(vec![node]);
+    let output = emit_type_definitions(&verified).unwrap();
+    let content = &output.files[0].content;
+    assert!(content.contains("__all__"), "types.py must contain __all__");
+    assert!(
+        content.contains("\"WalletBalance\""),
+        "__all__ must include WalletBalance"
+    );
+}
+
+#[test]
+fn types_py_all_list_includes_all_kinds() {
+    // Define + Describe + Error should all appear in __all__.
+    let balance = define_node("Balance", "number", None);
+    let transfer = describe_node("Transfer", vec![("amount", "number")]);
+    let err = error_node("InsufficientFundsError", vec![]);
+    let verified = build_verified_types_graph(vec![balance, transfer, err]);
+    let output = emit_type_definitions(&verified).unwrap();
+    let content = &output.files[0].content;
+    assert!(content.contains("\"Balance\""));
+    assert!(content.contains("\"Transfer\""));
+    assert!(content.contains("\"InsufficientFundsError\""));
 }

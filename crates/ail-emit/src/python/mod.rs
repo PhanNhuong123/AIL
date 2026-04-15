@@ -7,6 +7,7 @@ pub mod emit_types;
 pub(crate) mod error;
 pub(crate) mod expression_parser;
 pub(crate) mod function;
+pub mod scaffold;
 pub(crate) mod source_map;
 pub(crate) mod statement;
 pub(crate) mod test_gen;

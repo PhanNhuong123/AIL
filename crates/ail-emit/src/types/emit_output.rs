@@ -1,16 +1,22 @@
+use std::collections::BTreeSet;
+
+use crate::types::FileOwnership;
+
 /// The result of emitting Python code from a VerifiedGraph.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EmitOutput {
     pub files: Vec<EmittedFile>,
 }
 
-/// A single emitted file with its relative path and content.
+/// A single emitted file with its relative path, content, and ownership policy.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EmittedFile {
     /// Relative path from the output root (e.g. "generated/types.py").
     pub path: String,
     /// Full file content including imports.
     pub content: String,
+    /// Whether the emitter always overwrites this file or creates it only once.
+    pub ownership: FileOwnership,
 }
 
 /// Tracks which Python imports are needed across a generated file.
@@ -30,6 +36,12 @@ pub(crate) struct ImportSet {
     pub needs_time: bool,
     /// Adds `transaction` to the `from ail_runtime import ...` line.
     pub needs_transaction: bool,
+    /// User-defined type names that need `from .types import ...` in the preamble.
+    ///
+    /// Populated during function body emission when types are used as runtime
+    /// values (constructor calls, exception constructors, repository type args).
+    /// Uses `BTreeSet` for deterministic sorted output.
+    pub cross_file_types: BTreeSet<String>,
 }
 
 impl ImportSet {
@@ -78,6 +90,12 @@ impl ImportSet {
             ));
         }
 
+        // Cross-file imports: user-defined types from generated/types.py.
+        if !self.cross_file_types.is_empty() {
+            let names: Vec<&str> = self.cross_file_types.iter().map(String::as_str).collect();
+            lines.push(format!("from .types import {}", names.join(", ")));
+        }
+
         lines.join("\n")
     }
 }
@@ -122,5 +140,44 @@ mod tests {
         };
         let rendered = imports.render();
         assert!(rendered.contains("from ail_runtime import keep, pre, post"));
+    }
+
+    #[test]
+    fn cross_file_types_empty_no_import_line() {
+        let imports = ImportSet::new();
+        let rendered = imports.render();
+        assert!(!rendered.contains("from .types import"));
+    }
+
+    #[test]
+    fn cross_file_types_single_renders_import() {
+        let mut imports = ImportSet::new();
+        imports.cross_file_types.insert("MyType".to_owned());
+        let rendered = imports.render();
+        assert!(rendered.contains("from .types import MyType"));
+    }
+
+    #[test]
+    fn cross_file_types_sorted_alphabetically() {
+        let mut imports = ImportSet::new();
+        imports.cross_file_types.insert("Zebra".to_owned());
+        imports.cross_file_types.insert("Alpha".to_owned());
+        imports.cross_file_types.insert("Middle".to_owned());
+        let rendered = imports.render();
+        // BTreeSet guarantees alphabetical order.
+        assert!(rendered.contains("from .types import Alpha, Middle, Zebra"));
+    }
+
+    #[test]
+    fn cross_file_types_rendered_after_runtime_imports() {
+        let mut imports = ImportSet {
+            needs_pre: true,
+            ..Default::default()
+        };
+        imports.cross_file_types.insert("MyType".to_owned());
+        let rendered = imports.render();
+        let runtime_pos = rendered.find("from ail_runtime import").unwrap();
+        let types_pos = rendered.find("from .types import").unwrap();
+        assert!(types_pos > runtime_pos, "cross-file import must come after ail_runtime import");
     }
 }

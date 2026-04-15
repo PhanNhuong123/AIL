@@ -3,7 +3,7 @@ use ail_graph::{ContractKind, Pattern};
 use serde::Serialize;
 
 use crate::python::function::slugify_name;
-use crate::types::EmittedFile;
+use crate::types::{EmittedFile, FileOwnership};
 
 // ── Serialisable source-map types ─────────────────────────────────────────────
 
@@ -116,6 +116,7 @@ pub(crate) fn emit_source_map(verified: &VerifiedGraph) -> Option<EmittedFile> {
     Some(EmittedFile {
         path: "generated/functions.ailmap.json".to_owned(),
         content,
+        ownership: FileOwnership::Generated,
     })
 }
 
