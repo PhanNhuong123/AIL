@@ -1,0 +1,5 @@
+do broken function
+  from x:number
+  -> number
+
+  let result:number = x + 1

@@ -3,11 +3,15 @@ name = "ail-mcp"
 version = "0.1.0"
 edition = "2021"
 
+[features]
+z3-verify = ["ail-contract/z3-verify"]
+
 [dependencies]
 ail-graph    = { workspace = true }
 ail-types    = { workspace = true }
 ail-contract = { workspace = true }
 ail-emit     = { workspace = true }
+ail-text     = { workspace = true }
 serde        = { workspace = true }
 serde_json   = { workspace = true }
 thiserror    = { workspace = true }

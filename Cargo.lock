@@ -81,6 +81,7 @@ dependencies = [
  "ail-contract",
  "ail-emit",
  "ail-graph",
+ "ail-text",
  "ail-types",
  "serde",
  "serde_json",
