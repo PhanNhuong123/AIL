@@ -87,6 +87,7 @@ dependencies = [
  "ail-types",
  "serde",
  "serde_json",
+ "tempfile",
  "thiserror",
 ]
 
