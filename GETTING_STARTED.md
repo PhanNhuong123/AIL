@@ -323,8 +323,8 @@ ail build --source-map         # generate functions.ailmap.json
 
 ## Next Steps
 
-- Read [docs/AIL-Rules-v1.0.md](docs/AIL-Rules-v1.0.md) for the full syntax reference (17 patterns).
-- Read [docs/AIL-Spec-v1.0.md](docs/AIL-Spec-v1.0.md) for the crate API, error catalog, and JSON format.
+- Read [docs/plan/v1.0/reference/AIL-Rules-v1.0.md](docs/plan/v1.0/reference/AIL-Rules-v1.0.md) for the full syntax reference (17 patterns).
+- Read [docs/plan/v1.0/reference/AIL-Spec-v1.0.md](docs/plan/v1.0/reference/AIL-Spec-v1.0.md) for the crate API, error catalog, and JSON format.
 - Browse the complete `wallet_service` example in
   [crates/ail-graph/tests/fixtures/wallet_service/](crates/ail-graph/tests/fixtures/wallet_service/).
 - Install the Python runtime helpers:

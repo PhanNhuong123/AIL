@@ -166,6 +166,14 @@ impl AilGraph {
     pub(crate) fn inner(&self) -> &StableDiGraph<Node, EdgeKind> {
         &self.inner
     }
+
+    /// Return a mutable reference to the underlying petgraph.
+    ///
+    /// Used by [`super::backend_impl`] to perform edge removal by kind without
+    /// needing an [`EdgeId`].
+    pub(crate) fn inner_mut(&mut self) -> &mut StableDiGraph<Node, EdgeKind> {
+        &mut self.inner
+    }
 }
 
 impl Default for AilGraph {

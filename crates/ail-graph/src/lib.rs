@@ -30,7 +30,7 @@ pub mod validation;
 
 pub use cic::{ContextPacket, PacketConstraint, ScopeVariable, ScopeVariableKind};
 pub use errors::{GraphError, ValidationError};
-pub use graph::{AilGraph, AilGraphBuilder};
+pub use graph::{AilGraph, AilGraphBuilder, GraphBackend};
 pub use index::{
     generate_folder_index_for_node, render_folder_index, ContractSummary, FolderIndex, IndexEntry,
     IndexKind, NameResolver,

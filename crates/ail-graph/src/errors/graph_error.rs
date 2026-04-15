@@ -26,4 +26,11 @@ pub enum GraphError {
         name: String,
         locations: Vec<String>,
     },
+
+    #[error("edge not found: {from} → {to} (kind: {kind:?})")]
+    EdgeKindNotFound {
+        from: NodeId,
+        to: NodeId,
+        kind: crate::types::EdgeKind,
+    },
 }
