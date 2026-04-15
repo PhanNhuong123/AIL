@@ -1,7 +1,7 @@
 mod checks;
 mod resolver;
 
-use ail_graph::{ContextPacket, ValidGraph};
+use ail_graph::{compute_context_packet_for_backend, ContextPacket, ValidGraph};
 
 use crate::errors::TypeError;
 use crate::types::TypedGraph;
@@ -36,10 +36,25 @@ pub fn type_check(
 ) -> Result<TypedGraph, Vec<TypeError>> {
     let mut errors = Vec::new();
 
+    // When no pre-computed packets are supplied, compute them from the graph.
+    // Callers that hold a pre-built cache (e.g. from SQLite) may pass their own
+    // slice to skip recomputation.
+    let computed;
+    let effective_packets: &[ContextPacket] = if packets.is_empty() {
+        let ids = valid.graph().all_node_ids().unwrap_or_default();
+        computed = ids
+            .iter()
+            .filter_map(|&id| compute_context_packet_for_backend(valid.graph(), id).ok())
+            .collect::<Vec<_>>();
+        &computed
+    } else {
+        packets
+    };
+
     check_all_node_type_refs(valid.graph(), &mut errors);
-    check_contract_field_access(valid.graph(), packets, &mut errors);
-    check_data_flow_types(valid.graph(), packets, &mut errors);
-    check_do_param_types_from_ed_edges(valid.graph(), packets, &mut errors);
+    check_contract_field_access(valid.graph(), effective_packets, &mut errors);
+    check_data_flow_types(valid.graph(), effective_packets, &mut errors);
+    check_do_param_types_from_ed_edges(valid.graph(), effective_packets, &mut errors);
 
     if errors.is_empty() {
         Ok(TypedGraph::new(valid))

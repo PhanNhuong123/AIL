@@ -315,7 +315,13 @@ pub(super) fn check_data_flow_types(
         let node_id = packet.node_id;
 
         // Resolve every scope variable's declared type.
+        // Phase 1 note: Let/Fetch bindings have type_ref = "" when the parser
+        // hasn't supplied a type annotation yet. Skip empty refs defensively —
+        // they will be filled in by later parser phases.
         for sv in &packet.scope {
+            if sv.type_ref.is_empty() {
+                continue;
+            }
             if resolve_type_ref(&sv.type_ref, graph).is_none() {
                 errors.push(TypeError::UndefinedType {
                     node_id,
@@ -340,10 +346,17 @@ pub(super) fn check_data_flow_types(
         };
 
         // Compare node output type vs must_produce.
+        // Only applies to Do nodes — their `return_type` is the declared function
+        // output. For Let/Fetch/etc. nodes, `return_type` stores the binding type
+        // (e.g. `:User`), which must not be compared against the enclosing Do's
+        // must_produce.
         // AilGraph: never errors; SqliteGraph: degrade gracefully on missing node.
         let Some(node) = graph.get_node(node_id).ok().flatten() else {
             continue;
         };
+        if !matches!(node.pattern, Pattern::Do) {
+            continue;
+        }
         let Some(return_type) = &node.metadata.return_type else {
             continue;
         };

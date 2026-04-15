@@ -19,8 +19,8 @@ fn wallet_service_path() -> PathBuf {
 fn full_parse_directory_produces_correct_structure() {
     let graph = parse_directory(&wallet_full_path()).unwrap();
 
-    // 1 Describe root + 2 Define + 2 Describe + 1 Do + 1 Let = 7 nodes
-    assert_eq!(graph.node_count(), 7);
+    // 1 Describe root + 2 Define + 2 Describe + 3 Do + 3 Let = 11 nodes
+    assert_eq!(graph.node_count(), 11);
 
     // Root is a structural Describe container
     let root_id = graph.root_id().expect("should have a root");
@@ -32,11 +32,13 @@ fn full_parse_directory_produces_correct_structure() {
         "container node should have name = None"
     );
 
-    // Root has 5 direct children (the 5 parsed files)
+    // Root has 7 direct children (the 7 parsed files)
     let children = root.children.as_ref().expect("root should have children");
-    assert_eq!(children.len(), 5);
+    assert_eq!(children.len(), 7);
 
     // Check child patterns (alphabetical order):
+    // add_money.ail -> Do
+    // deduct_money.ail -> Do
     // positive_amount.ail -> Define
     // transfer_money.ail -> Do
     // transfer_result.ail -> Describe
@@ -49,6 +51,8 @@ fn full_parse_directory_produces_correct_structure() {
     assert_eq!(
         child_patterns,
         vec![
+            Pattern::Do,
+            Pattern::Do,
             Pattern::Define,
             Pattern::Do,
             Pattern::Describe,
@@ -153,10 +157,10 @@ fn full_parse_each_existing_fixture_file_parses() {
         parsed_count += 1;
     }
 
-    // The wallet_service fixture has 22 .ail files
+    // The wallet_service fixture has 30 .ail files
     assert_eq!(
-        parsed_count, 22,
-        "expected 22 .ail files in wallet_service fixture"
+        parsed_count, 30,
+        "expected 30 .ail files in wallet_service fixture"
     );
 }
 

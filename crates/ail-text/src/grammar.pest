@@ -248,6 +248,7 @@ remove_stmt = {
 return_stmt = {
     (
         ("return" ~ type_ref) |
+        ("return" ~ raw_expr) |
         ("respond" ~ "with" ~ raw_expr)
     ) ~
     (cont2 ~ "with" ~ assignment_list)?

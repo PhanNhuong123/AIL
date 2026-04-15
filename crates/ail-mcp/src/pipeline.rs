@@ -25,7 +25,7 @@ pub(crate) fn refresh_from_path(root: &Path) -> Result<ProjectContext, Vec<Strin
     let valid = validate_graph(graph)
         .map_err(|errs| errs.iter().map(|e| e.to_string()).collect::<Vec<_>>())?;
 
-    // ── 3. Type-check (no pre-computed packets for the MCP path) ─────────────
+    // ── 3. Type-check (packets computed internally by type_check) ────────────
     let typed = type_check(valid, &[])
         .map_err(|errs| errs.iter().map(|e| e.to_string()).collect::<Vec<_>>())?;
 

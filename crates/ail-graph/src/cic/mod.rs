@@ -22,7 +22,6 @@ mod constraint;
 mod packet;
 mod promotion;
 mod scope;
-mod type_resolution;
 
 pub use compute_backend::compute_context_packet_for_backend;
 pub use constraint::PacketConstraint;

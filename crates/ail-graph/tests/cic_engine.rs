@@ -1,4 +1,7 @@
-use ail_graph::{AilGraph, ContractKind, EdgeKind, GraphError, NodeId, Pattern, ScopeVariableKind};
+use ail_graph::{
+    compute_context_packet_for_backend, AilGraph, ContractKind, EdgeKind, GraphError, NodeId,
+    Pattern, ScopeVariableKind,
+};
 
 mod helpers;
 use helpers::{
@@ -452,4 +455,56 @@ fn cic_verified_facts_is_empty_in_phase_one() {
     let root_packet = graph.compute_context_packet(root).unwrap();
     assert!(b_packet.verified_facts.is_empty());
     assert!(root_packet.verified_facts.is_empty());
+}
+
+// ─── parity: concrete == backend-agnostic ─────────────────────────────────
+
+/// Verify that `AilGraph::compute_context_packet` and
+/// `compute_context_packet_for_backend` produce identical output for every
+/// node in a representative graph that exercises all four CIC rules
+/// (DOWN, ACROSS, DIAGONAL/scope, and promoted-fact collection).
+///
+/// This test must pass before `compute_context_packet` can safely delegate to
+/// `compute_context_packet_for_backend` (Step 5 of the gap-fix plan).
+#[test]
+fn cic_concrete_and_backend_agnostic_produce_identical_packets() {
+    // Build a graph that exercises:
+    //   - Rule 1 DOWN: root contracts flow into children
+    //   - Rule 1 ACROSS: sibling scope variables flow into later siblings
+    //   - DIAGONAL: type constraints and params
+    //   - Promoted facts: Check sibling before a Do node
+    let mut graph = AilGraph::new();
+
+    // root Do with a before-contract (DOWN rule)
+    let root = make_node(&mut graph, Pattern::Do, "transfer", Some("transfer"));
+    add_contract(&mut graph, root, ContractKind::Before, "amount > 0");
+    add_param(&mut graph, root, "amount", "number");
+    graph.set_root(root).unwrap();
+
+    // check sibling: promotes a fact (promoted_facts rule)
+    let check = make_child(&mut graph, root, Pattern::Check, "validate", None);
+
+    // do sibling after check: receives promoted fact from check
+    let do_node = make_sibling_after(&mut graph, check, root, Pattern::Do, "compute", None);
+    add_param(&mut graph, do_node, "balance", "number");
+    set_return_type(&mut graph, do_node, "number");
+
+    // let child inside do_node: scope variable test
+    let _let_node = make_child(&mut graph, do_node, Pattern::Let, "new_balance", None);
+
+    // Collect all node ids
+    let all_ids: Vec<NodeId> = graph.all_nodes().map(|n| n.id).collect();
+    assert!(!all_ids.is_empty());
+
+    for id in all_ids {
+        let concrete = graph
+            .compute_context_packet(id)
+            .unwrap_or_else(|e| panic!("concrete failed for {id:?}: {e}"));
+        let backend = compute_context_packet_for_backend(&graph, id)
+            .unwrap_or_else(|e| panic!("backend failed for {id:?}: {e}"));
+        assert_eq!(
+            concrete, backend,
+            "concrete and backend-agnostic packets differ for node {id:?}"
+        );
+    }
 }
