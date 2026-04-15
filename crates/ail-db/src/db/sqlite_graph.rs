@@ -6,6 +6,7 @@ use std::{
 use ail_graph::{
     compute_context_packet_for_backend,
     errors::GraphError,
+    search::SearchResult,
     types::{Contract, EdgeKind, Expression, Node, NodeId},
     ContextPacket,
 };
@@ -15,6 +16,7 @@ use uuid::Uuid;
 use crate::errors::DbError;
 
 use super::cic_cache;
+use super::fts_search;
 use super::node_serde::{contract_kind_from_sql, contract_kind_to_sql, node_id_from_sql, row_to_node};
 use super::schema::init_schema;
 
@@ -106,11 +108,11 @@ impl SqliteGraph {
 
     /// Count all rows in a named table.
     ///
-    /// Allowed tables: `nodes`, `contracts`, `edges`, `project_meta`, `cic_cache`.
+    /// Allowed tables: `nodes`, `contracts`, `edges`, `project_meta`, `cic_cache`, `search_fts`.
     /// Used in tests to verify cascade deletions and cache state.
     pub fn table_row_count(&self, table: &str) -> Result<i64, DbError> {
         let table = match table {
-            "nodes" | "contracts" | "edges" | "project_meta" | "cic_cache" => table,
+            "nodes" | "contracts" | "edges" | "project_meta" | "cic_cache" | "search_fts" => table,
             other => return Err(DbError::Other(format!("unknown table: {other}"))),
         };
         let db = self.db();
@@ -168,6 +170,23 @@ impl SqliteGraph {
             .map_err(|e| DbError::Other(e.to_string()))
     }
 
+    // ─── FTS5 search ─────────────────────────────────────────────────────────
+
+    /// Search nodes using the FTS5 `search_fts` virtual table.
+    ///
+    /// Returns up to `limit` [`SearchResult`] values ranked by BM25 relevance
+    /// (best match first). Each result includes the node's `depth` in the Ev
+    /// tree and the `path` from root down to the matched node.
+    ///
+    /// The `query` string is passed directly to FTS5 `MATCH`. Valid FTS5
+    /// boolean operators (`AND`, `OR`, `NOT`) work as intended. Malformed FTS5
+    /// syntax returns `Err(DbError::Other(...))`. An empty query returns
+    /// `Ok(vec![])`.
+    pub fn search(&self, query: &str, limit: usize) -> Result<Vec<SearchResult>, DbError> {
+        let db = self.db();
+        fts_search::search(&db, query, limit)
+    }
+
     /// Return `Some(true)` if the cache entry for `node_id` is valid,
     /// `Some(false)` if stale, `None` if absent.
     ///
@@ -190,11 +209,9 @@ impl SqliteGraph {
 // ─── Free helpers — take &Connection directly (no re-lock risk) ──────────────
 
 pub(crate) fn configure_pragmas(conn: &Connection) -> Result<(), DbError> {
-    conn.execute_batch(
-        "PRAGMA journal_mode = WAL;
-         PRAGMA foreign_keys = ON;
-         PRAGMA synchronous = NORMAL;",
-    )?;
+    conn.pragma_update(None, "journal_mode", "WAL")?;
+    conn.pragma_update(None, "foreign_keys", true)?;
+    conn.pragma_update(None, "synchronous", "NORMAL")?;
     Ok(())
 }
 

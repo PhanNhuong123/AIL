@@ -4,7 +4,7 @@
 /// real file. In-memory SQLite does not support WAL.
 use ail_db::SqliteGraph;
 use ail_graph::{
-    Contract, ContractKind, EdgeKind, Expression, GraphBackend, Node, NodeId, Pattern,
+    Contract, ContractKind, EdgeKind, Expression, GraphBackend, Node, NodeId, Pattern, SearchResult,
 };
 use tempfile::NamedTempFile;
 
@@ -975,5 +975,243 @@ fn t073_update_contract_invalidates_subtree() {
         db.cic_cache_valid(child),
         Some(false),
         "child cache must be stale after parent contract added"
+    );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Task 7.4 — FTS5 Search Integration
+// ═══════════════════════════════════════════════════════════════════════════
+
+// ─── t074_fts_search_basic_query ─────────────────────────────────────────────
+
+#[test]
+fn t074_fts_search_basic_query() {
+    let (_guard, mut db) = fresh_db();
+    GraphBackend::add_node(&mut db, make_do("transfer money between wallets")).unwrap();
+
+    let results = db.search("money", 10).unwrap();
+    assert_eq!(results.len(), 1);
+    assert!(results[0].intent.contains("money"));
+}
+
+// ─── t074_fts_search_multi_word_ranks_correctly ───────────────────────────────
+
+#[test]
+fn t074_fts_search_multi_word_ranks_correctly() {
+    let (_guard, mut db) = fresh_db();
+
+    // Node A matches both "transfer" and "wallet" — higher combined relevance.
+    GraphBackend::add_node(&mut db, make_do("transfer wallet funds securely")).unwrap();
+    // Node B matches only "transfer".
+    GraphBackend::add_node(&mut db, make_do("transfer payment record history")).unwrap();
+
+    // FTS5 space-separated terms use implicit AND; use OR so both nodes appear.
+    let results = db.search("transfer OR wallet", 10).unwrap();
+    assert!(results.len() >= 2, "both nodes must appear");
+    assert!(
+        results[0].intent.contains("wallet"),
+        "node matching both terms must rank first"
+    );
+}
+
+// ─── t074_fts_search_no_results_empty_vec ────────────────────────────────────
+
+#[test]
+fn t074_fts_search_no_results_empty_vec() {
+    let (_guard, mut db) = fresh_db();
+    GraphBackend::add_node(&mut db, make_do("transfer money between wallets")).unwrap();
+
+    let results = db.search("xyzzy", 10).unwrap();
+    assert!(results.is_empty(), "query with no match must return empty vec");
+}
+
+// ─── t074_fts_limit_zero_returns_empty ───────────────────────────────────────
+
+#[test]
+fn t074_fts_limit_zero_returns_empty() {
+    let (_guard, mut db) = fresh_db();
+    GraphBackend::add_node(&mut db, make_do("transfer money between wallets")).unwrap();
+
+    let results = db.search("transfer", 0).unwrap();
+    assert!(results.is_empty(), "limit=0 must short-circuit to empty vec");
+}
+
+// ─── t074_fts_whitespace_query_returns_empty ─────────────────────────────────
+
+#[test]
+fn t074_fts_whitespace_query_returns_empty() {
+    let (_guard, mut db) = fresh_db();
+    GraphBackend::add_node(&mut db, make_do("transfer money between wallets")).unwrap();
+
+    let results = db.search("   ", 10).unwrap();
+    assert!(results.is_empty(), "whitespace-only query must short-circuit to empty vec");
+}
+
+// ─── t074_fts_auto_sync_on_insert ────────────────────────────────────────────
+
+#[test]
+fn t074_fts_auto_sync_on_insert() {
+    let (_guard, mut db) = fresh_db();
+
+    // Insert trigger must populate search_fts immediately.
+    GraphBackend::add_node(&mut db, make_do("validate payment request")).unwrap();
+
+    let results = db.search("payment", 10).unwrap();
+    assert_eq!(
+        results.len(), 1,
+        "inserted node must be findable via FTS5 immediately after add_node"
+    );
+}
+
+// ─── t074_fts_auto_sync_on_update ────────────────────────────────────────────
+
+#[test]
+fn t074_fts_auto_sync_on_update() {
+    let (_guard, mut db) = fresh_db();
+    let id = GraphBackend::add_node(&mut db, make_do("validate input data")).unwrap();
+
+    // Before update: "validate" matches.
+    assert!(!db.search("validate", 10).unwrap().is_empty());
+
+    // Update trigger replaces FTS entry.
+    let mut updated = make_do("transfer wallet balance");
+    updated.id = id;
+    GraphBackend::update_node(&mut db, id, updated).unwrap();
+
+    // After update: "validate" no longer matches; "transfer" does.
+    assert!(
+        db.search("validate", 10).unwrap().is_empty(),
+        "old term must not match after update"
+    );
+    assert_eq!(
+        db.search("transfer", 10).unwrap().len(), 1,
+        "new term must match after update"
+    );
+}
+
+// ─── t074_fts_auto_sync_on_delete ────────────────────────────────────────────
+
+#[test]
+fn t074_fts_auto_sync_on_delete() {
+    let (_guard, mut db) = fresh_db();
+    let id = GraphBackend::add_node(&mut db, make_do("validate payment")).unwrap();
+
+    assert_eq!(db.search("validate", 10).unwrap().len(), 1);
+
+    // Delete trigger removes the FTS entry.
+    GraphBackend::remove_node(&mut db, id).unwrap();
+
+    assert!(
+        db.search("validate", 10).unwrap().is_empty(),
+        "deleted node must not appear in search results"
+    );
+}
+
+// ─── t074_fts_porter_stemming_works ──────────────────────────────────────────
+
+#[test]
+fn t074_fts_porter_stemming_works() {
+    let (_guard, mut db) = fresh_db();
+    // "transfers" — porter stem is "transfer".
+    GraphBackend::add_node(&mut db, make_do("transfers money between wallets")).unwrap();
+
+    // Searching the stem "transfer" must match the inflected form "transfers".
+    let results = db.search("transfer", 10).unwrap();
+    assert_eq!(
+        results.len(), 1,
+        "porter stemmer must match 'transfers' when searching 'transfer'"
+    );
+}
+
+// ─── t074_fts_result_includes_depth_and_path ─────────────────────────────────
+
+#[test]
+fn t074_fts_result_includes_depth_and_path() {
+    let (_guard, mut db) = fresh_db();
+
+    let parent = make_named_do("transfer money safely", "transfer_money");
+    let child = make_named_do("check wallet balance before transfer", "check_balance");
+    let pid = GraphBackend::add_node(&mut db, parent).unwrap();
+    let cid = GraphBackend::add_node(&mut db, child).unwrap();
+    GraphBackend::add_edge(&mut db, pid, cid, EdgeKind::Ev).unwrap();
+
+    let results = db.search("wallet", 10).unwrap();
+    let hit: &SearchResult = results
+        .iter()
+        .find(|r| r.node_id == cid)
+        .expect("child must appear in search results");
+
+    assert_eq!(hit.depth, 1, "child must have depth 1");
+    assert_eq!(
+        hit.path,
+        vec!["transfer_money".to_string(), "check_balance".to_string()],
+        "path must run from root label down to matched node label"
+    );
+}
+
+// ─── t074_fts_limit_respected ────────────────────────────────────────────────
+
+#[test]
+fn t074_fts_limit_respected() {
+    let (_guard, mut db) = fresh_db();
+
+    for i in 0..5 {
+        GraphBackend::add_node(&mut db, make_do(&format!("validate payment step {i}"))).unwrap();
+    }
+
+    let results = db.search("validate", 2).unwrap();
+    assert_eq!(results.len(), 2, "search must respect the limit parameter");
+}
+
+// ─── t074_fts_bm25_ranking_order ─────────────────────────────────────────────
+
+#[test]
+fn t074_fts_bm25_ranking_order() {
+    let (_guard, mut db) = fresh_db();
+
+    // Node A: "wallet" appears 5× — equal total length (5 tokens each).
+    let a = GraphBackend::add_node(
+        &mut db,
+        make_do("wallet wallet wallet wallet wallet"),
+    )
+    .unwrap();
+    // Node B: "wallet" appears 1× — same document length as A.
+    let b = GraphBackend::add_node(
+        &mut db,
+        make_do("wallet account ledger balance fund"),
+    )
+    .unwrap();
+
+    let results = db.search("wallet", 10).unwrap();
+    assert!(results.len() >= 2, "both nodes must appear");
+    assert_eq!(
+        results[0].node_id, a,
+        "node with higher term frequency must rank first"
+    );
+    assert!(
+        results[0].score >= results[1].score,
+        "scores must be descending: {:.4} >= {:.4}",
+        results[0].score, results[1].score
+    );
+    let _ = b; // both nodes referenced
+}
+
+// ─── t074_fts_fts5_operator_no_crash ─────────────────────────────────────────
+
+#[test]
+fn t074_fts_fts5_operator_no_crash() {
+    let (_guard, mut db) = fresh_db();
+    GraphBackend::add_node(&mut db, make_do("transfer money between accounts")).unwrap();
+    GraphBackend::add_node(&mut db, make_do("validate payment request")).unwrap();
+
+    // Valid FTS5 boolean OR — must return results for nodes matching either term.
+    let results = db.search("transfer OR validate", 10).unwrap();
+    assert_eq!(results.len(), 2, "FTS5 OR operator must return both matching nodes");
+
+    // Malformed FTS5 syntax — must return Err, NOT panic.
+    let bad = db.search("balance{{malformed", 10);
+    assert!(
+        bad.is_err(),
+        "malformed FTS5 query must return Err(...) rather than panic"
     );
 }
