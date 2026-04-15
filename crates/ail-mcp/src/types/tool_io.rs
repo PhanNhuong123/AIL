@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 
 // ── ail.search ───────────────────────────────────────────────────────────────
 
-/// Input for [`ail.search`](crate::tools::run_search).
+/// Input for the `ail.search` MCP tool.
 #[derive(Debug, Deserialize)]
 pub struct SearchInput {
     pub query: String,
@@ -31,7 +31,7 @@ pub struct SearchItem {
 
 // ── ail.context ──────────────────────────────────────────────────────────────
 
-/// Input for [`ail.context`](crate::tools::run_context).
+/// Input for the `ail.context` MCP tool.
 #[derive(Debug, Deserialize)]
 pub struct ContextInput {
     pub task: String,
@@ -76,7 +76,7 @@ pub struct ContextSummary {
 
 // ── ail.verify ───────────────────────────────────────────────────────────────
 
-/// Input for [`ail.verify`](crate::tools::run_verify).
+/// Input for the `ail.verify` MCP tool.
 #[derive(Debug, Deserialize)]
 pub struct VerifyInput {
     /// Path hint — v0.1 always verifies the whole project regardless.
@@ -94,7 +94,7 @@ pub struct VerifyOutput {
 
 // ── ail.build ────────────────────────────────────────────────────────────────
 
-/// Input for [`ail.build`](crate::tools::run_build).
+/// Input for the `ail.build` MCP tool.
 #[derive(Debug, Deserialize)]
 pub struct BuildInput {
     /// Emission target (v0.1: always "python").

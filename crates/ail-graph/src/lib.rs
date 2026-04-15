@@ -1,3 +1,24 @@
+//! `ail-graph` — PSSD graph, CIC packets, BM25 search, validation, and `ValidGraph`.
+//!
+//! This crate is the first stage of the AIL compiler pipeline. It owns:
+//! - The core graph data model ([`AilGraph`], [`Node`], [`EdgeKind`]).
+//! - CIC (Constraint Inheritance Chain) computation ([`ContextPacket`], [`PacketConstraint`]).
+//! - BM25 full-text search over the graph ([`Bm25Index`]).
+//! - Folder-index generation and name resolution ([`FolderIndex`], [`NameResolver`]).
+//! - Structural validation producing the first hard pipeline gate ([`ValidGraph`]).
+//!
+//! ## Pipeline position
+//!
+//! ```text
+//! AilGraph → validate_graph() → ValidGraph → (ail-types)
+//! ```
+//!
+//! ## Entry points
+//!
+//! - [`AilGraphBuilder`] — build a graph from parsed nodes and edges.
+//! - [`validate_graph`] — validate a raw graph; returns [`ValidGraph`] or errors.
+//! - [`ContextPacket`] — query CIC-propagated constraints for any node.
+
 pub mod cic;
 pub mod constants;
 pub mod errors;

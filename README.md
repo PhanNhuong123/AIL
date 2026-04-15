@@ -281,7 +281,19 @@ AI tools (Claude, Cursor) connect qua MCP:
 
 ## Status
 
-**v0.1 — In Development.** Phase 1 (Graph + CIC Engine) đang triển khai.
+**v0.1 — Release Candidate.** Toàn bộ pipeline đã hoàn thiện:
+
+| Phase | Deliverable | State |
+|-------|-------------|-------|
+| 1 | `ail-graph` — PSSD graph, CIC packets, BM25 search, validation | ✅ Done |
+| 2 | `ail-types` — constraint AST, type checker, `TypedGraph` | ✅ Done |
+| 3 | `ail-contract` — static checks, Z3 formal verification, `VerifiedGraph` | ✅ Done |
+| 4 | `ail-text` — pest parser, deterministic `.ail` renderer | ✅ Done |
+| 5 | `ail-emit` — Python emitter, pytest stubs, source maps | ✅ Done |
+| 5b | `ail-mcp` + `ail-cli` — MCP server, `clap` CLI | ✅ Done |
+| 6 | Polish & release — `wallet_service` example, docs, quality gates | 🔄 In progress |
+
+End-to-end verified: `ail build` on `wallet_service` generates Python + pytest, all 196 tests pass.
 
 ## License
 

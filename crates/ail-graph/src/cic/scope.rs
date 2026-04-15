@@ -19,7 +19,7 @@ pub enum ScopeVariableKind {
 /// A single named variable available at the current node's scope.
 ///
 /// Scope is assembled by the CIC engine from ancestor parameters and from
-/// across-chain sibling outputs (see [`super::compute::compute_context_packet`]).
+/// across-chain sibling outputs (see the CIC compute module).
 /// The variable's type is stored as raw text; semantic resolution happens in
 /// the Phase 2 `ail-types` crate.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

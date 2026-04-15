@@ -10,7 +10,7 @@ use super::ContractError;
 ///
 /// Static check errors (variant [`ContractStageError::StaticCheck`]) are
 /// always reported. Z3 verification errors (variant
-/// [`ContractStageError::Z3Verify`]) are only produced when the `z3-verify`
+/// `Z3Verify`) are only produced when the `z3-verify`
 /// feature is enabled.
 #[derive(Debug, Clone, Error)]
 pub enum ContractStageError {

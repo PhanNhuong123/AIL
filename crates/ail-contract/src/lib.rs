@@ -1,3 +1,26 @@
+//! `ail-contract` — static contract checks, Z3 formal verification, and `VerifiedGraph`.
+//!
+//! This crate is the third stage of the AIL compiler pipeline. It owns:
+//! - Static scope checks over `TypedGraph` ([`check_static_contracts`]).
+//! - Z3 encoding and satisfiability checks (behind the `z3-verify` feature).
+//! - `VerifiedGraph`, the third hard pipeline gate.
+//!
+//! ## Pipeline position
+//!
+//! ```text
+//! TypedGraph → verify() → VerifiedGraph → (ail-emit)
+//! ```
+//!
+//! ## Entry points
+//!
+//! - [`verify`] — run static checks (and Z3 if the feature is enabled); returns [`VerifiedGraph`].
+//! - [`check_static_contracts`] — static-only pass, no Z3 dependency.
+//!
+//! ## Feature flags
+//!
+//! - `z3-verify` — enables Z3 encoding (`z3_encode` module) and formal verification (`z3_verify` module).
+//!   Requires a Z3 system library and LLVM `libclang` on Windows.
+
 mod checks;
 mod errors;
 mod types;

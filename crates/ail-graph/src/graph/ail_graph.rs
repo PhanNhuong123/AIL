@@ -79,7 +79,7 @@ impl AilGraph {
 
     /// Add a directed edge `from → to` with the given [`EdgeKind`].
     ///
-    /// Returns an [`EdgeId`] that can be passed to [`remove_edge`].
+    /// Returns an [`EdgeId`] that can be passed to [`AilGraph::remove_edge`].
     /// Errors if either endpoint does not exist.
     pub fn add_edge(
         &mut self,
