@@ -5,7 +5,9 @@
 
 use ail_graph::{AilGraph, Bm25Index, NodeId};
 
-use crate::types::tool_io::{ContextInput, ContextNode, ContextOutput, ContextSummary, ScopeEntry};
+use crate::types::tool_io::{
+    ContextInput, ContextNode, ContextOutput, ContextSummary, PromotedFactEntry, ScopeEntry,
+};
 
 /// Approximate words in a JSON-serialised [`ContextOutput`], used for budget
 /// capping.  We use a rough 1-word = 6-byte heuristic on the serialised form.
@@ -116,11 +118,29 @@ fn expand_node(graph: &AilGraph, node_id: NodeId, intent: &str) -> Option<Contex
         constraints.push(format!("{:?} {}", c.kind, c.expression));
     }
 
+    // Map promoted facts to self-contained MCP entries.
+    // `condition` and `source_node_id` are infallible string conversions.
+    // `source_node_intent` is resolved from the graph so callers do not need
+    // a second lookup to display "(from check at <intent>)".
+    let promoted_facts: Vec<PromotedFactEntry> = packet
+        .promoted_facts
+        .iter()
+        .map(|pf| PromotedFactEntry {
+            condition: pf.condition.0.clone(),
+            source_node_id: pf.source_node.to_string(),
+            source_node_intent: graph
+                .get_node(pf.source_node)
+                .ok()
+                .map(|n| n.intent.clone()),
+        })
+        .collect();
+
     Some(ContextNode {
         node_id: node_id.to_string(),
         intent: intent.to_owned(),
         intent_chain: packet.intent_chain,
         scope,
         constraints,
+        promoted_facts,
     })
 }

@@ -29,8 +29,8 @@ pub mod types;
 pub mod validation;
 
 pub use cic::{
-    compute_context_packet_for_backend, ContextPacket, FactOrigin, PacketConstraint, PromotedFact,
-    ScopeVariable, ScopeVariableKind,
+    check_promotion_affected_nodes, compute_context_packet_for_backend, ContextPacket, FactOrigin,
+    PacketConstraint, PromotedFact, ScopeVariable, ScopeVariableKind,
 };
 pub use errors::{GraphError, ValidationError};
 pub use graph::{AilGraph, AilGraphBuilder, GraphBackend};

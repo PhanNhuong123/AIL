@@ -281,6 +281,98 @@ fn mcp_build_respects_async_mode_true() {
     assert_eq!(result["ok"].as_bool(), Some(true));
 }
 
+// ── ail.context — promoted facts rendering (task 8.2) ────────────────────────
+
+#[test]
+fn t082_promoted_facts_rendered_in_context_output() {
+    // Build a graph where a check node immediately precedes a Do node.
+    // The Do node's context packet should contain a promoted fact, and that
+    // fact must appear in the MCP `ail.context` response JSON under
+    // `primary[n].promoted_facts`.
+    let mut graph = AilGraph::new();
+
+    // do root
+    //   check balance >= amount   ← promoted fact source
+    //   do execute transfer       ← target: should see the promoted fact
+    let root = graph
+        .add_node(Node::new(NodeId::new(), "transfer money root", Pattern::Do))
+        .unwrap();
+    let check_id = graph
+        .add_node(Node::new(
+            NodeId::new(),
+            "check balance sufficient",
+            Pattern::Check,
+        ))
+        .unwrap();
+    let execute_id = graph
+        .add_node(Node::new(
+            NodeId::new(),
+            "execute transfer operation",
+            Pattern::Do,
+        ))
+        .unwrap();
+
+    // Wire topology: root Ev→ check, root Ev→ execute, check Eh→ execute.
+    graph.add_edge(root, check_id, EdgeKind::Ev).unwrap();
+    graph.add_edge(root, execute_id, EdgeKind::Ev).unwrap();
+    graph.add_edge(check_id, execute_id, EdgeKind::Eh).unwrap();
+    graph.set_root(root).unwrap();
+
+    // Set the check expression so it can be promoted.
+    graph.get_node_mut(check_id).unwrap().expression =
+        Some(ail_graph::Expression("balance >= amount".to_string()));
+
+    let server = memory_server(graph);
+
+    let req = tools_call("ail.context", json!({"task": "execute transfer"}));
+    let resp = server.handle(req).unwrap();
+    let result = resp.result.unwrap();
+
+    let primary = result["primary"].as_array().unwrap();
+    assert!(
+        !primary.is_empty(),
+        "expected at least one primary context node"
+    );
+
+    // The execute node should appear in primary (it matches the query best).
+    // Find the context node for execute_id.
+    let execute_node = primary
+        .iter()
+        .find(|n| n["node_id"].as_str() == Some(&execute_id.to_string()));
+
+    assert!(
+        execute_node.is_some(),
+        "execute node must appear in primary context results"
+    );
+
+    let execute_node = execute_node.unwrap();
+    let promoted = execute_node["promoted_facts"].as_array().unwrap();
+    assert_eq!(
+        promoted.len(),
+        1,
+        "execute node should have exactly one promoted fact; got: {:?}",
+        promoted
+    );
+
+    // Verify the promoted fact fields.
+    let pf = &promoted[0];
+    assert_eq!(
+        pf["condition"].as_str(),
+        Some("balance >= amount"),
+        "condition must match the check expression"
+    );
+    assert_eq!(
+        pf["source_node_id"].as_str(),
+        Some(check_id.to_string().as_str()),
+        "source_node_id must be the check node's UUID"
+    );
+    assert_eq!(
+        pf["source_node_intent"].as_str(),
+        Some("check balance sufficient"),
+        "source_node_intent must be the check node's intent"
+    );
+}
+
 // ── ail.status ────────────────────────────────────────────────────────────────
 
 #[test]

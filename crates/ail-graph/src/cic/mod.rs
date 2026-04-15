@@ -19,12 +19,14 @@
 mod compute;
 mod compute_backend;
 mod constraint;
+mod invalidation;
 mod packet;
 mod promotion;
 mod scope;
 
 pub use compute_backend::compute_context_packet_for_backend;
 pub use constraint::PacketConstraint;
+pub use invalidation::check_promotion_affected_nodes;
 pub use packet::ContextPacket;
 pub use promotion::{FactOrigin, PromotedFact};
 pub use scope::{ScopeVariable, ScopeVariableKind};

@@ -58,6 +58,9 @@ pub struct ContextNode {
     pub intent_chain: Vec<String>,
     pub scope: Vec<ScopeEntry>,
     pub constraints: Vec<String>,
+    /// Facts proved by preceding `check X otherwise raise E` nodes (Phase 8).
+    /// Empty when no check nodes precede this node in its execution path.
+    pub promoted_facts: Vec<PromotedFactEntry>,
 }
 
 /// A scope variable entry within a context node.
@@ -65,6 +68,28 @@ pub struct ContextNode {
 pub struct ScopeEntry {
     pub name: String,
     pub constraint: String,
+}
+
+/// A single promoted fact in a context node response.
+///
+/// Represents a condition that a preceding `check` node proved true and that
+/// is therefore available as a verified assumption for this node.
+#[derive(Debug, Serialize)]
+pub struct PromotedFactEntry {
+    /// Raw condition expression proved by the check
+    /// (e.g. `"sender.balance >= amount"`).
+    pub condition: String,
+    /// [`NodeId`](ail_graph::NodeId) of the `check` node that established this fact.
+    pub source_node_id: String,
+    /// Human-readable intent of the check node, when available.
+    /// Allows MCP consumers to display `(from check at <intent>)` without an
+    /// extra lookup round-trip.
+    ///
+    /// `None` when the check node is no longer present in the graph at the
+    /// time the context packet is rendered (e.g. a stale packet was read from
+    /// cache after the check was removed and before invalidation ran). The
+    /// `condition` and `source_node_id` fields are still valid in that case.
+    pub source_node_intent: Option<String>,
 }
 
 /// A lightweight secondary result (intent only).
