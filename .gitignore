@@ -4,6 +4,10 @@ target
 .serena
 .codex
 
+# Python cache
+__pycache__/
+*.py[cod]
+
 # Private/internal docs and agent instructions
 /docs/
 CLAUDE.md
