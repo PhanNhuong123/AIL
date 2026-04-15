@@ -3,6 +3,10 @@ name = "ail-cli"
 version = "0.1.0"
 edition = "2021"
 
+[lib]
+name = "ail_cli"
+path = "src/lib.rs"
+
 [[bin]]
 name = "ail"
 path = "src/main.rs"
@@ -16,3 +20,7 @@ ail-emit     = { workspace = true }
 ail-mcp      = { workspace = true }
 clap         = { workspace = true }
 thiserror    = { workspace = true }
+miette       = { workspace = true }
+
+[dev-dependencies]
+tempfile = "3"
