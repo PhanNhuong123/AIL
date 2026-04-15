@@ -48,4 +48,7 @@ pub enum EmitError {
 
     #[error("AIL-E013: Do node {node_id} is missing required template phase '{phase}' at emit time (should have been caught by v008 validation)")]
     MissingTemplatePhase { node_id: NodeId, phase: String },
+
+    #[error("AIL-E014: old() reference in non-after contract on node {node_id}: old() is only valid in promise-after expressions")]
+    OldRefInNonAfterContract { node_id: NodeId },
 }

@@ -67,8 +67,9 @@ pub(crate) fn emit_using_do(
     }
 
     // Emit the shared-pattern body.
+    // using-Do bodies contain no explicit Return nodes, so after_contracts is empty.
     let raw_lines = if let Some(children) = &template.children {
-        emit_do_body(graph, children, indent_level, config, imports)?
+        emit_do_body(graph, children, indent_level, config, imports, &[])?
     } else {
         Vec::new()
     };

@@ -1,4 +1,5 @@
 pub(crate) mod constraint;
+pub(crate) mod contract_inject;
 pub(crate) mod define;
 pub(crate) mod describe;
 pub mod emit_functions;
@@ -6,6 +7,8 @@ pub mod emit_types;
 pub(crate) mod error;
 pub(crate) mod expression_parser;
 pub(crate) mod function;
+pub(crate) mod source_map;
 pub(crate) mod statement;
+pub(crate) mod test_gen;
 pub(crate) mod type_map;
 pub(crate) mod using;

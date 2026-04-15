@@ -1,3 +1,5 @@
+use crate::types::ContractMode;
+
 /// Configuration for the Python emitter.
 #[derive(Debug, Clone, Default)]
 pub struct EmitConfig {
@@ -7,4 +9,10 @@ pub struct EmitConfig {
     /// Functions containing `together` blocks always require `async_mode = true`
     /// because `together` unconditionally emits `async with transaction():`.
     pub async_mode: bool,
+
+    /// Controls how contract assertions are written into generated Python.
+    ///
+    /// `On` (default) emits `assert` statements; `Comments` emits them as `#` lines;
+    /// `Off` omits all contract output.
+    pub contract_mode: ContractMode,
 }

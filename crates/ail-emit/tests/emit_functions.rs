@@ -1,5 +1,5 @@
 use ail_contract::verify;
-use ail_emit::{emit_function_definitions, EmitConfig, EmitError};
+use ail_emit::{emit_function_definitions, ContractMode, EmitConfig, EmitError};
 use ail_graph::{
     validate_graph, AilGraph, Contract, ContractKind, EdgeKind, Expression, Node, NodeId,
     NodeMetadata, Param, Pattern,
@@ -311,10 +311,10 @@ fn match_node(discriminant: &str, arms: Vec<(&str, &str)>, otherwise: Option<&st
 }
 
 fn sync_config() -> EmitConfig {
-    EmitConfig { async_mode: false }
+    EmitConfig { async_mode: false, ..Default::default() }
 }
 fn async_config() -> EmitConfig {
-    EmitConfig { async_mode: true }
+    EmitConfig { async_mode: true, ..Default::default() }
 }
 
 // ── Integration tests ─────────────────────────────────────────────────────────
@@ -324,8 +324,10 @@ fn emit_empty_graph_no_functions() {
     let verified = build_verified_fn_graph("noop", vec![], "void", vec![], vec![]);
     let config = sync_config();
     let output = emit_function_definitions(&verified, &config).expect("emit should succeed");
-    // The function has no children, so it still emits (with pass).
-    assert_eq!(output.files.len(), 1);
+    // functions.py is always present; test_contracts.py and ailmap.json are also
+    // emitted because build_verified_fn_graph attaches Before + After contracts.
+    assert!(output.files.len() >= 1);
+    assert!(output.files.iter().any(|f| f.path == "generated/functions.py"));
 }
 
 #[test]
@@ -1724,4 +1726,329 @@ fn emit_generated_python_functions_valid_syntax() {
         String::from_utf8_lossy(&output.stderr),
         code
     );
+}
+
+// ── Contract injection integration tests ─────────────────────────────────────
+
+/// Build a verified graph where the Do node carries specific contracts.
+///
+/// Caller must supply at least one Before and one After contract
+/// (validation requirement).
+fn build_verified_fn_graph_with_contracts(
+    fn_name: &str,
+    params: Vec<(&str, &str)>,
+    return_type: &str,
+    children: Vec<Node>,
+    contracts: Vec<Contract>,
+) -> ail_contract::VerifiedGraph {
+    let mut graph = AilGraph::new();
+
+    let root = Node {
+        id: NodeId::new(),
+        intent: "root container".to_owned(),
+        pattern: Pattern::Describe,
+        children: None,
+        expression: None,
+        contracts: vec![],
+        metadata: NodeMetadata::default(),
+    };
+    let root_id = root.id;
+    graph.add_node(root).expect("add root");
+    graph.set_root(root_id).expect("set root");
+
+    let fn_node_id = NodeId::new();
+    let mut fn_node = Node {
+        id: fn_node_id,
+        intent: fn_name.to_owned(),
+        pattern: Pattern::Do,
+        children: None,
+        expression: None,
+        contracts,
+        metadata: NodeMetadata::default(),
+    };
+    fn_node.metadata.name = Some(fn_name.to_owned());
+    fn_node.metadata.params = params
+        .into_iter()
+        .map(|(n, t)| Param { name: n.to_owned(), type_ref: t.to_owned() })
+        .collect();
+    fn_node.metadata.return_type = Some(return_type.to_owned());
+
+    graph.add_node(fn_node).expect("add fn node");
+    graph.add_edge(root_id, fn_node_id, EdgeKind::Ev).expect("Ev root->fn");
+
+    let mut child_ids = Vec::new();
+    for node in children {
+        let child_id = node.id;
+        graph.add_node(node).expect("add child node");
+        graph.add_edge(fn_node_id, child_id, EdgeKind::Ev).expect("Ev fn->child");
+        child_ids.push(child_id);
+    }
+    for i in 0..child_ids.len().saturating_sub(1) {
+        graph.add_edge(child_ids[i], child_ids[i + 1], EdgeKind::Eh).expect("Eh sibling");
+    }
+    if !child_ids.is_empty() {
+        let fn_mut = graph.get_node_mut(fn_node_id).expect("fn node exists");
+        fn_mut.children = Some(child_ids);
+    }
+    {
+        let root_mut = graph.get_node_mut(root_id).expect("root exists");
+        root_mut.children = Some(vec![fn_node_id]);
+    }
+
+    let valid = validate_graph(graph).expect("validation");
+    let typed = type_check(valid, &[]).expect("type check");
+    verify(typed).expect("verify")
+}
+
+fn before_after_contracts() -> Vec<Contract> {
+    vec![
+        Contract {
+            kind: ContractKind::Before,
+            expression: Expression("true == true".to_owned()),
+        },
+        Contract {
+            kind: ContractKind::After,
+            expression: Expression("true == true".to_owned()),
+        },
+    ]
+}
+
+fn make_return_node(type_name: &str) -> Node {
+    let mut node = Node {
+        id: NodeId::new(),
+        intent: "return result".to_owned(),
+        pattern: Pattern::Return,
+        children: None,
+        expression: None,
+        contracts: vec![],
+        metadata: NodeMetadata::default(),
+    };
+    node.metadata.name = Some(type_name.to_owned());
+    node
+}
+
+#[test]
+fn emit_before_contract_injected_after_docstring() {
+    let contracts = before_after_contracts();
+    let verified =
+        build_verified_fn_graph_with_contracts("pay", vec![], "number", vec![], contracts);
+    let config = sync_config();
+    let output = emit_function_definitions(&verified, &config).expect("emit ok");
+    let content = &output.files[0].content;
+
+    let docstring_pos = content.find("\"\"\"pay\"\"\"").expect("docstring present");
+    // "true == true" parses to Bool literals; renderer capitalises: "True == True".
+    let assert_pos = content
+        .find("assert True == True  # before:")
+        .expect("before-assert present");
+    assert!(assert_pos > docstring_pos, "before-assert must come after docstring");
+}
+
+#[test]
+fn emit_after_contract_injected_before_return() {
+    let contracts = before_after_contracts();
+    let return_node = make_return_node("number");
+    let verified = build_verified_fn_graph_with_contracts(
+        "compute",
+        vec![],
+        "number",
+        vec![return_node],
+        contracts,
+    );
+    let config = sync_config();
+    let output = emit_function_definitions(&verified, &config).expect("emit ok");
+    let content = &output.files[0].content;
+
+    let assert_pos = content
+        .find("assert True == True  # after:")
+        .expect("after-assert present");
+    let return_pos = content.find("return number(").expect("return present");
+    assert!(assert_pos < return_pos, "after-assert must come before return");
+}
+
+#[test]
+fn emit_old_snapshot_at_function_entry() {
+    // "old(x)" in After contract requires snapshot assignment at function entry.
+    // Before: "x > 0" (param x), After: "x is old(x)".
+    let contracts = vec![
+        Contract {
+            kind: ContractKind::Before,
+            expression: Expression("x > 0".to_owned()),
+        },
+        Contract {
+            kind: ContractKind::After,
+            expression: Expression("x is old(x)".to_owned()),
+        },
+    ];
+    let verified = build_verified_fn_graph_with_contracts(
+        "snap",
+        vec![("x", "number")],
+        "number",
+        vec![],
+        contracts,
+    );
+    let config = sync_config();
+    let output = emit_function_definitions(&verified, &config).expect("emit ok");
+    let content = &output.files[0].content;
+
+    assert!(content.contains("_pre_x = x"), "snapshot assignment missing:\n{content}");
+    assert!(content.contains("_pre_x"), "after-assert should use _pre_x:\n{content}");
+}
+
+#[test]
+fn emit_contract_mode_off_no_asserts() {
+    let contracts = before_after_contracts();
+    let verified =
+        build_verified_fn_graph_with_contracts("noop", vec![], "number", vec![], contracts);
+    let config = EmitConfig { contract_mode: ContractMode::Off, ..Default::default() };
+    let output = emit_function_definitions(&verified, &config).expect("emit ok");
+    let content = &output.files[0].content;
+    assert!(
+        !content.contains("assert "),
+        "assert should be absent in Off mode:\n{content}"
+    );
+}
+
+#[test]
+fn emit_contract_mode_comments_uses_hash() {
+    let contracts = before_after_contracts();
+    let verified =
+        build_verified_fn_graph_with_contracts("noop", vec![], "number", vec![], contracts);
+    let config = EmitConfig { contract_mode: ContractMode::Comments, ..Default::default() };
+    let output = emit_function_definitions(&verified, &config).expect("emit ok");
+    let content = &output.files[0].content;
+    assert!(content.contains("# assert "), "comment-assert missing:\n{content}");
+    // No live assert lines (indented by 4 spaces) should appear.
+    assert!(
+        !content.contains("\n    assert "),
+        "live assert must not appear in Comments mode:\n{content}"
+    );
+}
+
+#[test]
+fn emit_after_contract_not_injected_inside_together_block() {
+    // Build the graph manually so that update_node is a child of together_node
+    // ONLY — not also a direct child of fn_node. Using the flat helper would
+    // incorrectly add update_node as a sibling of together_node.
+    let mut graph = AilGraph::new();
+
+    let root_id = NodeId::new();
+    let root = Node {
+        id: root_id,
+        intent: "root container".to_owned(),
+        pattern: Pattern::Describe,
+        children: None,
+        expression: None,
+        contracts: vec![],
+        metadata: NodeMetadata::default(),
+    };
+    graph.add_node(root).expect("add root");
+    graph.set_root(root_id).expect("set root");
+
+    let fn_node_id = NodeId::new();
+    let mut fn_node = Node {
+        id: fn_node_id,
+        intent: "do_together".to_owned(),
+        pattern: Pattern::Do,
+        children: None,
+        expression: None,
+        contracts: before_after_contracts(),
+        metadata: NodeMetadata::default(),
+    };
+    fn_node.metadata.name = Some("do_together".to_owned());
+    fn_node.metadata.return_type = Some("number".to_owned());
+    graph.add_node(fn_node).expect("add fn node");
+    graph.add_edge(root_id, fn_node_id, EdgeKind::Ev).expect("root->fn");
+
+    // update_node is a child of together_node, NOT fn_node.
+    let update_id = NodeId::new();
+    let mut update_node = Node {
+        id: update_id,
+        intent: "update balance".to_owned(),
+        pattern: Pattern::Update,
+        children: None,
+        expression: None,
+        contracts: vec![],
+        metadata: NodeMetadata::default(),
+    };
+    update_node.metadata.name = Some("balance".to_owned());
+    update_node.metadata.collection = Some("repo".to_owned());
+    update_node.expression = Some(Expression("balance".to_owned()));
+    graph.add_node(update_node).expect("add update node");
+
+    let together_id = NodeId::new();
+    let together_node = Node {
+        id: together_id,
+        intent: "atomic ops".to_owned(),
+        pattern: Pattern::Together,
+        children: Some(vec![update_id]),
+        expression: None,
+        contracts: vec![],
+        metadata: NodeMetadata::default(),
+    };
+    graph.add_node(together_node).expect("add together node");
+    graph.add_edge(fn_node_id, together_id, EdgeKind::Ev).expect("fn->together");
+    graph.add_edge(together_id, update_id, EdgeKind::Ev).expect("together->update");
+
+    let return_node = make_return_node("number");
+    let return_id = return_node.id;
+    graph.add_node(return_node).expect("add return node");
+    graph.add_edge(fn_node_id, return_id, EdgeKind::Ev).expect("fn->return");
+    graph.add_edge(together_id, return_id, EdgeKind::Eh).expect("together->return sibling");
+
+    // fn_node children: [together, return]; root children: [fn].
+    graph.get_node_mut(fn_node_id).unwrap().children = Some(vec![together_id, return_id]);
+    graph.get_node_mut(root_id).unwrap().children = Some(vec![fn_node_id]);
+
+    let valid = validate_graph(graph).expect("validation");
+    let typed = type_check(valid, &[]).expect("type check");
+    let verified = verify(typed).expect("verify");
+
+    let config = EmitConfig { async_mode: true, ..Default::default() };
+    let output = emit_function_definitions(&verified, &config).expect("emit ok");
+    let content = &output.files[0].content;
+
+    let together_pos = content
+        .find("async with transaction():")
+        .expect("together block present");
+    let assert_pos = content
+        .find("assert True == True  # after:")
+        .expect("after-assert present");
+    let return_pos = content.find("return number(").expect("return present");
+
+    assert!(assert_pos > together_pos, "after-assert must be outside together block");
+    assert!(assert_pos < return_pos, "after-assert must be before return");
+}
+
+#[test]
+fn emit_test_file_has_pytest_skip() {
+    let contracts = before_after_contracts();
+    let verified =
+        build_verified_fn_graph_with_contracts("pay", vec![], "number", vec![], contracts);
+    let config = sync_config();
+    let output = emit_function_definitions(&verified, &config).expect("emit ok");
+    let test_file = output
+        .files
+        .iter()
+        .find(|f| f.path == "generated/test_contracts.py")
+        .expect("test_contracts.py must be present");
+    assert!(test_file.content.contains("pytest.skip"));
+    assert!(test_file.content.contains("class PayContracts:"));
+}
+
+#[test]
+fn emit_source_map_json_is_valid() {
+    let contracts = before_after_contracts();
+    let verified =
+        build_verified_fn_graph_with_contracts("pay", vec![], "number", vec![], contracts);
+    let config = sync_config();
+    let output = emit_function_definitions(&verified, &config).expect("emit ok");
+    let map_file = output
+        .files
+        .iter()
+        .find(|f| f.path == "generated/functions.ailmap.json")
+        .expect("ailmap.json must be present");
+    assert!(map_file.content.contains("\"python_name\""));
+    assert!(map_file.content.contains("\"pay\""));
+    assert!(map_file.content.contains("\"version\": \"1.0\""));
 }

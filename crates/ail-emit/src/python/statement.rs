@@ -378,10 +378,10 @@ mod tests {
     }
 
     fn sync_config() -> EmitConfig {
-        EmitConfig { async_mode: false }
+        EmitConfig { async_mode: false, ..Default::default() }
     }
     fn async_config() -> EmitConfig {
-        EmitConfig { async_mode: true }
+        EmitConfig { async_mode: true, ..Default::default() }
     }
 
     // ── Let ───────────────────────────────────────────────────────────────────

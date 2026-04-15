@@ -62,10 +62,11 @@ pub(crate) fn render_value_python(expr: &ValueExpr, imports: &mut ImportSet) -> 
         ValueExpr::Literal(lit) => render_literal_python(lit),
         ValueExpr::Ref(path) => path.join("."),
         ValueExpr::Old(inner) => {
-            // old() should not appear in Define constraints.
-            // Emit as-is for forward compatibility with after-contracts.
-            let v = render_value_python(inner, imports);
-            format!("old_{v}")
+            // Render as `_pre_<path>` where dots in the path are replaced by underscores.
+            // The corresponding snapshot assignment (`_pre_x = x`) is emitted at function
+            // entry by `emit_do_function` via `collect_old_refs`.
+            let path = render_value_python(inner, imports);
+            format!("_pre_{}", path.replace('.', "_"))
         }
         ValueExpr::Call { name, args } => {
             let arg_strs: Vec<_> = args
@@ -287,5 +288,24 @@ mod tests {
     fn emit_render_nothing_literal() {
         let r = render_literal_python(&LiteralValue::Nothing);
         assert_eq!(r, "None");
+    }
+
+    #[test]
+    fn emit_render_old_as_pre_prefix() {
+        let expr = ValueExpr::Old(Box::new(ValueExpr::Ref(vec![
+            "sender".into(),
+            "balance".into(),
+        ])));
+        let mut imports = ImportSet::new();
+        let r = render_value_python(&expr, &mut imports);
+        assert_eq!(r, "_pre_sender_balance");
+    }
+
+    #[test]
+    fn emit_render_old_simple_ref() {
+        let expr = ValueExpr::Old(Box::new(ValueExpr::Ref(vec!["amount".into()])));
+        let mut imports = ImportSet::new();
+        let r = render_value_python(&expr, &mut imports);
+        assert_eq!(r, "_pre_amount");
     }
 }
