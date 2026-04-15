@@ -185,6 +185,7 @@ fn packet_with_scope(node_id: NodeId, var_name: &str, type_ref: &str) -> Context
         call_contracts: vec![],
         template_constraints: vec![],
         verified_facts: vec![],
+        promoted_facts: vec![],
         scope: vec![ScopeVariable {
             name: var_name.to_owned(),
             type_ref: type_ref.to_owned(),
@@ -205,6 +206,7 @@ fn packet_with_must_produce(node_id: NodeId, must_produce: &str) -> ContextPacke
         call_contracts: vec![],
         template_constraints: vec![],
         verified_facts: vec![],
+        promoted_facts: vec![],
         scope: vec![],
         must_produce: Some(must_produce.to_owned()),
     }
@@ -338,6 +340,7 @@ fn t031_all_seven_builtins_resolve_as_scope_var_types() {
         call_contracts: vec![],
         template_constraints: vec![],
         verified_facts: vec![],
+        promoted_facts: vec![],
         scope,
         must_produce: None,
     };
@@ -644,6 +647,7 @@ fn t044_multiple_errors_are_all_collected_in_one_pass() {
         call_contracts: vec![],
         template_constraints: vec![],
         verified_facts: vec![],
+        promoted_facts: vec![],
         scope,
         must_produce: None,
     };

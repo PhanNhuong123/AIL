@@ -4,6 +4,7 @@ use crate::errors::GraphError;
 use crate::graph::AilGraph;
 use crate::types::{Node, NodeId, Param, Pattern};
 
+use super::promotion::{extract_promoted_fact, PromotedFact};
 use super::type_resolution::{find_type_node_by_name, unfold_type_constraints};
 use super::{ContextPacket, PacketConstraint, ScopeVariable, ScopeVariableKind};
 
@@ -72,6 +73,10 @@ impl AilGraph {
         // verified_facts: empty in Phase 1.
         // Rule 2 UP promotes verified postconditions only after Phase 3 Z3
         // verification runs; populated by `ail-contract`, not here.
+
+        // promoted_facts (Phase 8): check conditions proved before this node.
+        // Collected depth-aware across all ancestor levels (same walk as scope).
+        packet.promoted_facts = self.collect_promoted_facts(&path)?;
 
         // must_produce: return type of the nearest enclosing `Do` ancestor.
         packet.must_produce = self.nearest_enclosing_return_type(&path)?;
@@ -203,6 +208,72 @@ impl AilGraph {
         }
 
         Ok(out)
+    }
+
+    /// Collect all promoted facts visible at the end of `path`.
+    ///
+    /// Implements the depth-aware walk described in doc 22 §8.1:
+    ///
+    /// - At each ancestor level (root-to-current, inclusive), collect Check
+    ///   siblings that appear **before** that ancestor in execution order
+    ///   (Rule P1 and the depth-aware generalisation of Rule P2).
+    /// - For `Do` siblings, recurse into their body to collect inner Check
+    ///   nodes (Rule P2 UP: checks inside completed Dos promote outward).
+    /// - Skip `ForEach` and `Match` siblings — no promotion across loop or
+    ///   branch boundaries (issue 8.1-B, Rule P4).
+    ///
+    /// Facts are accumulated in declaration order (earliest-first per level,
+    /// root level first) to ensure deterministic ordering.
+    fn collect_promoted_facts(&self, path: &[NodeId]) -> Result<Vec<PromotedFact>, GraphError> {
+        let mut facts: Vec<PromotedFact> = Vec::new();
+
+        for level_id in path {
+            let prev_chain = self.collect_prev_sibling_chain(*level_id)?;
+            for sib_id in prev_chain {
+                let sib = self.get_node(sib_id)?;
+                match sib.pattern {
+                    Pattern::Check => {
+                        if let Some(fact) = extract_promoted_fact(sib_id, sib) {
+                            facts.push(fact);
+                        }
+                    }
+                    Pattern::Do => {
+                        // Rule P2 UP: checks inside a completed Do sibling
+                        // promote outward. Recurse but stop at ForEach/Match.
+                        facts.extend(self.collect_facts_from_do_body(sib_id)?);
+                    }
+                    // ForEach and Match: stop — no promotion across boundaries.
+                    _ => {}
+                }
+            }
+        }
+
+        Ok(facts)
+    }
+
+    /// Recursively collect promoted facts from inside a `Do` body.
+    ///
+    /// Walks children in order. Recurses into nested `Do` children but stops
+    /// at `ForEach` and `Match` (loop-variable and branch-scope boundaries).
+    fn collect_facts_from_do_body(&self, do_id: NodeId) -> Result<Vec<PromotedFact>, GraphError> {
+        let mut facts: Vec<PromotedFact> = Vec::new();
+        let children = self.children_of(do_id)?;
+        for child_id in children {
+            let child = self.get_node(child_id)?;
+            match child.pattern {
+                Pattern::Check => {
+                    if let Some(fact) = extract_promoted_fact(child_id, child) {
+                        facts.push(fact);
+                    }
+                }
+                Pattern::Do => {
+                    facts.extend(self.collect_facts_from_do_body(child_id)?);
+                }
+                // ForEach and Match: stop — no promotion across loop/branch boundaries.
+                _ => {}
+            }
+        }
+        Ok(facts)
     }
 
     /// Return the `return_type` of the deepest `Do` ancestor (including the

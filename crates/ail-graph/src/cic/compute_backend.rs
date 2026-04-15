@@ -11,6 +11,7 @@ use crate::errors::GraphError;
 use crate::graph::GraphBackend;
 use crate::types::{NodeId, Pattern};
 
+use super::promotion::{extract_promoted_fact, PromotedFact};
 use super::{ContextPacket, PacketConstraint, ScopeVariable, ScopeVariableKind};
 
 /// Compute the [`ContextPacket`] for `node_id` using any [`GraphBackend`].
@@ -63,6 +64,9 @@ pub fn compute_context_packet_for_backend(
     // call_contracts (Rule 4 DIAGONAL, call branch) — outgoing Ed edges only.
     packet.call_contracts = collect_call_contracts(backend, &path)?;
 
+    // promoted_facts (Phase 8): check conditions proved before this node.
+    packet.promoted_facts = collect_promoted_facts(backend, &path)?;
+
     // must_produce — return type from the nearest enclosing Do ancestor.
     packet.must_produce = nearest_return_type(backend, &path)?;
 
@@ -70,6 +74,67 @@ pub fn compute_context_packet_for_backend(
 }
 
 // ─── private helpers ──────────────────────────────────────────────────────────
+
+/// Collect all promoted facts visible at the end of `path`.
+///
+/// Backend-agnostic mirror of `AilGraph::collect_promoted_facts`. See that
+/// method for the full algorithm description.
+fn collect_promoted_facts(
+    backend: &dyn GraphBackend,
+    path: &[NodeId],
+) -> Result<Vec<PromotedFact>, GraphError> {
+    let mut facts: Vec<PromotedFact> = Vec::new();
+
+    for level_id in path {
+        let prev_sibs = backend.siblings_before(*level_id)?;
+        for sib_id in prev_sibs {
+            let Some(sib) = backend.get_node(sib_id)? else {
+                continue;
+            };
+            match sib.pattern {
+                Pattern::Check => {
+                    if let Some(fact) = extract_promoted_fact(sib_id, &sib) {
+                        facts.push(fact);
+                    }
+                }
+                Pattern::Do => {
+                    facts.extend(collect_facts_from_do_body(backend, sib_id)?);
+                }
+                _ => {}
+            }
+        }
+    }
+
+    Ok(facts)
+}
+
+/// Recursively collect promoted facts from inside a `Do` body.
+///
+/// Backend-agnostic mirror of `AilGraph::collect_facts_from_do_body`.
+fn collect_facts_from_do_body(
+    backend: &dyn GraphBackend,
+    do_id: NodeId,
+) -> Result<Vec<PromotedFact>, GraphError> {
+    let mut facts: Vec<PromotedFact> = Vec::new();
+    let children = backend.children(do_id)?;
+    for child_id in children {
+        let Some(child) = backend.get_node(child_id)? else {
+            continue;
+        };
+        match child.pattern {
+            Pattern::Check => {
+                if let Some(fact) = extract_promoted_fact(child_id, &child) {
+                    facts.push(fact);
+                }
+            }
+            Pattern::Do => {
+                facts.extend(collect_facts_from_do_body(backend, child_id)?);
+            }
+            _ => {}
+        }
+    }
+    Ok(facts)
+}
 
 /// Build the root-to-current ancestor path (inclusive on both ends).
 fn build_path(backend: &dyn GraphBackend, node_id: NodeId) -> Result<Vec<NodeId>, GraphError> {

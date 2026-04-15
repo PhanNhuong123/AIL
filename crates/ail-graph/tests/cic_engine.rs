@@ -1,76 +1,9 @@
-use ail_graph::{
-    AilGraph, Contract, ContractKind, EdgeKind, Expression, Field, GraphError, Node, NodeId, Param,
-    Pattern, ScopeVariableKind,
+use ail_graph::{AilGraph, ContractKind, EdgeKind, GraphError, NodeId, Pattern, ScopeVariableKind};
+
+mod helpers;
+use helpers::{
+    add_contract, add_field, add_param, make_child, make_node, make_sibling_after, set_return_type,
 };
-
-// ─── test builders ─────────────────────────────────────────────────────────
-
-/// Create a standalone node (no edges yet). Sets `metadata.name` when `Some`.
-fn make_node(graph: &mut AilGraph, pattern: Pattern, intent: &str, name: Option<&str>) -> NodeId {
-    let mut node = Node::new(NodeId::new(), intent, pattern);
-    if let Some(n) = name {
-        node.metadata.name = Some(n.to_string());
-    }
-    graph.add_node(node).unwrap()
-}
-
-/// Create `child`, attach it under `parent` via an Ev edge, return its id.
-fn make_child(
-    graph: &mut AilGraph,
-    parent: NodeId,
-    pattern: Pattern,
-    intent: &str,
-    name: Option<&str>,
-) -> NodeId {
-    let id = make_node(graph, pattern, intent, name);
-    graph.add_edge(parent, id, EdgeKind::Ev).unwrap();
-    id
-}
-
-/// Create `next` as a child of `parent` and attach an Eh edge `prev → next`,
-/// so `next` is both a structural child of `parent` and the sibling after
-/// `prev` in execution order.
-fn make_sibling_after(
-    graph: &mut AilGraph,
-    prev: NodeId,
-    parent: NodeId,
-    pattern: Pattern,
-    intent: &str,
-    name: Option<&str>,
-) -> NodeId {
-    let id = make_child(graph, parent, pattern, intent, name);
-    graph.add_edge(prev, id, EdgeKind::Eh).unwrap();
-    id
-}
-
-fn add_contract(graph: &mut AilGraph, node_id: NodeId, kind: ContractKind, expr: &str) {
-    let node = graph.get_node_mut(node_id).unwrap();
-    node.contracts.push(Contract {
-        kind,
-        expression: Expression(expr.to_string()),
-    });
-}
-
-fn add_param(graph: &mut AilGraph, node_id: NodeId, name: &str, type_ref: &str) {
-    let node = graph.get_node_mut(node_id).unwrap();
-    node.metadata.params.push(Param {
-        name: name.to_string(),
-        type_ref: type_ref.to_string(),
-    });
-}
-
-fn add_field(graph: &mut AilGraph, node_id: NodeId, name: &str, type_ref: &str) {
-    let node = graph.get_node_mut(node_id).unwrap();
-    node.metadata.fields.push(Field {
-        name: name.to_string(),
-        type_ref: type_ref.to_string(),
-    });
-}
-
-fn set_return_type(graph: &mut AilGraph, node_id: NodeId, type_ref: &str) {
-    let node = graph.get_node_mut(node_id).unwrap();
-    node.metadata.return_type = Some(type_ref.to_string());
-}
 
 // ─── Rule 1 DOWN ───────────────────────────────────────────────────────────
 

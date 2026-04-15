@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::types::NodeId;
 
-use super::{PacketConstraint, ScopeVariable};
+use super::{PacketConstraint, PromotedFact, ScopeVariable};
 
 /// The cumulative inherited context available at a single node.
 ///
@@ -50,6 +50,17 @@ pub struct ContextPacket {
     ///
     /// Empty in Phase 1: promotion requires Phase 3 Z3 verification results.
     pub verified_facts: Vec<PacketConstraint>,
+    /// Facts proved by preceding `check X otherwise raise E` nodes (Phase 8).
+    ///
+    /// Collected from Check siblings before this node at every ancestor level
+    /// (depth-aware, same walk as scope assembly). Also includes checks inside
+    /// preceding sibling `Do` bodies (Rule P2 UP). Empty when no check nodes
+    /// precede this node in its execution path.
+    ///
+    /// `#[serde(default)]` ensures cached packets serialised before Phase 8
+    /// deserialise without error — they simply get an empty `promoted_facts`.
+    #[serde(default)]
+    pub promoted_facts: Vec<PromotedFact>,
     /// All named variables available at the current node.
     pub scope: Vec<ScopeVariable>,
     /// Return-type text from the nearest enclosing `Do`, if any.
@@ -68,6 +79,7 @@ impl ContextPacket {
             call_contracts: Vec::new(),
             template_constraints: Vec::new(),
             verified_facts: Vec::new(),
+            promoted_facts: Vec::new(),
             scope: Vec::new(),
             must_produce: None,
         }
