@@ -15,6 +15,9 @@ use clap::{Parser, Subcommand};
 pub use commands::{
     build::{run_build, BuildArgs},
     init::run_init,
+    migrate::{
+        migrate_graph, run_export, run_migrate, run_verify_graph, MigrationReport, VerifyResult,
+    },
     run_cmd::run_run,
     serve::run_serve,
     status::run_status,
@@ -61,6 +64,10 @@ pub fn run() -> Result<(), CliError> {
         Command::Serve => run_serve(&cwd),
 
         Command::Status => run_status(&cwd),
+
+        Command::Migrate { from, to, verify } => run_migrate(&from, &to, verify),
+
+        Command::Export { from, to } => run_export(&from, &to),
     }
 }
 
@@ -125,4 +132,32 @@ pub enum Command {
 
     /// Show the highest pipeline stage reached and node/edge counts.
     Status,
+
+    /// Migrate a filesystem `.ail` project to a `.ail.db` SQLite database.
+    Migrate {
+        /// Source directory containing `.ail` files.
+        #[arg(long)]
+        from: PathBuf,
+
+        /// Destination path for the new `.ail.db` file.
+        #[arg(long)]
+        to: PathBuf,
+
+        /// Verify roundtrip fidelity after migrating.
+        #[arg(long)]
+        verify: bool,
+    },
+
+    /// Export a `.ail.db` database back to `.ail` text files.
+    ///
+    /// Output is written to `<to>/export.ail` as a single file.
+    Export {
+        /// Source `.ail.db` database path.
+        #[arg(long)]
+        from: PathBuf,
+
+        /// Destination directory for the exported `.ail` file.
+        #[arg(long)]
+        to: PathBuf,
+    },
 }

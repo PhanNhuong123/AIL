@@ -17,7 +17,9 @@ use crate::errors::DbError;
 
 use super::cic_cache;
 use super::fts_search;
-use super::node_serde::{contract_kind_from_sql, contract_kind_to_sql, node_id_from_sql, row_to_node};
+use super::node_serde::{
+    contract_kind_from_sql, contract_kind_to_sql, node_id_from_sql, row_to_node,
+};
 use super::schema::init_schema;
 
 /// A graph backed by a single SQLite `.ail.db` file.
@@ -88,7 +90,9 @@ impl SqliteGraph {
 
     /// Acquire the connection lock. Panics if the mutex is poisoned.
     pub(crate) fn db(&self) -> std::sync::MutexGuard<'_, Connection> {
-        self.conn.lock().expect("SqliteGraph connection mutex poisoned")
+        self.conn
+            .lock()
+            .expect("SqliteGraph connection mutex poisoned")
     }
 
     // ─── Diagnostic / test-support helpers ───────────────────────────────────
@@ -98,11 +102,7 @@ impl SqliteGraph {
     /// Used in tests to assert WAL mode is active; useful in diagnostics.
     pub fn journal_mode(&self) -> Result<String, DbError> {
         let db = self.db();
-        let mode = db.query_row(
-            "PRAGMA journal_mode",
-            [],
-            |row| row.get::<_, String>(0),
-        )?;
+        let mode = db.query_row("PRAGMA journal_mode", [], |row| row.get::<_, String>(0))?;
         Ok(mode)
     }
 
@@ -116,11 +116,9 @@ impl SqliteGraph {
             other => return Err(DbError::Other(format!("unknown table: {other}"))),
         };
         let db = self.db();
-        let count = db.query_row(
-            &format!("SELECT COUNT(*) FROM {table}"),
-            [],
-            |row| row.get::<_, i64>(0),
-        )?;
+        let count = db.query_row(&format!("SELECT COUNT(*) FROM {table}"), [], |row| {
+            row.get::<_, i64>(0)
+        })?;
         Ok(count)
     }
 
@@ -166,8 +164,7 @@ impl SqliteGraph {
     pub fn invalidate_node(&self, node_id: NodeId) -> Result<usize, DbError> {
         let id_str = node_id.to_string();
         let db = self.db();
-        cic_cache::compute_and_invalidate(&db, &id_str)
-            .map_err(|e| DbError::Other(e.to_string()))
+        cic_cache::compute_and_invalidate(&db, &id_str).map_err(|e| DbError::Other(e.to_string()))
     }
 
     // ─── FTS5 search ─────────────────────────────────────────────────────────
@@ -220,9 +217,7 @@ pub(crate) fn load_contracts(
     node_id: &str,
 ) -> Result<Vec<Contract>, GraphError> {
     let mut stmt = conn
-        .prepare(
-            "SELECT kind, expression FROM contracts WHERE node_id = ? ORDER BY position",
-        )
+        .prepare("SELECT kind, expression FROM contracts WHERE node_id = ? ORDER BY position")
         .map_err(|e| GraphError::Storage(e.to_string()))?;
 
     let contracts = stmt
@@ -263,11 +258,9 @@ pub(crate) fn get_depth(conn: &Connection, id: &str) -> Result<i64, GraphError> 
         |row| row.get::<_, i64>(0),
     ) {
         Ok(d) => Ok(d),
-        Err(rusqlite::Error::QueryReturnedNoRows) => {
-            Err(GraphError::NodeNotFound(
-                node_id_from_sql(id).unwrap_or_else(|_| NodeId::new()),
-            ))
-        }
+        Err(rusqlite::Error::QueryReturnedNoRows) => Err(GraphError::NodeNotFound(
+            node_id_from_sql(id).unwrap_or_else(|_| NodeId::new()),
+        )),
         Err(e) => Err(GraphError::Storage(e.to_string())),
     }
 }
@@ -296,11 +289,9 @@ pub(crate) fn get_parent_and_position(
         |row| Ok((row.get::<_, Option<String>>(0)?, row.get::<_, i64>(1)?)),
     ) {
         Ok(pair) => Ok(pair),
-        Err(rusqlite::Error::QueryReturnedNoRows) => {
-            Err(GraphError::NodeNotFound(
-                node_id_from_sql(id).unwrap_or_else(|_| NodeId::new()),
-            ))
-        }
+        Err(rusqlite::Error::QueryReturnedNoRows) => Err(GraphError::NodeNotFound(
+            node_id_from_sql(id).unwrap_or_else(|_| NodeId::new()),
+        )),
         Err(e) => Err(GraphError::Storage(e.to_string())),
     }
 }

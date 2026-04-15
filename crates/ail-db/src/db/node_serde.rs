@@ -1,6 +1,4 @@
-use ail_graph::types::{
-    Contract, ContractKind, Expression, Node, NodeId, NodeMetadata, Pattern,
-};
+use ail_graph::types::{Contract, ContractKind, Expression, Node, NodeId, NodeMetadata, Pattern};
 
 use crate::errors::DbError;
 
@@ -18,8 +16,7 @@ pub(crate) fn pattern_to_sql(pattern: &Pattern) -> Result<String, DbError> {
 
 /// Deserialize a snake_case SQL string back to a `Pattern`.
 pub(crate) fn pattern_from_sql(s: &str) -> Result<Pattern, DbError> {
-    serde_json::from_value(serde_json::Value::String(s.to_string()))
-        .map_err(DbError::Serialization)
+    serde_json::from_value(serde_json::Value::String(s.to_string())).map_err(DbError::Serialization)
 }
 
 // ─── ContractKind ─────────────────────────────────────────────────────────────
@@ -36,8 +33,7 @@ pub(crate) fn contract_kind_to_sql(kind: &ContractKind) -> Result<String, DbErro
 
 /// Deserialize a snake_case SQL string back to a `ContractKind`.
 pub(crate) fn contract_kind_from_sql(s: &str) -> Result<ContractKind, DbError> {
-    serde_json::from_value(serde_json::Value::String(s.to_string()))
-        .map_err(DbError::Serialization)
+    serde_json::from_value(serde_json::Value::String(s.to_string())).map_err(DbError::Serialization)
 }
 
 // ─── NodeId ───────────────────────────────────────────────────────────────────

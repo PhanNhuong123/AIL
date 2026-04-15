@@ -19,8 +19,7 @@ pub(crate) fn get_cached_packet(
         |row| row.get::<_, String>(0),
     ) {
         Ok(json) => {
-            let packet =
-                serde_json::from_str(&json).map_err(GraphError::Serialization)?;
+            let packet = serde_json::from_str(&json).map_err(GraphError::Serialization)?;
             Ok(Some(packet))
         }
         Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
@@ -70,8 +69,7 @@ pub(crate) fn compute_and_invalidate(
     }
 
     let placeholders = affected.iter().map(|_| "?").collect::<Vec<_>>().join(", ");
-    let update_sql =
-        format!("UPDATE cic_cache SET valid = 0 WHERE node_id IN ({placeholders})");
+    let update_sql = format!("UPDATE cic_cache SET valid = 0 WHERE node_id IN ({placeholders})");
     let count = conn
         .execute(&update_sql, rusqlite::params_from_iter(affected.iter()))
         .map_err(|e| GraphError::Storage(e.to_string()))?;

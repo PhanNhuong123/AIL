@@ -6,11 +6,11 @@ use ail_graph::{
 
 use super::cic_cache;
 use super::node_serde::{node_id_from_sql, node_to_row, pattern_to_sql};
+use super::sqlite_graph::SqliteGraph;
 use super::sqlite_graph::{
     edge_kind_str, fetch_node, get_depth, get_max_child_position, get_parent_and_position,
     insert_contracts, next_contract_position, node_exists,
 };
-use super::sqlite_graph::SqliteGraph;
 
 impl GraphBackend for SqliteGraph {
     // ═══════════════════════════════════════════════════════════════════════

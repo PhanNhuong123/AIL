@@ -43,6 +43,7 @@ name = "ail-cli"
 version = "0.1.0"
 dependencies = [
  "ail-contract",
+ "ail-db",
  "ail-emit",
  "ail-graph",
  "ail-mcp",

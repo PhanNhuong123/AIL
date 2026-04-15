@@ -84,7 +84,9 @@ fn t072_sqlite_add_node_persists() {
     assert_eq!(fetched.unwrap().intent, "transfer money safely");
 
     // Unknown id returns None, not an error.
-    assert!(GraphBackend::get_node(&db, NodeId::new()).unwrap().is_none());
+    assert!(GraphBackend::get_node(&db, NodeId::new())
+        .unwrap()
+        .is_none());
 }
 
 // ─── t072_sqlite_get_node_returns_all_fields ─────────────────────────────────
@@ -205,7 +207,11 @@ fn t072_sqlite_children_returns_position_ordered() {
     GraphBackend::add_edge(&mut db, root_id, c3, EdgeKind::Ev).unwrap();
 
     let children = GraphBackend::children(&db, root_id).unwrap();
-    assert_eq!(children, vec![c1, c2, c3], "children must be in insertion order");
+    assert_eq!(
+        children,
+        vec![c1, c2, c3],
+        "children must be in insertion order"
+    );
 }
 
 // ─── t072_sqlite_siblings_before_correct_order ───────────────────────────────
@@ -222,7 +228,11 @@ fn t072_sqlite_siblings_before_correct_order() {
 
     // From s3: [s1, s2] before
     let before = GraphBackend::siblings_before(&db, s3).unwrap();
-    assert_eq!(before, vec![s1, s2], "siblings before s3 must be [s1, s2] in order");
+    assert_eq!(
+        before,
+        vec![s1, s2],
+        "siblings before s3 must be [s1, s2] in order"
+    );
 
     // From s1: nothing before
     assert!(GraphBackend::siblings_before(&db, s1).unwrap().is_empty());
@@ -277,7 +287,11 @@ fn t072_sqlite_ancestors_walks_to_root() {
     GraphBackend::add_edge(&mut db, mid, leaf, EdgeKind::Ev).unwrap();
 
     let ancestors = GraphBackend::ancestors(&db, leaf).unwrap();
-    assert_eq!(ancestors, vec![mid, root], "direct parent first, grandparent second");
+    assert_eq!(
+        ancestors,
+        vec![mid, root],
+        "direct parent first, grandparent second"
+    );
 
     assert_eq!(GraphBackend::ancestors(&db, mid).unwrap(), vec![root]);
     assert!(GraphBackend::ancestors(&db, root).unwrap().is_empty());
@@ -326,8 +340,10 @@ fn t072_sqlite_find_by_pattern_do_nodes() {
 fn t072_sqlite_find_by_pattern_define_nodes() {
     let (_guard, mut db) = fresh_db();
     let _do1 = GraphBackend::add_node(&mut db, make_do("a function")).unwrap();
-    let def1 = GraphBackend::add_node(&mut db, make_node("wallet balance", Pattern::Define)).unwrap();
-    let def2 = GraphBackend::add_node(&mut db, make_node("positive amount", Pattern::Define)).unwrap();
+    let def1 =
+        GraphBackend::add_node(&mut db, make_node("wallet balance", Pattern::Define)).unwrap();
+    let def2 =
+        GraphBackend::add_node(&mut db, make_node("positive amount", Pattern::Define)).unwrap();
 
     let mut found = GraphBackend::find_by_pattern(&db, Pattern::Define).unwrap();
     found.sort_by_key(|id| id.to_string());
@@ -335,7 +351,9 @@ fn t072_sqlite_find_by_pattern_define_nodes() {
     expected.sort_by_key(|id| id.to_string());
     assert_eq!(found, expected);
 
-    assert!(GraphBackend::find_by_pattern(&db, Pattern::Describe).unwrap().is_empty());
+    assert!(GraphBackend::find_by_pattern(&db, Pattern::Describe)
+        .unwrap()
+        .is_empty());
 }
 
 // ─── t072_sqlite_find_by_name_exact_match ────────────────────────────────────
@@ -343,11 +361,11 @@ fn t072_sqlite_find_by_pattern_define_nodes() {
 #[test]
 fn t072_sqlite_find_by_name_exact_match() {
     let (_guard, mut db) = fresh_db();
-    let id1 = GraphBackend::add_node(&mut db, make_named_do("transfer money", "transfer_money"))
-        .unwrap();
+    let id1 =
+        GraphBackend::add_node(&mut db, make_named_do("transfer money", "transfer_money")).unwrap();
     let _id2 = GraphBackend::add_node(&mut db, make_do("validate input")).unwrap();
-    let id3 = GraphBackend::add_node(&mut db, make_named_do("transfer again", "transfer_money"))
-        .unwrap();
+    let id3 =
+        GraphBackend::add_node(&mut db, make_named_do("transfer again", "transfer_money")).unwrap();
 
     let mut found = GraphBackend::find_by_name(&db, "transfer_money").unwrap();
     found.sort_by_key(|id| id.to_string());
@@ -488,10 +506,7 @@ fn t072_sqlite_transaction_rollback_on_error() {
 
     // After rollback, the node must NOT exist (unlike AilGraph which is a no-op).
     let fetched = GraphBackend::get_node(&db, id).unwrap();
-    assert!(
-        fetched.is_none(),
-        "node must be gone after SQLite rollback"
-    );
+    assert!(fetched.is_none(), "node must be gone after SQLite rollback");
     assert_eq!(GraphBackend::node_count(&db), 0);
 }
 
@@ -501,7 +516,10 @@ fn t072_sqlite_transaction_rollback_on_error() {
 fn t072_sqlite_wal_mode_enabled() {
     let (_guard, db) = fresh_db();
     let mode = db.journal_mode().unwrap();
-    assert_eq!(mode, "wal", "WAL mode must be active on every SqliteGraph connection");
+    assert_eq!(
+        mode, "wal",
+        "WAL mode must be active on every SqliteGraph connection"
+    );
 }
 
 // ─── t072_sqlite_all_pattern_variants_roundtrip ──────────────────────────────
@@ -533,7 +551,11 @@ fn t072_sqlite_all_pattern_variants_roundtrip() {
 
     let mut ids = Vec::new();
     for pattern in &all_patterns {
-        let node = Node::new(NodeId::new(), format!("intent for {pattern:?}"), pattern.clone());
+        let node = Node::new(
+            NodeId::new(),
+            format!("intent for {pattern:?}"),
+            pattern.clone(),
+        );
         let id = GraphBackend::add_node(&mut db, node).unwrap();
         ids.push((id, pattern.clone()));
     }
@@ -571,7 +593,10 @@ fn t072_sqlite_concurrent_read() {
 
     let roots_a = GraphBackend::root_nodes(&db_a).unwrap();
     let roots_b = GraphBackend::root_nodes(&db_b).unwrap();
-    assert_eq!(roots_a, roots_b, "both readers must see identical root list");
+    assert_eq!(
+        roots_a, roots_b,
+        "both readers must see identical root list"
+    );
 }
 
 // ─── all_descendants ─────────────────────────────────────────────────────────
@@ -618,15 +643,26 @@ fn t073_cache_miss_computes_and_stores() {
     let id = GraphBackend::add_node(&mut db, make_do("validate input")).unwrap();
 
     // No cache entry yet.
-    assert_eq!(db.cic_cache_valid(id), None, "no cache entry before first access");
+    assert_eq!(
+        db.cic_cache_valid(id),
+        None,
+        "no cache entry before first access"
+    );
 
     // First call: cache MISS → compute and store.
     let packet = db.get_context_packet(id).unwrap();
     assert_eq!(packet.node_id, id);
-    assert!(!packet.intent_chain.is_empty(), "intent_chain must include the node itself");
+    assert!(
+        !packet.intent_chain.is_empty(),
+        "intent_chain must include the node itself"
+    );
 
     // Cache entry now exists and is valid.
-    assert_eq!(db.cic_cache_valid(id), Some(true), "cache must be valid after first access");
+    assert_eq!(
+        db.cic_cache_valid(id),
+        Some(true),
+        "cache must be valid after first access"
+    );
     assert_eq!(db.table_row_count("cic_cache").unwrap(), 1);
 }
 
@@ -691,8 +727,16 @@ fn t073_invalidate_cascades_to_descendants() {
     updated.id = root;
     GraphBackend::update_node(&mut db, root, updated).unwrap();
 
-    assert_eq!(db.cic_cache_valid(child), Some(false), "child must be stale");
-    assert_eq!(db.cic_cache_valid(grandchild), Some(false), "grandchild must be stale");
+    assert_eq!(
+        db.cic_cache_valid(child),
+        Some(false),
+        "child must be stale"
+    );
+    assert_eq!(
+        db.cic_cache_valid(grandchild),
+        Some(false),
+        "grandchild must be stale"
+    );
 }
 
 // ─── t073_invalidate_cascades_to_ancestors ───────────────────────────────────
@@ -716,7 +760,11 @@ fn t073_invalidate_cascades_to_ancestors() {
     updated.id = grandchild;
     GraphBackend::update_node(&mut db, grandchild, updated).unwrap();
 
-    assert_eq!(db.cic_cache_valid(child), Some(false), "child must be stale");
+    assert_eq!(
+        db.cic_cache_valid(child),
+        Some(false),
+        "child must be stale"
+    );
     assert_eq!(db.cic_cache_valid(root), Some(false), "root must be stale");
 }
 
@@ -752,11 +800,8 @@ fn t073_invalidate_cascades_to_next_siblings() {
 #[test]
 fn t073_invalidate_diagonal_type_change() {
     let (_guard, mut db) = fresh_db();
-    let type_id = GraphBackend::add_node(
-        &mut db,
-        make_node("wallet balance", Pattern::Define),
-    )
-    .unwrap();
+    let type_id =
+        GraphBackend::add_node(&mut db, make_node("wallet balance", Pattern::Define)).unwrap();
     let func_id = GraphBackend::add_node(&mut db, make_do("transfer money")).unwrap();
 
     // func references type via Ed edge.
@@ -861,7 +906,11 @@ fn t073_bulk_invalidation_efficiency() {
 
     // Verify that root and the leaf are both stale.
     assert_eq!(db.cic_cache_valid(root), Some(false), "root must be stale");
-    assert_eq!(db.cic_cache_valid(ids[9]), Some(false), "leaf must be stale");
+    assert_eq!(
+        db.cic_cache_valid(ids[9]),
+        Some(false),
+        "leaf must be stale"
+    );
     // Mid itself must be stale.
     assert_eq!(db.cic_cache_valid(mid), Some(false), "mid must be stale");
 }
@@ -910,8 +959,16 @@ fn t073_remove_node_invalidates_siblings() {
     // Removing s1 must invalidate its next siblings (s2, s3) via Rule 3 ACROSS.
     GraphBackend::remove_node(&mut db, s1).unwrap();
 
-    assert_eq!(db.cic_cache_valid(s2), Some(false), "s2 must be stale after s1 removed");
-    assert_eq!(db.cic_cache_valid(s3), Some(false), "s3 must be stale after s1 removed");
+    assert_eq!(
+        db.cic_cache_valid(s2),
+        Some(false),
+        "s2 must be stale after s1 removed"
+    );
+    assert_eq!(
+        db.cic_cache_valid(s3),
+        Some(false),
+        "s3 must be stale after s1 removed"
+    );
 }
 
 // ─── t073_move_node_invalidates_old_and_new_parent ───────────────────────────
@@ -1022,7 +1079,10 @@ fn t074_fts_search_no_results_empty_vec() {
     GraphBackend::add_node(&mut db, make_do("transfer money between wallets")).unwrap();
 
     let results = db.search("xyzzy", 10).unwrap();
-    assert!(results.is_empty(), "query with no match must return empty vec");
+    assert!(
+        results.is_empty(),
+        "query with no match must return empty vec"
+    );
 }
 
 // ─── t074_fts_limit_zero_returns_empty ───────────────────────────────────────
@@ -1033,7 +1093,10 @@ fn t074_fts_limit_zero_returns_empty() {
     GraphBackend::add_node(&mut db, make_do("transfer money between wallets")).unwrap();
 
     let results = db.search("transfer", 0).unwrap();
-    assert!(results.is_empty(), "limit=0 must short-circuit to empty vec");
+    assert!(
+        results.is_empty(),
+        "limit=0 must short-circuit to empty vec"
+    );
 }
 
 // ─── t074_fts_whitespace_query_returns_empty ─────────────────────────────────
@@ -1044,7 +1107,10 @@ fn t074_fts_whitespace_query_returns_empty() {
     GraphBackend::add_node(&mut db, make_do("transfer money between wallets")).unwrap();
 
     let results = db.search("   ", 10).unwrap();
-    assert!(results.is_empty(), "whitespace-only query must short-circuit to empty vec");
+    assert!(
+        results.is_empty(),
+        "whitespace-only query must short-circuit to empty vec"
+    );
 }
 
 // ─── t074_fts_auto_sync_on_insert ────────────────────────────────────────────
@@ -1058,7 +1124,8 @@ fn t074_fts_auto_sync_on_insert() {
 
     let results = db.search("payment", 10).unwrap();
     assert_eq!(
-        results.len(), 1,
+        results.len(),
+        1,
         "inserted node must be findable via FTS5 immediately after add_node"
     );
 }
@@ -1084,7 +1151,8 @@ fn t074_fts_auto_sync_on_update() {
         "old term must not match after update"
     );
     assert_eq!(
-        db.search("transfer", 10).unwrap().len(), 1,
+        db.search("transfer", 10).unwrap().len(),
+        1,
         "new term must match after update"
     );
 }
@@ -1118,7 +1186,8 @@ fn t074_fts_porter_stemming_works() {
     // Searching the stem "transfer" must match the inflected form "transfers".
     let results = db.search("transfer", 10).unwrap();
     assert_eq!(
-        results.len(), 1,
+        results.len(),
+        1,
         "porter stemmer must match 'transfers' when searching 'transfer'"
     );
 }
@@ -1170,17 +1239,9 @@ fn t074_fts_bm25_ranking_order() {
     let (_guard, mut db) = fresh_db();
 
     // Node A: "wallet" appears 5× — equal total length (5 tokens each).
-    let a = GraphBackend::add_node(
-        &mut db,
-        make_do("wallet wallet wallet wallet wallet"),
-    )
-    .unwrap();
+    let a = GraphBackend::add_node(&mut db, make_do("wallet wallet wallet wallet wallet")).unwrap();
     // Node B: "wallet" appears 1× — same document length as A.
-    let b = GraphBackend::add_node(
-        &mut db,
-        make_do("wallet account ledger balance fund"),
-    )
-    .unwrap();
+    let b = GraphBackend::add_node(&mut db, make_do("wallet account ledger balance fund")).unwrap();
 
     let results = db.search("wallet", 10).unwrap();
     assert!(results.len() >= 2, "both nodes must appear");
@@ -1191,7 +1252,8 @@ fn t074_fts_bm25_ranking_order() {
     assert!(
         results[0].score >= results[1].score,
         "scores must be descending: {:.4} >= {:.4}",
-        results[0].score, results[1].score
+        results[0].score,
+        results[1].score
     );
     let _ = b; // both nodes referenced
 }
@@ -1206,7 +1268,11 @@ fn t074_fts_fts5_operator_no_crash() {
 
     // Valid FTS5 boolean OR — must return results for nodes matching either term.
     let results = db.search("transfer OR validate", 10).unwrap();
-    assert_eq!(results.len(), 2, "FTS5 OR operator must return both matching nodes");
+    assert_eq!(
+        results.len(),
+        2,
+        "FTS5 OR operator must return both matching nodes"
+    );
 
     // Malformed FTS5 syntax — must return Err, NOT panic.
     let bad = db.search("balance{{malformed", 10);

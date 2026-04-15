@@ -35,4 +35,12 @@ pub enum CliError {
     #[error("{message}")]
     #[diagnostic(help("{hint}"))]
     MissingTool { message: String, hint: String },
+
+    /// The migration to SQLite failed (parse error, I/O error, or DB write error).
+    #[error("Migration failed: {message}")]
+    MigrationFailed { message: String },
+
+    /// Roundtrip verification found mismatches between the source and the database.
+    #[error("Verify failed: {count} mismatch(es)\n{detail}")]
+    VerifyFailed { count: usize, detail: String },
 }
