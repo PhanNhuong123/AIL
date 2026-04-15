@@ -15,6 +15,13 @@ pub enum GraphError {
     #[error("edge not found: {0:?}")]
     EdgeNotFound(EdgeId),
 
+    #[error("edge not found: {from} → {to} (kind: {kind:?})")]
+    EdgeKindNotFound {
+        from: NodeId,
+        to: NodeId,
+        kind: crate::types::EdgeKind,
+    },
+
     #[error("I/O error: {0}")]
     Io(#[from] std::io::Error),
 
@@ -27,10 +34,11 @@ pub enum GraphError {
         locations: Vec<String>,
     },
 
-    #[error("edge not found: {from} → {to} (kind: {kind:?})")]
-    EdgeKindNotFound {
-        from: NodeId,
-        to: NodeId,
-        kind: crate::types::EdgeKind,
-    },
+    /// A storage backend (e.g. SQLite) reported an error.
+    #[error("storage backend error: {0}")]
+    Storage(String),
+
+    /// A node id string could not be parsed as a UUID.
+    #[error("invalid node id '{0}': {1}")]
+    InvalidNodeId(String, String),
 }

@@ -169,8 +169,8 @@ impl AilGraph {
 
     /// Return a mutable reference to the underlying petgraph.
     ///
-    /// Used by [`super::backend_impl`] to perform edge removal by kind without
-    /// needing an [`EdgeId`].
+    /// Used by [`super::backend_impl`] for edge removal by kind, which requires
+    /// a petgraph edge index not exposed through the public [`EdgeId`] API.
     pub(crate) fn inner_mut(&mut self) -> &mut StableDiGraph<Node, EdgeKind> {
         &mut self.inner
     }

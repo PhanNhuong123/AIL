@@ -28,7 +28,10 @@ pub mod search;
 pub mod types;
 pub mod validation;
 
-pub use cic::{ContextPacket, PacketConstraint, ScopeVariable, ScopeVariableKind};
+pub use cic::{
+    compute_context_packet_for_backend, ContextPacket, PacketConstraint, ScopeVariable,
+    ScopeVariableKind,
+};
 pub use errors::{GraphError, ValidationError};
 pub use graph::{AilGraph, AilGraphBuilder, GraphBackend};
 pub use index::{

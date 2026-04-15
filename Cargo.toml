@@ -2,6 +2,7 @@
 resolver = "2"
 members = [
     "crates/ail-graph",
+    "crates/ail-db",
     "crates/ail-types",
     "crates/ail-contract",
     "crates/ail-text",
@@ -38,6 +39,7 @@ clap         = { version = "4",   features = ["derive"] }
 
 # internal crates
 ail-graph    = { path = "crates/ail-graph" }
+ail-db       = { path = "crates/ail-db" }
 ail-types    = { path = "crates/ail-types" }
 ail-contract = { path = "crates/ail-contract" }
 ail-text     = { path = "crates/ail-text" }

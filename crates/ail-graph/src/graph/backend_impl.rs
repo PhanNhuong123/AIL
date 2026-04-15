@@ -8,10 +8,9 @@ use super::ail_graph::AilGraph;
 use super::backend::GraphBackend;
 
 impl GraphBackend for AilGraph {
-    // === Node Operations ===
+    // ─── Node operations ─────────────────────────────────────────────────────
 
     fn add_node(&mut self, node: Node) -> Result<NodeId, GraphError> {
-        // Delegate to the inherent method (same signature, already implemented).
         AilGraph::add_node(self, node)
     }
 
@@ -24,8 +23,8 @@ impl GraphBackend for AilGraph {
     }
 
     fn update_node(&mut self, id: NodeId, node: Node) -> Result<(), GraphError> {
-        let existing = AilGraph::get_node_mut(self, id)?;
-        *existing = node;
+        let slot = AilGraph::get_node_mut(self, id)?;
+        *slot = node;
         Ok(())
     }
 
@@ -41,7 +40,7 @@ impl GraphBackend for AilGraph {
         AilGraph::node_count(self)
     }
 
-    // === Edge Operations ===
+    // ─── Edge operations ──────────────────────────────────────────────────────
 
     fn add_edge(&mut self, from: NodeId, to: NodeId, kind: EdgeKind) -> Result<(), GraphError> {
         AilGraph::add_edge(self, from, to, kind).map(|_| ())
@@ -56,6 +55,7 @@ impl GraphBackend for AilGraph {
         let from_nx = self.resolve_node_index(from)?;
         let to_nx = self.resolve_node_index(to)?;
 
+        // Find the edge index before mutating the graph.
         let edge_idx = self
             .inner()
             .edges_directed(from_nx, Direction::Outgoing)
@@ -64,7 +64,6 @@ impl GraphBackend for AilGraph {
 
         match edge_idx {
             Some(eid) => {
-                // Access inner directly — same module, private field accessible.
                 self.inner_mut().remove_edge(eid);
                 Ok(())
             }
@@ -72,18 +71,21 @@ impl GraphBackend for AilGraph {
         }
     }
 
+    // ─── Navigation ───────────────────────────────────────────────────────────
+
     fn children(&self, id: NodeId) -> Result<Vec<NodeId>, GraphError> {
         self.children_of(id)
     }
 
     fn siblings_before(&self, id: NodeId) -> Result<Vec<NodeId>, GraphError> {
+        // Walk the incoming Eh chain toward the first sibling, collecting as
+        // we go, then reverse so the result is ordered earliest-first.
         let mut result = Vec::new();
         let mut current = id;
-        while let Some(prev_id) = self.prev_sibling_of(current)? {
-            result.push(prev_id);
-            current = prev_id;
+        while let Some(prev) = self.prev_sibling_of(current)? {
+            result.push(prev);
+            current = prev;
         }
-        // Walk was from id toward the head; reverse so result is earliest-first.
         result.reverse();
         Ok(result)
     }
@@ -91,9 +93,9 @@ impl GraphBackend for AilGraph {
     fn siblings_after(&self, id: NodeId) -> Result<Vec<NodeId>, GraphError> {
         let mut result = Vec::new();
         let mut current = id;
-        while let Some(next_id) = self.next_sibling_of(current)? {
-            result.push(next_id);
-            current = next_id;
+        while let Some(next) = self.next_sibling_of(current)? {
+            result.push(next);
+            current = next;
         }
         Ok(result)
     }
@@ -107,6 +109,10 @@ impl GraphBackend for AilGraph {
         Ok(refs.into_iter().map(|nid| (nid, EdgeKind::Ed)).collect())
     }
 
+    fn outgoing_diagonal_refs(&self, id: NodeId) -> Result<Vec<NodeId>, GraphError> {
+        self.outgoing_diagonal_refs_of(id)
+    }
+
     fn ancestors(&self, id: NodeId) -> Result<Vec<NodeId>, GraphError> {
         let mut result = Vec::new();
         let mut current = id;
@@ -118,18 +124,20 @@ impl GraphBackend for AilGraph {
     }
 
     fn all_descendants(&self, id: NodeId) -> Result<Vec<NodeId>, GraphError> {
+        // BFS over the Ev (structural child) edges.
         let mut result = Vec::new();
-        let mut queue = vec![id];
-        while let Some(current) = queue.pop() {
+        let mut queue = std::collections::VecDeque::new();
+        queue.push_back(id);
+        while let Some(current) = queue.pop_front() {
             for child in self.children_of(current)? {
                 result.push(child);
-                queue.push(child);
+                queue.push_back(child);
             }
         }
         Ok(result)
     }
 
-    // === Query Operations ===
+    // ─── Query operations ─────────────────────────────────────────────────────
 
     fn find_by_pattern(&self, pattern: Pattern) -> Result<Vec<NodeId>, GraphError> {
         let ids = self
@@ -155,7 +163,7 @@ impl GraphBackend for AilGraph {
             .filter(|&id| {
                 self.parent_of(id)
                     .map(|p| p.is_none())
-                    // If resolve fails the node is already gone — treat as non-root.
+                    // If the node index was somehow removed, skip it.
                     .unwrap_or(false)
             })
             .collect();
@@ -163,7 +171,6 @@ impl GraphBackend for AilGraph {
     }
 
     fn depth(&self, id: NodeId) -> Result<usize, GraphError> {
-        // Walk the parent chain — depth equals number of ancestors.
         let mut depth = 0usize;
         let mut current = id;
         while let Some(parent_id) = self.parent_of(current)? {
@@ -173,7 +180,7 @@ impl GraphBackend for AilGraph {
         Ok(depth)
     }
 
-    // === Contract Operations ===
+    // ─── Contract operations ──────────────────────────────────────────────────
 
     fn contracts(&self, id: NodeId) -> Result<Vec<Contract>, GraphError> {
         let node = AilGraph::get_node(self, id)?;
@@ -186,7 +193,7 @@ impl GraphBackend for AilGraph {
         Ok(())
     }
 
-    // === Transaction Operations (no-op for in-memory graph) ===
+    // ─── Transaction operations (no-op for in-memory graph) ──────────────────
 
     fn begin_transaction(&mut self) -> Result<(), GraphError> {
         Ok(())
