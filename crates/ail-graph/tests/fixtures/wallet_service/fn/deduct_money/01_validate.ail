@@ -1,0 +1,2 @@
+check balance >= amount
+  otherwise raise InsufficientBalanceError carries current_balance = balance, requested_amount = amount

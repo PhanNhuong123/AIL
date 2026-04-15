@@ -5,13 +5,15 @@
 //! complete path from human-readable AIL text through parse, validate, type-check,
 //! verify, and emit stages.
 //!
-//! ## wallet_full fixture (5 files)
+//! ## wallet_full fixture (7 files)
 //! Located at `crates/ail-text/tests/fixtures/wallet_full/`:
 //! - `positive_amount.ail`  — `define PositiveAmount:number where value > 0`
 //! - `wallet_balance.ail`   — `define WalletBalance:number where value >= 0`
 //! - `user.ail`             — `describe User as balance:WalletBalance`
 //! - `transfer_result.ail`  — `describe TransferResult as sender:User, ...`
 //! - `transfer_money.ail`   — `do transfer money` with 3 contracts + 1 Let child
+//! - `deduct_money.ail`     — `do deduct money` with 3 contracts + 1 Let child
+//! - `add_money.ail`        — `do add money` with 2 contracts + 1 Let child
 //!
 //! ## Generated output layout
 //! ```
@@ -236,6 +238,50 @@ fn e2e_full_pipeline_all_outputs_present() {
     );
 }
 
+/// `generated/functions.py` contains `deduct_money` with its before-contract injected.
+#[test]
+fn e2e_wallet_build_generates_deduct_money() {
+    let tmp = tempfile::tempdir().unwrap();
+    copy_dir_all(&wallet_full_dir(), tmp.path()).unwrap();
+
+    run_build(tmp.path(), &default_args()).expect("build should succeed");
+
+    let path = tmp.path().join("generated").join("functions.py");
+    assert!(path.exists(), "generated/functions.py missing after build");
+
+    let content = fs::read_to_string(&path).unwrap();
+    assert!(
+        content.contains("deduct_money"),
+        "functions.py should define deduct_money; got:\n{content}"
+    );
+    assert!(
+        content.contains("assert balance >= amount"),
+        "functions.py should contain before-contract 'balance >= amount'; got:\n{content}"
+    );
+}
+
+/// `generated/functions.py` contains `add_money` with its after-contract injected.
+#[test]
+fn e2e_wallet_build_generates_add_money() {
+    let tmp = tempfile::tempdir().unwrap();
+    copy_dir_all(&wallet_full_dir(), tmp.path()).unwrap();
+
+    run_build(tmp.path(), &default_args()).expect("build should succeed");
+
+    let path = tmp.path().join("generated").join("functions.py");
+    assert!(path.exists(), "generated/functions.py missing after build");
+
+    let content = fs::read_to_string(&path).unwrap();
+    assert!(
+        content.contains("add_money"),
+        "functions.py should define add_money; got:\n{content}"
+    );
+    assert!(
+        content.contains("assert amount > 0"),
+        "functions.py should contain before-contract 'amount > 0' for add_money; got:\n{content}"
+    );
+}
+
 // ── Optional pytest test ──────────────────────────────────────────────────────
 
 /// Run pytest on the generated contract stubs.
@@ -243,10 +289,8 @@ fn e2e_full_pipeline_all_outputs_present() {
 /// Skipped automatically when `python` or `pytest` is not available in the
 /// environment — this keeps CI clean on systems without a Python installation.
 ///
-/// Accepts exit code 0 (all tests passed) or 5 (no tests collected).  Exit 5
-/// is expected because the generated class is named `TransferMoneyContracts`,
-/// not `TestTransferMoneyContracts` — pytest does not collect it by default.
-/// This is a known emitter naming issue to be fixed in a future task.
+/// Generated classes are named `TestXContracts` so pytest collects them.
+/// All stubs call `pytest.skip()`, so pytest exits 0 (all skipped = pass).
 #[test]
 fn e2e_pytest_passes_on_generated_code() {
     // Skip if Python / pytest is unavailable.
@@ -278,8 +322,8 @@ fn e2e_pytest_passes_on_generated_code() {
 
     let exit_code = output.status.code().unwrap_or(-1);
     assert!(
-        output.status.success() || exit_code == 5,
-        "pytest should exit 0 (pass) or 5 (no tests collected); got exit {exit_code}\nstdout: {}\nstderr: {}",
+        output.status.success(),
+        "pytest should exit 0 (all tests skipped); got exit {exit_code}\nstdout: {}\nstderr: {}",
         String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr),
     );

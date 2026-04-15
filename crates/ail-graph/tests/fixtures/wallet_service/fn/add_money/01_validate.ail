@@ -1,0 +1,2 @@
+check amount > 0
+  otherwise raise InvalidAmountError carries requested_amount = amount

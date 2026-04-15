@@ -12,7 +12,7 @@ use crate::types::{EmitConfig, EmittedFile, FileOwnership};
 /// Returns `generated/test_contracts.py` otherwise, regardless of `contract_mode`
 /// — contract tests document intent even when runtime injection is `Off`.
 ///
-/// Each Do function with contracts gets one `class TestXContracts` with one
+/// Each Do function with contracts gets one `class TestXContracts` (pytest-collectable) with one
 /// `test_before/after_contract_N` stub per contract. Each stub contains the
 /// raw contract expression in its docstring and a `pytest.skip(...)` body,
 /// indicating that the human must fill in test setup and assertions.
@@ -93,7 +93,7 @@ pub(crate) fn emit_test_file(
 
         lines.push(String::new());
         lines.push(String::new());
-        lines.push(format!("class {class_name}Contracts:"));
+        lines.push(format!("class Test{class_name}Contracts:"));
         lines.push(format!(
             "    \"\"\"Generated contract tests for {fn_name}.\"\"\""
         ));
@@ -274,7 +274,7 @@ mod tests {
         let verified = build_verified(do_node);
         let config = EmitConfig::default();
         let file = emit_test_file(&verified, &config).unwrap();
-        assert!(file.content.contains("class TransferMoneyContracts:"));
+        assert!(file.content.contains("class TestTransferMoneyContracts:"));
         assert!(file.content.contains("def test_before_contract_0"));
     }
 

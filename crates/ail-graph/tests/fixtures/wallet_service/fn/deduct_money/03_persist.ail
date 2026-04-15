@@ -1,0 +1,1 @@
+update User in database where id is user_id set balance = new_balance

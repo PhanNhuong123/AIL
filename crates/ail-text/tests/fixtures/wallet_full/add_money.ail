@@ -1,0 +1,8 @@
+do add money
+  from balance:WalletBalance, amount:PositiveAmount
+  -> WalletBalance
+
+  promise before: amount > 0
+  promise after: balance >= 0
+
+  let new_balance:WalletBalance = balance + amount

@@ -149,6 +149,66 @@ fn hydrate_wallet_service_fixture(graph: &mut AilGraph) {
         Some("TransferResult(sender, receiver, amount)"),
     );
 
+    set_deduct_money(graph);
+    set_named_child(graph, "deduct_money", "01_validate", Pattern::Check, "validate", None, None);
+    set_named_child(
+        graph,
+        "deduct_money",
+        "02_compute_balance",
+        Pattern::Let,
+        "new_balance",
+        Some("WalletBalance"),
+        Some("balance - amount"),
+    );
+    set_named_child(
+        graph,
+        "deduct_money",
+        "03_persist",
+        Pattern::Update,
+        "persist",
+        None,
+        Some("balance = new_balance"),
+    );
+    set_named_child(
+        graph,
+        "deduct_money",
+        "04_return_result",
+        Pattern::Return,
+        "return_result",
+        Some("WalletBalance"),
+        Some("new_balance"),
+    );
+
+    set_add_money(graph);
+    set_named_child(graph, "add_money", "01_validate", Pattern::Check, "validate", None, None);
+    set_named_child(
+        graph,
+        "add_money",
+        "02_compute_balance",
+        Pattern::Let,
+        "new_balance",
+        Some("WalletBalance"),
+        Some("balance + amount"),
+    );
+    set_named_child(
+        graph,
+        "add_money",
+        "03_persist",
+        Pattern::Update,
+        "persist",
+        None,
+        Some("balance = new_balance"),
+    );
+    set_named_child(
+        graph,
+        "add_money",
+        "04_return_result",
+        Pattern::Return,
+        "return_result",
+        Some("WalletBalance"),
+        Some("new_balance"),
+    );
+
     for (intent, name) in [
         ("01_validate", "validate"),
         ("02_fetch_sender", "sender"),
@@ -240,6 +300,55 @@ fn set_persist(graph: &mut AilGraph) {
     let node = graph.get_node_mut(id).unwrap();
     node.pattern = Pattern::Do;
     node.metadata.name = Some("persist".to_owned());
+}
+
+fn set_deduct_money(graph: &mut AilGraph) {
+    let id = find_node(graph, "deduct_money");
+    let node = graph.get_node_mut(id).unwrap();
+    node.pattern = Pattern::Do;
+    node.metadata.name = Some("deduct_money".to_owned());
+    node.metadata.params = vec![
+        param("user_id", "UserId"),
+        param("balance", "WalletBalance"),
+        param("amount", "PositiveAmount"),
+    ];
+    node.metadata.return_type = Some("WalletBalance".to_owned());
+    node.contracts = vec![
+        contract(ContractKind::Before, "balance >= amount"),
+        contract(ContractKind::Before, "amount > 0"),
+        contract(ContractKind::After, "result >= 0"),
+    ];
+}
+
+fn set_add_money(graph: &mut AilGraph) {
+    let id = find_node(graph, "add_money");
+    let node = graph.get_node_mut(id).unwrap();
+    node.pattern = Pattern::Do;
+    node.metadata.name = Some("add_money".to_owned());
+    node.metadata.params = vec![
+        param("user_id", "UserId"),
+        param("balance", "WalletBalance"),
+        param("amount", "PositiveAmount"),
+    ];
+    node.metadata.return_type = Some("WalletBalance".to_owned());
+    node.contracts = vec![
+        contract(ContractKind::Before, "amount > 0"),
+        contract(ContractKind::After, "result >= 0"),
+    ];
+}
+
+fn set_named_child(
+    graph: &mut AilGraph,
+    parent_intent: &str,
+    child_intent: &str,
+    pattern: Pattern,
+    name: &str,
+    return_type: Option<&str>,
+    expression: Option<&str>,
+) {
+    let parent = find_node(graph, parent_intent);
+    let id = find_child_by_intent(graph, parent, child_intent);
+    set_leaf_by_id(graph, id, pattern, name, return_type, expression);
 }
 
 fn set_transfer_child(
@@ -353,7 +462,7 @@ fn find_child_by_intent(graph: &AilGraph, parent_id: NodeId, intent: &str) -> No
 fn fixture_files_load_into_graph() {
     let graph = AilGraphBuilder::build_from_directory(&fixture_path()).unwrap();
 
-    assert_eq!(graph.node_count(), 30);
+    assert_eq!(graph.node_count(), 40);
     assert_eq!(
         graph.get_node(graph.root_id().unwrap()).unwrap().intent,
         "wallet_service"

@@ -2033,7 +2033,7 @@ fn emit_test_file_has_pytest_skip() {
         .find(|f| f.path == "generated/test_contracts.py")
         .expect("test_contracts.py must be present");
     assert!(test_file.content.contains("pytest.skip"));
-    assert!(test_file.content.contains("class PayContracts:"));
+    assert!(test_file.content.contains("class TestPayContracts:"));
 }
 
 #[test]
