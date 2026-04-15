@@ -73,4 +73,21 @@ pub enum VerifyError {
     /// contracts after recording this error.
     #[error("AIL-C014: encoding failed for contract on {node_id}: {inner}")]
     EncodingFailed { node_id: NodeId, inner: EncodeError },
+
+    /// AIL-C015: a promoted fact from a `check` node contradicts the established
+    /// preconditions on a node. The `source_check_ids` list the originating
+    /// `Check` nodes so the developer can trace back to the conflicting guard.
+    ///
+    /// This occurs when a preceding `check X otherwise raise E` node promotes
+    /// `X` as a verified fact, but `X` is inconsistent with the node's type
+    /// constraints, before-contracts, or child postconditions.
+    #[error(
+        "AIL-C015: promoted fact from check node(s) {source_check_ids:?} contradicts \
+         preconditions on {node_id}. Counterexample: {counterexample}"
+    )]
+    PromotedFactContradiction {
+        node_id: NodeId,
+        source_check_ids: Vec<NodeId>,
+        counterexample: String,
+    },
 }

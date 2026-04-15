@@ -1,14 +1,26 @@
-//! Z3 contract verification for AIL programs (Phase 3 Task 3.3).
+//! Z3 contract verification for AIL programs (Phase 3 Task 3.3, Phase 8 Task 8.3).
 //!
 //! Drives the [`z3_encode`] layer from real [`TypedGraph`] node data.  For
 //! every `Do` node the verifier:
 //!
 //! 1. Asserts type constraints implied by parameter types and checks satisfiability.
 //! 2. Asserts `Before` contracts and checks that they are jointly satisfiable.
-//! 3. For each `After` / `Always` contract: proves entailment (`¬post ∧ pre` is
+//! 3. Asserts **promoted facts** from preceding `check` nodes as axioms (v2.0).
+//! 4. For each `After` / `Always` contract: proves entailment (`¬post ∧ pre` is
 //!    UNSAT) and extracts a counterexample when it is not.
-//! 4. Supports **compositional verification**: verified postconditions of child
+//! 5. Supports **compositional verification**: verified postconditions of child
 //!    `Do` nodes are injected as additional known facts when verifying the parent.
+//!
+//! # Promoted facts (v2.0 — Task 8.3)
+//!
+//! After a `check X otherwise raise E` node succeeds, condition `X` becomes a
+//! verified fact for all subsequent nodes. The CIC engine in `ail-graph`
+//! collects these facts into [`ContextPacket::promoted_facts`]. This module
+//! parses each raw [`Expression`] into a [`ConstraintExpr`], AND-splits
+//! compound conditions, and feeds the results into the Z3 solver as axioms.
+//!
+//! [`ContextPacket::promoted_facts`]: ail_graph::ContextPacket
+//! [`Expression`]: ail_graph::types::Expression
 //!
 //! # Entry point
 //! [`verify_contracts`] — takes a [`TypedGraph`] and returns all [`VerifyError`]
@@ -39,6 +51,7 @@ mod tests;
 use std::collections::HashMap;
 
 use ail_graph::{
+    compute_context_packet_for_backend,
     types::{NodeId, Pattern},
     GraphBackend,
 };
@@ -47,6 +60,17 @@ use ail_types::{parse_constraint_expr, ConstraintExpr, TypedGraph};
 use crate::errors::VerifyError;
 
 use node_verifier::verify_do_node;
+
+/// A promoted fact parsed from raw [`Expression`] text into a
+/// [`ConstraintExpr`] ready for Z3 encoding, together with the source
+/// `Check` node that proved it.
+///
+/// Compound `and` conditions are AND-split: `check A and B` produces two
+/// `ParsedPromotedFact` entries sharing the same `source_node`.
+pub(super) struct ParsedPromotedFact {
+    pub source_node: NodeId,
+    pub constraint: ConstraintExpr,
+}
 
 /// Run Z3 contract verification over every `Do` node in `typed_graph`.
 ///
@@ -107,7 +131,10 @@ pub fn verify_contracts(typed_graph: &TypedGraph) -> Vec<VerifyError> {
         // Collect verified postconditions from direct Do children.
         let child_posts = collect_child_posts(node.id, graph, &verified_posts);
 
-        let errors = verify_do_node(node, graph, &child_posts, &z3_ctx);
+        // Collect promoted facts from preceding check nodes (v2.0 task 8.3).
+        let promoted = collect_promoted_facts(node.id, graph);
+
+        let errors = verify_do_node(node, graph, &child_posts, &promoted, &z3_ctx);
 
         let has_entailment_failure = errors
             .iter()
@@ -180,4 +207,42 @@ fn parse_after_contracts(node: &ail_graph::types::Node) -> Vec<ConstraintExpr> {
         })
         .filter_map(|c| parse_constraint_expr(c.expression.as_ref()).ok())
         .collect()
+}
+
+/// Collect promoted facts for a `Do` node from the CIC context packet.
+///
+/// Computes the [`ContextPacket`] via the backend-agnostic CIC engine, parses
+/// each `PromotedFact.condition` into a [`ConstraintExpr`], and AND-splits
+/// compound expressions (e.g. `"A and B"` → two entries). Facts that fail to
+/// parse are silently skipped — impure bare function calls are already
+/// filtered by `ail-graph`'s `promotion.rs`.
+fn collect_promoted_facts(node_id: NodeId, graph: &dyn GraphBackend) -> Vec<ParsedPromotedFact> {
+    let Ok(packet) = compute_context_packet_for_backend(graph, node_id) else {
+        return Vec::new();
+    };
+
+    let mut out = Vec::new();
+    for pf in &packet.promoted_facts {
+        let Ok(constraint) = parse_constraint_expr(pf.condition.as_ref()) else {
+            continue;
+        };
+        // AND-split: `check A and B` → two separate axioms.
+        match constraint {
+            ConstraintExpr::And(children) => {
+                for child in children {
+                    out.push(ParsedPromotedFact {
+                        source_node: pf.source_node,
+                        constraint: child,
+                    });
+                }
+            }
+            other => {
+                out.push(ParsedPromotedFact {
+                    source_node: pf.source_node,
+                    constraint: other,
+                });
+            }
+        }
+    }
+    out
 }

@@ -1,5 +1,5 @@
 use ail_graph::{
-    types::{ContractKind, Node},
+    types::{ContractKind, Node, NodeId},
     GraphBackend,
 };
 use ail_types::{parse_constraint_expr, ConstraintExpr};
@@ -11,6 +11,7 @@ use crate::z3_encode::{
 };
 
 use super::context_builder::{build_encode_context, collect_param_type_constraints};
+use super::ParsedPromotedFact;
 
 /// Verify all contracts on a single `Do` node.
 ///
@@ -22,7 +23,10 @@ use super::context_builder::{build_encode_context, collect_param_type_constraint
 ///    Encoding errors for child posts are silently skipped — v0.1 limitation:
 ///    child param names may not match the parent scope.
 /// 5. Assert each `Before` contract and check satisfiability.
-/// 6. For each `After` / `Always` contract: assert `NOT(post)` and check UNSAT
+/// 6. Assert **promoted facts** from preceding `check` nodes (v2.0 task 8.3).
+///    If promoted facts contradict the precondition base,
+///    [`VerifyError::PromotedFactContradiction`] is reported with source node IDs.
+/// 7. For each `After` / `Always` contract: assert `NOT(post)` and check UNSAT
 ///    (entailment proof). Extract a counterexample when SAT.
 ///
 /// Returns the accumulated list of [`VerifyError`] values. An empty list means
@@ -31,6 +35,7 @@ pub(super) fn verify_do_node(
     node: &Node,
     graph: &dyn GraphBackend,
     child_posts: &[ConstraintExpr],
+    promoted_facts: &[ParsedPromotedFact],
     z3_ctx: &z3::Context,
 ) -> Vec<VerifyError> {
     let mut errors: Vec<VerifyError> = Vec::new();
@@ -121,7 +126,49 @@ pub(super) fn verify_do_node(
         SatResult::Sat => {}
     }
 
-    // ── Step 6: Verify After / Always contracts ───────────────────────────────
+    // ── Step 6: Assert promoted facts from preceding check nodes (v2.0) ──────
+    // Promoted facts are already-proved conditions from `check X otherwise raise E`
+    // nodes that precede this Do node. They are asserted AFTER the before-contract
+    // SAT check so that existing ContradictoryPreconditions behavior is preserved.
+    // If promoted facts contradict the established precondition base, we report
+    // PromotedFactContradiction with source check node IDs.
+    for pf in promoted_facts {
+        if let Ok(encoded) = encode_constraint(&pf.constraint, &enc) {
+            solver.assert(&encoded);
+        }
+        // UnboundVariable or UnsupportedConstraint → silently skipped.
+    }
+
+    if !promoted_facts.is_empty() {
+        match solver.check() {
+            SatResult::Unsat => {
+                let source_check_ids: Vec<NodeId> = promoted_facts
+                    .iter()
+                    .map(|pf| pf.source_node)
+                    .collect::<std::collections::HashSet<_>>()
+                    .into_iter()
+                    .collect();
+                let counterexample =
+                    "<no model — promoted facts contradict preconditions>".to_string();
+                errors.push(VerifyError::PromotedFactContradiction {
+                    node_id,
+                    source_check_ids,
+                    counterexample,
+                });
+                return errors;
+            }
+            SatResult::Unknown => {
+                errors.push(VerifyError::SolverTimeout {
+                    node_id,
+                    contract_expr: "<promoted fact satisfiability check>".to_string(),
+                });
+                return errors;
+            }
+            SatResult::Sat => {}
+        }
+    }
+
+    // ── Step 7: Verify After / Always contracts ───────────────────────────────
     let post_contracts = node
         .contracts
         .iter()
