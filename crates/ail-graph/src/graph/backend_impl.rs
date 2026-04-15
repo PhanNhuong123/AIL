@@ -36,6 +36,14 @@ impl GraphBackend for AilGraph {
         Ok(self.node_ids().collect())
     }
 
+    /// Override the default `all_nodes_vec` to use petgraph's stable insertion
+    /// order via `all_nodes()`, which matches the order callers have always
+    /// observed. The default implementation goes through `all_node_ids()` which
+    /// iterates a `HashMap` (non-deterministic order).
+    fn all_nodes_vec(&self) -> Vec<Node> {
+        self.all_nodes().cloned().collect()
+    }
+
     fn node_count(&self) -> usize {
         AilGraph::node_count(self)
     }

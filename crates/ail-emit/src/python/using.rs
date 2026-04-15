@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use ail_graph::{AilGraph, Node, NodeId, Pattern};
+use ail_graph::{GraphBackend, Node, NodeId, Pattern};
 
 use crate::errors::EmitError;
 use crate::python::function::emit_do_body;
@@ -24,7 +24,7 @@ use crate::types::{EmitConfig, ImportSet};
 /// Values that ARE multi-token may not round-trip through substitution if a
 /// later substitution's key appears inside an earlier substitution's value.
 pub(crate) fn emit_using_do(
-    graph: &AilGraph,
+    graph: &dyn GraphBackend,
     node: &Node,
     indent_level: usize,
     config: &EmitConfig,
@@ -38,7 +38,7 @@ pub(crate) fn emit_using_do(
         .expect("emit_using_do called on a node without using_pattern_name");
 
     // Locate the template Do node via the outgoing Ed diagonal edge.
-    let diagonal_refs = graph.outgoing_diagonal_refs_of(node.id).unwrap_or_default();
+    let diagonal_refs = graph.outgoing_diagonal_refs(node.id).unwrap_or_default();
 
     // The v009 validation rule guarantees exactly one Ed edge for using-Do
     // nodes, but we handle the "not found" case defensively here.
@@ -49,15 +49,16 @@ pub(crate) fn emit_using_do(
         }
     };
 
-    let template = match graph.get_node(template_id) {
-        Ok(n) => n,
-        Err(_) => {
+    let template_owned = match graph.get_node(template_id).ok().flatten() {
+        Some(n) => n,
+        None => {
             return Err(vec![EmitError::UsingDoUnresolvedPattern {
                 node_id: node.id,
                 pattern_name,
             }]);
         }
     };
+    let template = &template_owned;
 
     if template.pattern != Pattern::Do {
         return Err(vec![EmitError::UsingDoUnresolvedPattern {
@@ -156,18 +157,20 @@ fn is_ident_char(b: u8) -> bool {
 ///
 /// Used by `emit_do_function` to determine which top-level children need a
 /// `# === [Phase: X] ===` comment injected before them.
-pub(crate) fn collect_required_phases(graph: &AilGraph, do_node_id: NodeId) -> HashSet<String> {
-    let template_ids = graph
-        .outgoing_diagonal_refs_of(do_node_id)
-        .unwrap_or_default();
+pub(crate) fn collect_required_phases(
+    graph: &dyn GraphBackend,
+    do_node_id: NodeId,
+) -> HashSet<String> {
+    let template_ids = graph.outgoing_diagonal_refs(do_node_id).unwrap_or_default();
 
     template_ids
         .iter()
-        .flat_map(|&tid| graph.children_of(tid).unwrap_or_default())
+        .flat_map(|&tid| graph.children(tid).unwrap_or_default())
         .filter_map(|cid| {
             graph
                 .get_node(cid)
                 .ok()
+                .flatten()
                 .and_then(|n| n.metadata.name.clone())
         })
         .collect()

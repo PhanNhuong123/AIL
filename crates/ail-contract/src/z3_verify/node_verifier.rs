@@ -1,6 +1,6 @@
 use ail_graph::{
     types::{ContractKind, Node},
-    AilGraph,
+    GraphBackend,
 };
 use ail_types::{parse_constraint_expr, ConstraintExpr};
 use z3::{SatResult, Solver};
@@ -29,7 +29,7 @@ use super::context_builder::{build_encode_context, collect_param_type_constraint
 /// all checks passed for this node.
 pub(super) fn verify_do_node(
     node: &Node,
-    graph: &AilGraph,
+    graph: &dyn GraphBackend,
     child_posts: &[ConstraintExpr],
     z3_ctx: &z3::Context,
 ) -> Vec<VerifyError> {

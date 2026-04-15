@@ -102,21 +102,27 @@ fn scaffold_path_is_scaffolded_init() {
 fn scaffold_content_has_future_annotations() {
     let verified = build_minimal_verified();
     let output = emit_scaffold_files(&verified);
-    assert!(output.files[0].content.contains("from __future__ import annotations"));
+    assert!(output.files[0]
+        .content
+        .contains("from __future__ import annotations"));
 }
 
 #[test]
 fn scaffold_content_imports_generated_types() {
     let verified = build_minimal_verified();
     let output = emit_scaffold_files(&verified);
-    assert!(output.files[0].content.contains("from generated.types import *"));
+    assert!(output.files[0]
+        .content
+        .contains("from generated.types import *"));
 }
 
 #[test]
 fn scaffold_content_imports_generated_functions() {
     let verified = build_minimal_verified();
     let output = emit_scaffold_files(&verified);
-    assert!(output.files[0].content.contains("from generated.functions import *"));
+    assert!(output.files[0]
+        .content
+        .contains("from generated.functions import *"));
 }
 
 #[test]

@@ -403,10 +403,16 @@ mod tests {
     }
 
     fn sync_config() -> EmitConfig {
-        EmitConfig { async_mode: false, ..Default::default() }
+        EmitConfig {
+            async_mode: false,
+            ..Default::default()
+        }
     }
     fn async_config() -> EmitConfig {
-        EmitConfig { async_mode: true, ..Default::default() }
+        EmitConfig {
+            async_mode: true,
+            ..Default::default()
+        }
     }
 
     // ── Let ───────────────────────────────────────────────────────────────────
@@ -536,7 +542,9 @@ mod tests {
         node.metadata.name = Some("InsufficientBalanceError".to_owned());
         let mut imports = ImportSet::new();
         emit_raise(&node, "    ", &mut imports).unwrap();
-        assert!(imports.cross_file_types.contains("InsufficientBalanceError"));
+        assert!(imports
+            .cross_file_types
+            .contains("InsufficientBalanceError"));
     }
 
     #[test]
@@ -565,7 +573,10 @@ mod tests {
         node.metadata.name = Some("user".to_owned());
         node.metadata.return_type = Some("User".to_owned());
         node.expression = Some(Expression("from db where id is user_id".to_owned()));
-        let config = EmitConfig { async_mode: false, ..Default::default() };
+        let config = EmitConfig {
+            async_mode: false,
+            ..Default::default()
+        };
         let mut imports = ImportSet::new();
         emit_fetch(&node, "    ", &config, &mut imports).unwrap();
         assert!(imports.cross_file_types.contains("User"));
@@ -578,7 +589,10 @@ mod tests {
         node.expression = Some(Expression(
             "in db where id is account.id set balance = new_balance".to_owned(),
         ));
-        let config = EmitConfig { async_mode: false, ..Default::default() };
+        let config = EmitConfig {
+            async_mode: false,
+            ..Default::default()
+        };
         let mut imports = ImportSet::new();
         emit_update(&node, "    ", &config, &mut imports).unwrap();
         assert!(imports.cross_file_types.contains("Account"));
@@ -589,7 +603,10 @@ mod tests {
         let mut node = make_node(Pattern::Remove, "remove session");
         node.metadata.return_type = Some("Session".to_owned());
         node.expression = Some(Expression("from store where token is expired".to_owned()));
-        let config = EmitConfig { async_mode: false, ..Default::default() };
+        let config = EmitConfig {
+            async_mode: false,
+            ..Default::default()
+        };
         let mut imports = ImportSet::new();
         emit_remove(&node, "    ", &config, &mut imports).unwrap();
         assert!(imports.cross_file_types.contains("Session"));

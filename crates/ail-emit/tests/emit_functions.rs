@@ -311,10 +311,16 @@ fn match_node(discriminant: &str, arms: Vec<(&str, &str)>, otherwise: Option<&st
 }
 
 fn sync_config() -> EmitConfig {
-    EmitConfig { async_mode: false, ..Default::default() }
+    EmitConfig {
+        async_mode: false,
+        ..Default::default()
+    }
 }
 fn async_config() -> EmitConfig {
-    EmitConfig { async_mode: true, ..Default::default() }
+    EmitConfig {
+        async_mode: true,
+        ..Default::default()
+    }
 }
 
 // ── Integration tests ─────────────────────────────────────────────────────────
@@ -327,7 +333,10 @@ fn emit_empty_graph_no_functions() {
     // functions.py is always present; test_contracts.py and ailmap.json are also
     // emitted because build_verified_fn_graph attaches Before + After contracts.
     assert!(output.files.len() >= 1);
-    assert!(output.files.iter().any(|f| f.path == "generated/functions.py"));
+    assert!(output
+        .files
+        .iter()
+        .any(|f| f.path == "generated/functions.py"));
 }
 
 #[test]
@@ -1769,22 +1778,31 @@ fn build_verified_fn_graph_with_contracts(
     fn_node.metadata.name = Some(fn_name.to_owned());
     fn_node.metadata.params = params
         .into_iter()
-        .map(|(n, t)| Param { name: n.to_owned(), type_ref: t.to_owned() })
+        .map(|(n, t)| Param {
+            name: n.to_owned(),
+            type_ref: t.to_owned(),
+        })
         .collect();
     fn_node.metadata.return_type = Some(return_type.to_owned());
 
     graph.add_node(fn_node).expect("add fn node");
-    graph.add_edge(root_id, fn_node_id, EdgeKind::Ev).expect("Ev root->fn");
+    graph
+        .add_edge(root_id, fn_node_id, EdgeKind::Ev)
+        .expect("Ev root->fn");
 
     let mut child_ids = Vec::new();
     for node in children {
         let child_id = node.id;
         graph.add_node(node).expect("add child node");
-        graph.add_edge(fn_node_id, child_id, EdgeKind::Ev).expect("Ev fn->child");
+        graph
+            .add_edge(fn_node_id, child_id, EdgeKind::Ev)
+            .expect("Ev fn->child");
         child_ids.push(child_id);
     }
     for i in 0..child_ids.len().saturating_sub(1) {
-        graph.add_edge(child_ids[i], child_ids[i + 1], EdgeKind::Eh).expect("Eh sibling");
+        graph
+            .add_edge(child_ids[i], child_ids[i + 1], EdgeKind::Eh)
+            .expect("Eh sibling");
     }
     if !child_ids.is_empty() {
         let fn_mut = graph.get_node_mut(fn_node_id).expect("fn node exists");
@@ -1841,7 +1859,10 @@ fn emit_before_contract_injected_after_docstring() {
     let assert_pos = content
         .find("assert True == True  # before:")
         .expect("before-assert present");
-    assert!(assert_pos > docstring_pos, "before-assert must come after docstring");
+    assert!(
+        assert_pos > docstring_pos,
+        "before-assert must come after docstring"
+    );
 }
 
 #[test]
@@ -1863,7 +1884,10 @@ fn emit_after_contract_injected_before_return() {
         .find("assert True == True  # after:")
         .expect("after-assert present");
     let return_pos = content.find("return number(").expect("return present");
-    assert!(assert_pos < return_pos, "after-assert must come before return");
+    assert!(
+        assert_pos < return_pos,
+        "after-assert must come before return"
+    );
 }
 
 #[test]
@@ -1891,8 +1915,14 @@ fn emit_old_snapshot_at_function_entry() {
     let output = emit_function_definitions(&verified, &config).expect("emit ok");
     let content = &output.files[0].content;
 
-    assert!(content.contains("_pre_x = x"), "snapshot assignment missing:\n{content}");
-    assert!(content.contains("_pre_x"), "after-assert should use _pre_x:\n{content}");
+    assert!(
+        content.contains("_pre_x = x"),
+        "snapshot assignment missing:\n{content}"
+    );
+    assert!(
+        content.contains("_pre_x"),
+        "after-assert should use _pre_x:\n{content}"
+    );
 }
 
 #[test]
@@ -1900,7 +1930,10 @@ fn emit_contract_mode_off_no_asserts() {
     let contracts = before_after_contracts();
     let verified =
         build_verified_fn_graph_with_contracts("noop", vec![], "number", vec![], contracts);
-    let config = EmitConfig { contract_mode: ContractMode::Off, ..Default::default() };
+    let config = EmitConfig {
+        contract_mode: ContractMode::Off,
+        ..Default::default()
+    };
     let output = emit_function_definitions(&verified, &config).expect("emit ok");
     let content = &output.files[0].content;
     assert!(
@@ -1914,10 +1947,16 @@ fn emit_contract_mode_comments_uses_hash() {
     let contracts = before_after_contracts();
     let verified =
         build_verified_fn_graph_with_contracts("noop", vec![], "number", vec![], contracts);
-    let config = EmitConfig { contract_mode: ContractMode::Comments, ..Default::default() };
+    let config = EmitConfig {
+        contract_mode: ContractMode::Comments,
+        ..Default::default()
+    };
     let output = emit_function_definitions(&verified, &config).expect("emit ok");
     let content = &output.files[0].content;
-    assert!(content.contains("# assert "), "comment-assert missing:\n{content}");
+    assert!(
+        content.contains("# assert "),
+        "comment-assert missing:\n{content}"
+    );
     // No live assert lines (indented by 4 spaces) should appear.
     assert!(
         !content.contains("\n    assert "),
@@ -1958,7 +1997,9 @@ fn emit_after_contract_not_injected_inside_together_block() {
     fn_node.metadata.name = Some("do_together".to_owned());
     fn_node.metadata.return_type = Some("number".to_owned());
     graph.add_node(fn_node).expect("add fn node");
-    graph.add_edge(root_id, fn_node_id, EdgeKind::Ev).expect("root->fn");
+    graph
+        .add_edge(root_id, fn_node_id, EdgeKind::Ev)
+        .expect("root->fn");
 
     // update_node is a child of together_node, NOT fn_node.
     let update_id = NodeId::new();
@@ -1987,14 +2028,22 @@ fn emit_after_contract_not_injected_inside_together_block() {
         metadata: NodeMetadata::default(),
     };
     graph.add_node(together_node).expect("add together node");
-    graph.add_edge(fn_node_id, together_id, EdgeKind::Ev).expect("fn->together");
-    graph.add_edge(together_id, update_id, EdgeKind::Ev).expect("together->update");
+    graph
+        .add_edge(fn_node_id, together_id, EdgeKind::Ev)
+        .expect("fn->together");
+    graph
+        .add_edge(together_id, update_id, EdgeKind::Ev)
+        .expect("together->update");
 
     let return_node = make_return_node("number");
     let return_id = return_node.id;
     graph.add_node(return_node).expect("add return node");
-    graph.add_edge(fn_node_id, return_id, EdgeKind::Ev).expect("fn->return");
-    graph.add_edge(together_id, return_id, EdgeKind::Eh).expect("together->return sibling");
+    graph
+        .add_edge(fn_node_id, return_id, EdgeKind::Ev)
+        .expect("fn->return");
+    graph
+        .add_edge(together_id, return_id, EdgeKind::Eh)
+        .expect("together->return sibling");
 
     // fn_node children: [together, return]; root children: [fn].
     graph.get_node_mut(fn_node_id).unwrap().children = Some(vec![together_id, return_id]);
@@ -2004,7 +2053,10 @@ fn emit_after_contract_not_injected_inside_together_block() {
     let typed = type_check(valid, &[]).expect("type check");
     let verified = verify(typed).expect("verify");
 
-    let config = EmitConfig { async_mode: true, ..Default::default() };
+    let config = EmitConfig {
+        async_mode: true,
+        ..Default::default()
+    };
     let output = emit_function_definitions(&verified, &config).expect("emit ok");
     let content = &output.files[0].content;
 
@@ -2016,8 +2068,14 @@ fn emit_after_contract_not_injected_inside_together_block() {
         .expect("after-assert present");
     let return_pos = content.find("return number(").expect("return present");
 
-    assert!(assert_pos > together_pos, "after-assert must be outside together block");
-    assert!(assert_pos < return_pos, "after-assert must be before return");
+    assert!(
+        assert_pos > together_pos,
+        "after-assert must be outside together block"
+    );
+    assert!(
+        assert_pos < return_pos,
+        "after-assert must be before return"
+    );
 }
 
 #[test]
@@ -2116,7 +2174,7 @@ fn cross_file_import_in_functions_preamble() {
     let verified = build_verified_fn_graph(
         "transfer",
         vec![],
-        "number",                                        // annotation — not type-checked
+        "number", // annotation — not type-checked
         vec![],
         vec![return_node("TransferResult", Some("a=1"))], // runtime constructor call
     );
@@ -2128,7 +2186,9 @@ fn cross_file_import_in_functions_preamble() {
         .find(|f| f.path == "generated/functions.py")
         .expect("functions.py must be present");
     assert!(
-        functions_file.content.contains("from .types import TransferResult"),
+        functions_file
+            .content
+            .contains("from .types import TransferResult"),
         "Return constructor call must add cross-file import: {}",
         functions_file.content
     );

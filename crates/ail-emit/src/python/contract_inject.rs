@@ -79,9 +79,7 @@ fn collect_old_refs_in_constraint(
 /// Detect whether a `ConstraintExpr` contains any `ValueExpr::Old(...)`.
 fn constraint_has_old(expr: &ConstraintExpr) -> bool {
     match expr {
-        ConstraintExpr::Compare { left, right, .. } => {
-            value_has_old(left) || value_has_old(right)
-        }
+        ConstraintExpr::Compare { left, right, .. } => value_has_old(left) || value_has_old(right),
         ConstraintExpr::In { value, collection } => {
             value_has_old(value) || value_has_old(collection)
         }
@@ -276,10 +274,7 @@ mod tests {
 
     #[test]
     fn collect_old_refs_nested_in_arithmetic() {
-        let contracts = vec![make_contract(
-            ContractKind::After,
-            "x is old(a) - old(b)",
-        )];
+        let contracts = vec![make_contract(ContractKind::After, "x is old(a) - old(b)")];
         let refs = collect_old_refs(dummy_id(), &contracts).unwrap();
         assert_eq!(refs.len(), 2);
     }
@@ -315,9 +310,14 @@ mod tests {
     fn contract_mode_on_renders_assert() {
         let contract = make_contract(ContractKind::Before, "x > 0");
         let mut imports = ImportSet::new();
-        let lines =
-            render_contract_lines(dummy_id(), &contract, "    ", &ContractMode::On, &mut imports)
-                .unwrap();
+        let lines = render_contract_lines(
+            dummy_id(),
+            &contract,
+            "    ",
+            &ContractMode::On,
+            &mut imports,
+        )
+        .unwrap();
         assert_eq!(lines.len(), 1);
         assert_eq!(lines[0], "    assert x > 0  # before: x > 0");
     }
@@ -342,9 +342,14 @@ mod tests {
     fn contract_mode_off_returns_empty() {
         let contract = make_contract(ContractKind::Before, "x > 0");
         let mut imports = ImportSet::new();
-        let lines =
-            render_contract_lines(dummy_id(), &contract, "    ", &ContractMode::Off, &mut imports)
-                .unwrap();
+        let lines = render_contract_lines(
+            dummy_id(),
+            &contract,
+            "    ",
+            &ContractMode::Off,
+            &mut imports,
+        )
+        .unwrap();
         assert!(lines.is_empty());
     }
 
@@ -352,9 +357,14 @@ mod tests {
     fn render_after_contract_line_has_after_label() {
         let contract = make_contract(ContractKind::After, "result > 0");
         let mut imports = ImportSet::new();
-        let lines =
-            render_contract_lines(dummy_id(), &contract, "    ", &ContractMode::On, &mut imports)
-                .unwrap();
+        let lines = render_contract_lines(
+            dummy_id(),
+            &contract,
+            "    ",
+            &ContractMode::On,
+            &mut imports,
+        )
+        .unwrap();
         assert!(lines[0].contains("# after: result > 0"));
     }
 }

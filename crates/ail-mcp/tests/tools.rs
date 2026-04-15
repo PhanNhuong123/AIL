@@ -44,10 +44,7 @@ fn wallet_concept_graph() -> (AilGraph, NodeId, [NodeId; 4]) {
         ))
         .unwrap();
     let c4 = graph
-        .add_node(make_node(
-            "fetch user account details",
-            Pattern::Describe,
-        ))
+        .add_node(make_node("fetch user account details", Pattern::Describe))
         .unwrap();
 
     for child in [c1, c2, c3, c4] {
@@ -215,10 +212,7 @@ fn mcp_verify_clean_project_returns_ok() {
         "wallet_full should verify cleanly; errors: {:?}",
         result["errors"]
     );
-    assert_eq!(
-        result["errors"].as_array().map(|a| a.len()),
-        Some(0)
-    );
+    assert_eq!(result["errors"].as_array().map(|a| a.len()), Some(0));
 }
 
 #[test]
@@ -301,14 +295,8 @@ fn mcp_status_reports_stage_and_counts() {
     let result = resp.result.unwrap();
 
     assert_eq!(result["pipeline_stage"].as_str(), Some("raw"));
-    assert_eq!(
-        result["node_count"].as_u64(),
-        Some(node_count as u64)
-    );
-    assert_eq!(
-        result["edge_count"].as_u64(),
-        Some(edge_count as u64)
-    );
+    assert_eq!(result["node_count"].as_u64(), Some(node_count as u64));
+    assert_eq!(result["edge_count"].as_u64(), Some(edge_count as u64));
     // All nodes in this graph are Describe — do_node_count should be 0.
     assert_eq!(result["do_node_count"].as_u64(), Some(0));
 }

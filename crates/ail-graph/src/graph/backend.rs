@@ -148,4 +148,32 @@ pub trait GraphBackend: Send + Sync {
     /// Roll back the current transaction. No-op for in-memory backends —
     /// state is NOT restored; the operation succeeds but has no effect.
     fn rollback_transaction(&mut self) -> Result<(), GraphError>;
+
+    // ─── Convenience ──────────────────────────────────────────────────────────
+
+    /// Return all nodes as an owned `Vec`.
+    ///
+    /// This default method uses [`all_node_ids`] + [`get_node`], so it works for
+    /// any backend without a separate implementation.
+    ///
+    /// For [`crate::graph::AilGraph`] both inner calls are infallible.
+    /// For I/O-backed backends (e.g. `SqliteGraph`), an error from `all_node_ids`
+    /// is logged to stderr in debug builds and degrades to an empty `Vec`. Full
+    /// `Result` propagation is deferred to Phase 8+.
+    ///
+    /// [`all_node_ids`]: GraphBackend::all_node_ids
+    /// [`get_node`]: GraphBackend::get_node
+    fn all_nodes_vec(&self) -> Vec<Node> {
+        match self.all_node_ids() {
+            Err(e) => {
+                #[cfg(debug_assertions)]
+                eprintln!("[ail] all_nodes_vec: all_node_ids failed: {e}");
+                vec![]
+            }
+            Ok(ids) => ids
+                .into_iter()
+                .filter_map(|id| self.get_node(id).ok().flatten())
+                .collect(),
+        }
+    }
 }

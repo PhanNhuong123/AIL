@@ -29,9 +29,9 @@ impl ProjectContext {
     pub fn graph(&self) -> &AilGraph {
         match self {
             Self::Raw(g) => g,
-            Self::Valid(v) => v.graph(),
-            Self::Typed(t) => t.graph(),
-            Self::Verified(v) => v.graph(),
+            Self::Valid(v) => v.ail_graph(),
+            Self::Typed(t) => t.ail_graph(),
+            Self::Verified(v) => v.ail_graph(),
         }
     }
 

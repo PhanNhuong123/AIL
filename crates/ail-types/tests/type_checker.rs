@@ -268,7 +268,7 @@ fn t025_wallet_type_graph_produces_typed_graph() {
 #[test]
 fn t026_base_type_integer_resolves_via_scope_var() {
     let valid = minimal_valid_graph();
-    let node_id = valid.graph().root_id().unwrap();
+    let node_id = valid.ail_graph().root_id().unwrap();
     let packet = packet_with_scope(node_id, "x", "integer");
     assert!(type_check(valid, &[packet]).is_ok());
 }
@@ -276,7 +276,7 @@ fn t026_base_type_integer_resolves_via_scope_var() {
 #[test]
 fn t027_base_type_number_resolves_via_scope_var() {
     let valid = minimal_valid_graph();
-    let node_id = valid.graph().root_id().unwrap();
+    let node_id = valid.ail_graph().root_id().unwrap();
     let packet = packet_with_scope(node_id, "x", "number");
     assert!(type_check(valid, &[packet]).is_ok());
 }
@@ -284,7 +284,7 @@ fn t027_base_type_number_resolves_via_scope_var() {
 #[test]
 fn t028_base_type_text_resolves_via_scope_var() {
     let valid = minimal_valid_graph();
-    let node_id = valid.graph().root_id().unwrap();
+    let node_id = valid.ail_graph().root_id().unwrap();
     let packet = packet_with_scope(node_id, "x", "text");
     assert!(type_check(valid, &[packet]).is_ok());
 }
@@ -292,7 +292,7 @@ fn t028_base_type_text_resolves_via_scope_var() {
 #[test]
 fn t029_base_type_boolean_resolves_via_scope_var() {
     let valid = minimal_valid_graph();
-    let node_id = valid.graph().root_id().unwrap();
+    let node_id = valid.ail_graph().root_id().unwrap();
     let packet = packet_with_scope(node_id, "x", "boolean");
     assert!(type_check(valid, &[packet]).is_ok());
 }
@@ -302,7 +302,7 @@ fn t029_base_type_boolean_resolves_via_scope_var() {
 #[test]
 fn t030_builtin_positive_integer_resolves_via_scope_var() {
     let valid = minimal_valid_graph();
-    let node_id = valid.graph().root_id().unwrap();
+    let node_id = valid.ail_graph().root_id().unwrap();
     let packet = packet_with_scope(node_id, "count", "PositiveInteger");
     assert!(type_check(valid, &[packet]).is_ok());
 }
@@ -310,7 +310,7 @@ fn t030_builtin_positive_integer_resolves_via_scope_var() {
 #[test]
 fn t031_all_seven_builtins_resolve_as_scope_var_types() {
     let valid = minimal_valid_graph();
-    let node_id = valid.graph().root_id().unwrap();
+    let node_id = valid.ail_graph().root_id().unwrap();
     let builtin_names = [
         "PositiveInteger",
         "NonNegativeInteger",
@@ -366,7 +366,7 @@ fn t033_user_defined_describe_node_resolves_as_scope_var_type() {
 #[test]
 fn t034_undefined_scope_var_type_raises_undefined_type_error() {
     let valid = minimal_valid_graph();
-    let node_id = valid.graph().root_id().unwrap();
+    let node_id = valid.ail_graph().root_id().unwrap();
     let packet = packet_with_scope(node_id, "x", "GhostType");
     let errors = type_check(valid, &[packet]).unwrap_err();
     assert!(
@@ -379,7 +379,7 @@ fn t034_undefined_scope_var_type_raises_undefined_type_error() {
 #[test]
 fn t035_undefined_must_produce_type_raises_error() {
     let valid = minimal_valid_graph();
-    let node_id = valid.graph().root_id().unwrap();
+    let node_id = valid.ail_graph().root_id().unwrap();
     let packet = packet_with_must_produce(node_id, "GhostType");
     let errors = type_check(valid, &[packet]).unwrap_err();
     assert!(has_undefined_type(&errors, "GhostType"));
@@ -620,7 +620,7 @@ fn t043_list_generic_inner_type_resolves() {
 #[test]
 fn t044_multiple_errors_are_all_collected_in_one_pass() {
     let valid = minimal_valid_graph();
-    let node_id = valid.graph().root_id().unwrap();
+    let node_id = valid.ail_graph().root_id().unwrap();
     // Two scope variables with undefined types — both errors should be collected.
     let scope = vec![
         ScopeVariable {
@@ -762,7 +762,7 @@ fn t048_void_type_resolves_as_base_kind() {
     // `void` is in ail-graph's BUILTIN_TYPE_NAMES for Do nodes that return nothing.
     // The type checker must resolve it without raising UndefinedType.
     let valid = minimal_valid_graph();
-    let node_id = valid.graph().root_id().unwrap();
+    let node_id = valid.ail_graph().root_id().unwrap();
     let packet = packet_with_scope(node_id, "nothing", "void");
     let result = type_check(valid, &[packet]);
     assert!(

@@ -1,4 +1,4 @@
-use ail_graph::AilGraph;
+use ail_graph::GraphBackend;
 use ail_types::BuiltinSemanticType;
 
 use ail_graph::types::Pattern;
@@ -29,14 +29,14 @@ pub(super) enum Z3Sort {
 ///
 /// **Important:** Unknown custom types always return `Uninterpreted`, not `Int`.
 /// Encoding a record type as an integer would produce nonsensical Z3 assertions.
-pub(super) fn sort_for_type_ref(type_ref: &str, graph: &AilGraph) -> Z3Sort {
+pub(super) fn sort_for_type_ref(type_ref: &str, graph: &dyn GraphBackend) -> Z3Sort {
     sort_for_type_ref_inner(type_ref, graph, 0)
 }
 
 /// Recursion-guarded inner implementation. The depth limit prevents infinite
 /// loops on pathological `Define` chains (in practice AIL graphs have no cycles
 /// because `ValidGraph` enforces acyclicity, but we keep the guard for safety).
-fn sort_for_type_ref_inner(type_ref: &str, graph: &AilGraph, depth: u8) -> Z3Sort {
+fn sort_for_type_ref_inner(type_ref: &str, graph: &dyn GraphBackend, depth: u8) -> Z3Sort {
     const MAX_DEPTH: u8 = 16;
     if depth > MAX_DEPTH {
         return Z3Sort::Uninterpreted;
@@ -65,7 +65,7 @@ fn sort_for_type_ref_inner(type_ref: &str, graph: &AilGraph, depth: u8) -> Z3Sor
     }
 
     // ── 3. User-defined graph types ───────────────────────────────────────────
-    for node in graph.all_nodes() {
+    for node in graph.all_nodes_vec() {
         let name_matches = node
             .metadata
             .name

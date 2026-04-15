@@ -1,4 +1,4 @@
-use ail_graph::graph::AilGraph;
+use ail_graph::graph::GraphBackend;
 use ail_graph::types::{Expression, Node, NodeId, Pattern};
 
 use crate::errors::ContractError;
@@ -10,7 +10,7 @@ use crate::errors::ContractError;
 /// `Pattern::Do` node is reached. The function's declared errors are the
 /// `Pattern::Error` nodes reachable via outgoing `Ed` edges from that `Do` node.
 pub(crate) fn check_raise_error_refs(
-    graph: &AilGraph,
+    graph: &dyn GraphBackend,
     node: &Node,
     errors: &mut Vec<ContractError>,
 ) {
@@ -54,13 +54,14 @@ fn extract_error_name(expr: &Expression) -> Option<String> {
 
 /// Walk up the `parent_of` chain from `start_id` until a `Do` node is found.
 /// Returns `None` if no enclosing `Do` exists.
-fn find_enclosing_do(graph: &AilGraph, start_id: NodeId) -> Option<NodeId> {
+fn find_enclosing_do(graph: &dyn GraphBackend, start_id: NodeId) -> Option<NodeId> {
     let mut cursor = start_id;
     loop {
-        match graph.parent_of(cursor) {
+        match graph.parent(cursor) {
             Ok(Some(parent_id)) => {
                 cursor = parent_id;
-                if let Ok(parent) = graph.get_node(parent_id) {
+                // AilGraph: never errors; SqliteGraph: degrade gracefully on missing node.
+                if let Some(parent) = graph.get_node(parent_id).ok().flatten() {
                     if parent.pattern == Pattern::Do {
                         return Some(parent_id);
                     }
@@ -73,13 +74,14 @@ fn find_enclosing_do(graph: &AilGraph, start_id: NodeId) -> Option<NodeId> {
 
 /// Collect the names of all `Error` nodes reachable via outgoing `Ed` edges
 /// from the `Do` node at `do_id`.
-fn collect_declared_errors(graph: &AilGraph, do_id: NodeId) -> Vec<String> {
+fn collect_declared_errors(graph: &dyn GraphBackend, do_id: NodeId) -> Vec<String> {
     graph
-        .outgoing_diagonal_refs_of(do_id)
+        .outgoing_diagonal_refs(do_id)
         .unwrap_or_default()
         .into_iter()
         .filter_map(|target_id| {
-            let target = graph.get_node(target_id).ok()?;
+            // AilGraph: never errors; SqliteGraph: degrade gracefully on missing node.
+            let target = graph.get_node(target_id).ok().flatten()?;
             if target.pattern == Pattern::Error {
                 target.metadata.name.clone()
             } else {

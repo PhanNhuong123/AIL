@@ -1,6 +1,6 @@
 use std::fmt;
 
-use ail_graph::{AilGraph, ValidGraph};
+use ail_graph::{AilGraph, GraphBackend, ValidGraph};
 
 /// A graph that has passed all type-checking rules.
 ///
@@ -20,9 +20,24 @@ impl TypedGraph {
         Self(valid)
     }
 
-    /// Return a shared reference to the underlying graph.
-    pub fn graph(&self) -> &AilGraph {
+    /// Return a shared reference to the underlying graph as a [`GraphBackend`] trait object.
+    ///
+    /// Downstream pipeline stages accept `&dyn GraphBackend` so they remain
+    /// backend-agnostic. Use [`into_inner`] when you need the concrete type.
+    ///
+    /// [`into_inner`]: TypedGraph::into_inner
+    pub fn graph(&self) -> &dyn GraphBackend {
         self.0.graph()
+    }
+
+    /// Return a shared reference to the underlying [`AilGraph`].
+    ///
+    /// For use by tools (MCP, CLI) that need `AilGraph`-specific APIs such as
+    /// BM25 search or edge count. Prefer [`graph`] for backend-agnostic pipeline code.
+    ///
+    /// [`graph`]: TypedGraph::graph
+    pub fn ail_graph(&self) -> &AilGraph {
+        self.0.ail_graph()
     }
 
     /// Consume the `TypedGraph` and return the inner `ValidGraph`.

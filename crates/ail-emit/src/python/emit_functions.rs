@@ -30,15 +30,17 @@ pub fn emit_function_definitions(
     let mut fn_names: Vec<String> = Vec::new();
     let mut errors = Vec::new();
 
-    for node in graph.all_nodes() {
+    let all_nodes = graph.all_nodes_vec();
+    for node in &all_nodes {
         if node.pattern != Pattern::Do {
             continue;
         }
 
         let parent_pattern = graph
-            .parent_of(node.id)
-            .unwrap_or(None)
-            .and_then(|pid| graph.get_node(pid).ok())
+            .parent(node.id)
+            .ok()
+            .flatten()
+            .and_then(|pid| graph.get_node(pid).ok().flatten())
             .map(|p| p.pattern.clone());
 
         if parent_pattern == Some(Pattern::Do) {

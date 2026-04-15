@@ -150,7 +150,15 @@ fn hydrate_wallet_service_fixture(graph: &mut AilGraph) {
     );
 
     set_deduct_money(graph);
-    set_named_child(graph, "deduct_money", "01_validate", Pattern::Check, "validate", None, None);
+    set_named_child(
+        graph,
+        "deduct_money",
+        "01_validate",
+        Pattern::Check,
+        "validate",
+        None,
+        None,
+    );
     set_named_child(
         graph,
         "deduct_money",
@@ -180,7 +188,15 @@ fn hydrate_wallet_service_fixture(graph: &mut AilGraph) {
     );
 
     set_add_money(graph);
-    set_named_child(graph, "add_money", "01_validate", Pattern::Check, "validate", None, None);
+    set_named_child(
+        graph,
+        "add_money",
+        "01_validate",
+        Pattern::Check,
+        "validate",
+        None,
+        None,
+    );
     set_named_child(
         graph,
         "add_money",
@@ -491,7 +507,7 @@ fn wallet_service_fixture_builds_and_validates() {
 fn wallet_service_fixture_cic_packets_cover_several_depths() {
     let graph = load_wallet_service_fixture();
     let valid = validate_graph(graph).unwrap();
-    let graph = valid.graph();
+    let graph = valid.ail_graph();
 
     let transfer_money = find_node(graph, "transfer_money");
     let validate = find_transfer_child(graph, "01_validate");

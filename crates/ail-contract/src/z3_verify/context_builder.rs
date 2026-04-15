@@ -1,6 +1,6 @@
 use ail_graph::{
     types::{Node, Pattern},
-    AilGraph,
+    GraphBackend,
 };
 use ail_types::BuiltinSemanticType;
 
@@ -23,7 +23,7 @@ use super::sort::{sort_for_type_ref, Z3Sort};
 /// skipped. No type constraint is asserted for those variables.
 pub(super) fn build_encode_context<'ctx>(
     node: &Node,
-    graph: &AilGraph,
+    graph: &dyn GraphBackend,
     z3_ctx: &'ctx z3::Context,
 ) -> EncodeContext<'ctx> {
     let mut enc = EncodeContext::new(z3_ctx);
@@ -82,7 +82,7 @@ pub(super) fn build_encode_context<'ctx>(
 /// corresponding Z3 assertions via [`encode_type_constraint`].
 pub(super) fn collect_param_type_constraints(
     node: &Node,
-    graph: &AilGraph,
+    graph: &dyn GraphBackend,
 ) -> Vec<(String, BuiltinSemanticType)> {
     let mut out = Vec::new();
 
@@ -116,7 +116,7 @@ fn expand_record_fields(
     enc: &mut EncodeContext<'_>,
     prefix: &str,
     type_name: &str,
-    graph: &AilGraph,
+    graph: &dyn GraphBackend,
 ) {
     let Some(describe) = find_describe_node(graph, type_name) else {
         return;
@@ -146,12 +146,16 @@ fn expand_record_fields(
 }
 
 /// Find the first `Describe` node in `graph` whose `metadata.name` matches `type_name`.
-pub(super) fn find_describe_node<'g>(
-    graph: &'g AilGraph,
+///
+/// Returns an owned `Node` because `all_nodes_vec()` allocates; callers that previously
+/// held `&'g Node` borrows must now hold `Node` values.
+pub(super) fn find_describe_node(
+    graph: &dyn GraphBackend,
     type_name: &str,
-) -> Option<&'g ail_graph::types::Node> {
+) -> Option<ail_graph::types::Node> {
     graph
-        .all_nodes()
+        .all_nodes_vec()
+        .into_iter()
         .find(|n| n.pattern == Pattern::Describe && n.metadata.name.as_deref() == Some(type_name))
 }
 
@@ -160,7 +164,7 @@ pub(super) fn find_describe_node<'g>(
 /// no matching `Define` node exists.
 fn resolve_define_to_builtin(
     type_ref: &str,
-    graph: &AilGraph,
+    graph: &dyn GraphBackend,
     depth: u8,
 ) -> Option<BuiltinSemanticType> {
     const MAX: u8 = 8;
@@ -168,7 +172,7 @@ fn resolve_define_to_builtin(
         return None;
     }
 
-    for node in graph.all_nodes() {
+    for node in graph.all_nodes_vec() {
         if node.pattern != Pattern::Define {
             continue;
         }

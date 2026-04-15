@@ -27,7 +27,8 @@ pub fn emit_type_definitions(verified: &VerifiedGraph) -> Result<EmitOutput, Vec
     let mut error_names: Vec<String> = Vec::new();
     let mut errors = Vec::new();
 
-    for node in graph.all_nodes() {
+    let all_nodes = graph.all_nodes_vec();
+    for node in &all_nodes {
         match node.pattern {
             Pattern::Define => match emit_define_node(node, &mut imports) {
                 Ok(code) => {

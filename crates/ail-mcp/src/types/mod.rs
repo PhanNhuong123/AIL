@@ -6,7 +6,6 @@ pub use protocol::{
     METHOD_NOT_FOUND, PARSE_ERROR,
 };
 pub use tool_io::{
-    BuildFile, BuildInput, BuildOutput, ContextInput, ContextNode, ContextOutput,
-    ContextSummary, ScopeEntry, SearchInput, SearchItem, SearchOutput, StatusOutput,
-    VerifyInput, VerifyOutput,
+    BuildFile, BuildInput, BuildOutput, ContextInput, ContextNode, ContextOutput, ContextSummary,
+    ScopeEntry, SearchInput, SearchItem, SearchOutput, StatusOutput, VerifyInput, VerifyOutput,
 };

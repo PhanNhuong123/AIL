@@ -6,9 +6,7 @@
 use std::cell::RefCell;
 use std::path::Path;
 
-use ail_emit::{
-    emit_function_definitions, emit_type_definitions, ContractMode, EmitConfig,
-};
+use ail_emit::{emit_function_definitions, emit_type_definitions, ContractMode, EmitConfig};
 use ail_graph::Bm25Index;
 
 use crate::context::ProjectContext;

@@ -811,7 +811,7 @@ fn validate_valid_graph_preserves_graph_data() {
 
     let valid = validate_graph(graph).unwrap();
     assert_eq!(
-        valid.graph().node_ids().count(),
+        valid.graph().all_node_ids().unwrap().len(),
         node_count,
         "ValidGraph.graph() must expose the same nodes"
     );

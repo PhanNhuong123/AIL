@@ -36,7 +36,9 @@ pub fn compute_context_packet_for_backend(
 
     // intent_chain — root-to-current, inclusive on both ends.
     for id in &path {
-        let node = backend.get_node(*id)?.ok_or(GraphError::NodeNotFound(*id))?;
+        let node = backend
+            .get_node(*id)?
+            .ok_or(GraphError::NodeNotFound(*id))?;
         packet.intent_chain.push(node.intent.clone());
     }
 
@@ -232,9 +234,10 @@ fn collect_call_contracts(
             let contracts = backend.contracts(target_id)?;
             for c in &contracts {
                 let new_c = PacketConstraint::from_contract(target_id, c);
-                if !out.iter().any(|e| {
-                    e.origin_node == new_c.origin_node && e.expression == new_c.expression
-                }) {
+                if !out
+                    .iter()
+                    .any(|e| e.origin_node == new_c.origin_node && e.expression == new_c.expression)
+                {
                     out.push(new_c);
                 }
             }

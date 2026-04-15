@@ -23,9 +23,9 @@
 pub mod context;
 pub(crate) mod pipeline;
 pub mod server;
+mod tools;
 pub mod transport;
 pub mod types;
-mod tools;
 
 pub use context::ProjectContext;
 pub use server::McpServer;

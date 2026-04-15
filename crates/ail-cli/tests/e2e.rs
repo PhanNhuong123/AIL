@@ -161,10 +161,7 @@ fn e2e_wallet_build_generates_scaffold_init() {
     run_build(tmp.path(), &default_args()).expect("build should succeed");
 
     let path = tmp.path().join("scaffolded").join("__init__.py");
-    assert!(
-        path.exists(),
-        "scaffolded/__init__.py missing after build"
-    );
+    assert!(path.exists(), "scaffolded/__init__.py missing after build");
 
     let content = fs::read_to_string(&path).unwrap();
     assert!(
@@ -185,10 +182,7 @@ fn e2e_wallet_build_generates_source_map() {
 
     run_build(tmp.path(), &default_args()).expect("build should succeed");
 
-    let path = tmp
-        .path()
-        .join("generated")
-        .join("functions.ailmap.json");
+    let path = tmp.path().join("generated").join("functions.ailmap.json");
     assert!(
         path.exists(),
         "generated/functions.ailmap.json missing after build"

@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use ail_graph::graph::AilGraph;
+use ail_graph::graph::GraphBackend;
 use ail_graph::types::{Node, NodeId, Pattern};
 
 use crate::errors::ContractError;
@@ -16,7 +16,7 @@ use crate::errors::ContractError;
 /// A template's required phases are the named children of the template `Do`
 /// node. The implementing `Do` must have a named child for each one.
 pub(crate) fn check_following_template_phases(
-    graph: &AilGraph,
+    graph: &dyn GraphBackend,
     node: &Node,
     errors: &mut Vec<ContractError>,
 ) {
@@ -27,12 +27,15 @@ pub(crate) fn check_following_template_phases(
     }
 
     let template_refs: Vec<NodeId> = graph
-        .outgoing_diagonal_refs_of(node.id)
+        .outgoing_diagonal_refs(node.id)
         .unwrap_or_default()
         .into_iter()
         .filter(|&target_id| {
+            // AilGraph: never errors; SqliteGraph: degrade gracefully on missing node.
             graph
                 .get_node(target_id)
+                .ok()
+                .flatten()
                 .map(|t| t.pattern == Pattern::Do)
                 .unwrap_or(false)
         })
@@ -45,9 +48,9 @@ pub(crate) fn check_following_template_phases(
     let implemented_phases: HashSet<String> = collect_named_children(graph, node.id);
 
     for template_id in template_refs {
-        let template_node = match graph.get_node(template_id) {
-            Ok(n) => n,
-            Err(_) => continue,
+        // AilGraph: never errors; SqliteGraph: degrade gracefully on missing node.
+        let Some(template_node) = graph.get_node(template_id).ok().flatten() else {
+            continue;
         };
 
         let template_name = template_node
@@ -73,15 +76,17 @@ pub(crate) fn check_following_template_phases(
 // ─── helper ───────────────────────────────────────────────────────────────
 
 /// Return the `metadata.name` values of all named children of `node_id`.
-fn collect_named_children(graph: &AilGraph, node_id: NodeId) -> HashSet<String> {
+fn collect_named_children(graph: &dyn GraphBackend, node_id: NodeId) -> HashSet<String> {
     graph
-        .children_of(node_id)
+        .children(node_id)
         .unwrap_or_default()
         .into_iter()
         .filter_map(|child_id| {
+            // AilGraph: never errors; SqliteGraph: degrade gracefully on missing node.
             graph
                 .get_node(child_id)
                 .ok()
+                .flatten()
                 .and_then(|c| c.metadata.name.clone())
         })
         .collect()

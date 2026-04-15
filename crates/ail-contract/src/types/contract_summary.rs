@@ -14,7 +14,7 @@
 use std::collections::BTreeMap;
 
 use ail_graph::types::{ContractKind, Pattern};
-use ail_graph::{AilGraph, NodeId};
+use ail_graph::{GraphBackend, NodeId};
 
 // ── Public types ──────────────────────────────────────────────────────────────
 
@@ -77,10 +77,10 @@ impl ContractSummary {
     /// Nodes are keyed by `metadata.name` when present, falling back to
     /// `intent`. When two `Do` nodes share the same key, the later one in
     /// iteration order wins (graph iteration order is stable but unspecified).
-    pub fn from_graph(graph: &AilGraph) -> Self {
+    pub fn from_graph(graph: &dyn GraphBackend) -> Self {
         let mut entries: BTreeMap<String, ContractRecord> = BTreeMap::new();
 
-        for node in graph.all_nodes() {
+        for node in graph.all_nodes_vec() {
             if node.pattern != Pattern::Do {
                 continue;
             }

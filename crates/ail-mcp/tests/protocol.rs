@@ -15,10 +15,7 @@ use serde_json::{json, Value};
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 fn empty_server() -> McpServer {
-    McpServer::new(
-        PathBuf::from("."),
-        ProjectContext::Raw(AilGraph::new()),
-    )
+    McpServer::new(PathBuf::from("."), ProjectContext::Raw(AilGraph::new()))
 }
 
 fn make_request(method: &str, params: Value) -> JsonRpcRequest {
@@ -45,10 +42,7 @@ fn roundtrip_jsonrpc_request() {
 
 #[test]
 fn roundtrip_jsonrpc_response_result() {
-    let resp = JsonRpcResponse::ok(
-        Some(JsonRpcId::Number(42)),
-        json!({"ok": true, "count": 3}),
-    );
+    let resp = JsonRpcResponse::ok(Some(JsonRpcId::Number(42)), json!({"ok": true, "count": 3}));
     let s = serde_json::to_string(&resp).unwrap();
     let back: JsonRpcResponse = serde_json::from_str(&s).unwrap();
     assert_eq!(back.id, Some(JsonRpcId::Number(42)));
@@ -85,10 +79,7 @@ fn mcp_server_handles_tools_list() {
     let resp = server.handle(req).expect("expected a response");
     let result = resp.result.unwrap();
     let tools = result["tools"].as_array().unwrap();
-    let names: Vec<&str> = tools
-        .iter()
-        .map(|t| t["name"].as_str().unwrap())
-        .collect();
+    let names: Vec<&str> = tools.iter().map(|t| t["name"].as_str().unwrap()).collect();
     assert!(names.contains(&"ail.search"));
     assert!(names.contains(&"ail.context"));
     assert!(names.contains(&"ail.verify"));

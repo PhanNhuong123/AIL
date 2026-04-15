@@ -1,4 +1,4 @@
-use ail_graph::{AilGraph, NodeId, Pattern};
+use ail_graph::{GraphBackend, NodeId, Pattern};
 
 use crate::builtins::BuiltinSemanticType;
 
@@ -40,7 +40,7 @@ pub(crate) enum BaseKind {
 ///    `metadata.name` matches.
 ///
 /// Returns `None` if the name is not recognised in any category.
-pub(crate) fn resolve_type_ref(type_ref: &str, graph: &AilGraph) -> Option<ResolvedType> {
+pub(crate) fn resolve_type_ref(type_ref: &str, graph: &dyn GraphBackend) -> Option<ResolvedType> {
     let trimmed = type_ref.trim();
 
     // ── Parametric types: list<T> / option<T> ───────────────────────────────
@@ -109,8 +109,8 @@ fn strip_parametric_wrapper<'a>(type_ref: &'a str, prefix: &str) -> Option<&'a s
 /// whose `metadata.name` matches `name`.
 ///
 /// Uses flat lookup — no scoping. Phase 4 will add scoped resolution.
-pub(crate) fn find_type_node_by_name(graph: &AilGraph, name: &str) -> Option<NodeId> {
-    graph.all_nodes().find_map(|node| {
+pub(crate) fn find_type_node_by_name(graph: &dyn GraphBackend, name: &str) -> Option<NodeId> {
+    graph.all_nodes_vec().into_iter().find_map(|node| {
         let is_type_node = matches!(
             node.pattern,
             Pattern::Define | Pattern::Describe | Pattern::Error

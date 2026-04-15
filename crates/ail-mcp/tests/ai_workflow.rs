@@ -242,12 +242,12 @@ fn ai_workflow_build_after_verify_emits_python_paths() {
     );
 
     let files = resp["files"].as_array().unwrap();
-    assert!(!files.is_empty(), "build must return at least one emitted file");
+    assert!(
+        !files.is_empty(),
+        "build must return at least one emitted file"
+    );
 
-    let paths: Vec<&str> = files
-        .iter()
-        .filter_map(|f| f["path"].as_str())
-        .collect();
+    let paths: Vec<&str> = files.iter().filter_map(|f| f["path"].as_str()).collect();
     assert!(
         paths.iter().any(|p| p.contains("types.py")),
         "expected 'types.py' in build output; got: {:?}",
@@ -297,10 +297,7 @@ fn ai_workflow_full_session() {
 
     // 4. Retrieve CIC context for the task.
     let ctx = server
-        .handle(tool_call(
-            "ail.context",
-            json!({"task": "transfer money"}),
-        ))
+        .handle(tool_call("ail.context", json!({"task": "transfer money"})))
         .unwrap()
         .result
         .unwrap();
@@ -471,10 +468,7 @@ fn ai_workflow_context_before_verify_returns_empty_primary() {
     let server = fresh_server(&wallet_full_dir()); // context never loaded from disk
 
     let resp = server
-        .handle(tool_call(
-            "ail.context",
-            json!({"task": "transfer money"}),
-        ))
+        .handle(tool_call("ail.context", json!({"task": "transfer money"})))
         .unwrap()
         .result
         .unwrap();

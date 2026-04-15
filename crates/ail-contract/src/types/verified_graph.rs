@@ -10,7 +10,7 @@
 use std::fmt;
 use std::sync::OnceLock;
 
-use ail_graph::AilGraph;
+use ail_graph::{AilGraph, GraphBackend};
 use ail_types::TypedGraph;
 
 use super::ContractSummary;
@@ -44,9 +44,24 @@ impl VerifiedGraph {
         }
     }
 
-    /// Return a shared reference to the underlying graph.
-    pub fn graph(&self) -> &AilGraph {
+    /// Return a shared reference to the underlying graph as a [`GraphBackend`] trait object.
+    ///
+    /// Downstream pipeline stages accept `&dyn GraphBackend` so they remain
+    /// backend-agnostic. Use [`into_inner`] when you need the concrete type.
+    ///
+    /// [`into_inner`]: VerifiedGraph::into_inner
+    pub fn graph(&self) -> &dyn GraphBackend {
         self.typed.graph()
+    }
+
+    /// Return a shared reference to the underlying [`AilGraph`].
+    ///
+    /// For use by tools (MCP, CLI) that need `AilGraph`-specific APIs such as
+    /// BM25 search or edge count. Prefer [`graph`] for backend-agnostic pipeline code.
+    ///
+    /// [`graph`]: VerifiedGraph::graph
+    pub fn ail_graph(&self) -> &AilGraph {
+        self.typed.ail_graph()
     }
 
     /// Return a shared reference to the inner [`TypedGraph`].

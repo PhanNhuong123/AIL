@@ -1,6 +1,6 @@
 use std::fmt;
 
-use crate::graph::AilGraph;
+use crate::graph::{AilGraph, GraphBackend};
 
 /// A graph that has passed all structural and semantic validation rules.
 ///
@@ -17,8 +17,23 @@ impl ValidGraph {
         Self(graph)
     }
 
-    /// Return a shared reference to the underlying graph.
-    pub fn graph(&self) -> &AilGraph {
+    /// Return a shared reference to the underlying graph as a [`GraphBackend`] trait object.
+    ///
+    /// Downstream pipeline stages accept `&dyn GraphBackend` so they remain
+    /// backend-agnostic. Use [`into_inner`] when you need the concrete `AilGraph`.
+    ///
+    /// [`into_inner`]: ValidGraph::into_inner
+    pub fn graph(&self) -> &dyn GraphBackend {
+        &self.0
+    }
+
+    /// Return a shared reference to the underlying [`AilGraph`].
+    ///
+    /// For use by tools (MCP, CLI) that need `AilGraph`-specific APIs such as
+    /// BM25 search or edge count. Prefer [`graph`] for backend-agnostic pipeline code.
+    ///
+    /// [`graph`]: ValidGraph::graph
+    pub fn ail_graph(&self) -> &AilGraph {
         &self.0
     }
 

@@ -30,16 +30,16 @@ pub fn check_static_contracts(typed_graph: &TypedGraph) -> Vec<ContractError> {
     let graph = typed_graph.graph();
     let mut errors = Vec::new();
 
-    for node in graph.all_nodes() {
-        check_before_contracts(graph, node, &mut errors);
-        check_after_contracts(graph, node, &mut errors);
+    for node in graph.all_nodes_vec() {
+        check_before_contracts(graph, &node, &mut errors);
+        check_after_contracts(graph, &node, &mut errors);
 
         if node.pattern == Pattern::Raise {
-            check_raise_error_refs(graph, node, &mut errors);
+            check_raise_error_refs(graph, &node, &mut errors);
         }
 
         if node.pattern == Pattern::Do {
-            check_following_template_phases(graph, node, &mut errors);
+            check_following_template_phases(graph, &node, &mut errors);
         }
     }
 

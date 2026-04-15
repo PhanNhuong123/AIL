@@ -66,4 +66,3 @@ pub fn serve(
     let server = McpServer::new(project_root, initial);
     run_stdio_loop(&server)
 }
-

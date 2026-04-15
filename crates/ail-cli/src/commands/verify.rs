@@ -21,6 +21,7 @@ pub fn run_verify(root: &Path, _file: Option<&Path>) -> Result<(), CliError> {
     })?;
 
     let node_count = graph.node_count();
+    let edge_count = graph.edge_count();
 
     let valid = validate_graph(graph).map_err(|errs| CliError::Pipeline {
         errors: errs
@@ -29,8 +30,6 @@ pub fn run_verify(root: &Path, _file: Option<&Path>) -> Result<(), CliError> {
             .collect::<Vec<_>>()
             .join("\n"),
     })?;
-
-    let edge_count = valid.graph().edge_count();
 
     let typed = type_check(valid, &[]).map_err(|errs| CliError::Pipeline {
         errors: errs

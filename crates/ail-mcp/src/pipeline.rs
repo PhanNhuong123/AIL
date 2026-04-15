@@ -30,8 +30,8 @@ pub(crate) fn refresh_from_path(root: &Path) -> Result<ProjectContext, Vec<Strin
         .map_err(|errs| errs.iter().map(|e| e.to_string()).collect::<Vec<_>>())?;
 
     // ── 4. Contract verification ──────────────────────────────────────────────
-    let verified = verify(typed)
-        .map_err(|errs| errs.iter().map(|e| e.to_string()).collect::<Vec<_>>())?;
+    let verified =
+        verify(typed).map_err(|errs| errs.iter().map(|e| e.to_string()).collect::<Vec<_>>())?;
 
     Ok(ProjectContext::Verified(verified))
 }

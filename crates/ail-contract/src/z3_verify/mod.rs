@@ -38,7 +38,10 @@ mod tests;
 
 use std::collections::HashMap;
 
-use ail_graph::types::{NodeId, Pattern};
+use ail_graph::{
+    types::{NodeId, Pattern},
+    GraphBackend,
+};
 use ail_types::{parse_constraint_expr, ConstraintExpr, TypedGraph};
 
 use crate::errors::VerifyError;
@@ -58,7 +61,8 @@ pub fn verify_contracts(typed_graph: &TypedGraph) -> Vec<VerifyError> {
 
     // ── Collect all Do nodes ──────────────────────────────────────────────────
     let do_nodes: Vec<_> = graph
-        .all_nodes()
+        .all_nodes_vec()
+        .into_iter()
         .filter(|n| n.pattern == Pattern::Do)
         .collect();
 
@@ -124,13 +128,13 @@ pub fn verify_contracts(typed_graph: &TypedGraph) -> Vec<VerifyError> {
 
 // ── Internal helpers ──────────────────────────────────────────────────────────
 
-/// Compute the graph depth of `node_id` by walking `parent_of` to the root.
+/// Compute the graph depth of `node_id` by walking `parent` to the root.
 /// Returns 0 if the node is the root.
-fn compute_depth(node_id: NodeId, graph: &ail_graph::AilGraph) -> usize {
+fn compute_depth(node_id: NodeId, graph: &dyn GraphBackend) -> usize {
     let mut depth = 0;
     let mut cursor = node_id;
     // walk upward through Ev (structural parent) edges
-    while let Ok(Some(parent_id)) = graph.parent_of(cursor) {
+    while let Ok(Some(parent_id)) = graph.parent(cursor) {
         depth += 1;
         cursor = parent_id;
     }
@@ -141,16 +145,17 @@ fn compute_depth(node_id: NodeId, graph: &ail_graph::AilGraph) -> usize {
 /// `parent_id`. Non-Do children and unverified Do children are ignored.
 fn collect_child_posts(
     parent_id: NodeId,
-    graph: &ail_graph::AilGraph,
+    graph: &dyn GraphBackend,
     verified_posts: &HashMap<NodeId, Vec<ConstraintExpr>>,
 ) -> Vec<ConstraintExpr> {
-    let Ok(children) = graph.children_of(parent_id) else {
+    let Ok(children) = graph.children(parent_id) else {
         return Vec::new();
     };
 
     let mut posts = Vec::new();
     for child_id in children {
-        let Ok(child_node) = graph.get_node(child_id) else {
+        // AilGraph: never errors; SqliteGraph: degrade gracefully on missing node.
+        let Some(child_node) = graph.get_node(child_id).ok().flatten() else {
             continue;
         };
         if child_node.pattern != Pattern::Do {

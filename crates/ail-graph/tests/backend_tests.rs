@@ -57,7 +57,11 @@ fn t071_trait_update_node() {
 
     let fetched = GraphBackend::get_node(&g, id).unwrap().unwrap();
     assert_eq!(fetched.intent, "updated intent");
-    assert_eq!(GraphBackend::node_count(&g), 1, "update must not change count");
+    assert_eq!(
+        GraphBackend::node_count(&g),
+        1,
+        "update must not change count"
+    );
 }
 
 // ─── t071_trait_add_edge_creates_parent_child ─────────────────────────────────
@@ -236,8 +240,13 @@ fn t071_trait_find_by_pattern_filters_correctly() {
     expected.sort_by_key(|id| id.to_string());
     assert_eq!(do_ids, expected);
 
-    assert_eq!(GraphBackend::find_by_pattern(&g, Pattern::Define).unwrap(), vec![def]);
-    assert!(GraphBackend::find_by_pattern(&g, Pattern::Describe).unwrap().is_empty());
+    assert_eq!(
+        GraphBackend::find_by_pattern(&g, Pattern::Define).unwrap(),
+        vec![def]
+    );
+    assert!(GraphBackend::find_by_pattern(&g, Pattern::Describe)
+        .unwrap()
+        .is_empty());
 }
 
 // ─── t071_trait_find_by_name_returns_matches ──────────────────────────────────
@@ -255,7 +264,9 @@ fn t071_trait_find_by_name_returns_matches() {
     expected.sort_by_key(|id| id.to_string());
     assert_eq!(found, expected);
 
-    assert!(GraphBackend::find_by_name(&g, "nonexistent").unwrap().is_empty());
+    assert!(GraphBackend::find_by_name(&g, "nonexistent")
+        .unwrap()
+        .is_empty());
 }
 
 // ─── t071_trait_root_nodes_excludes_children ──────────────────────────────────

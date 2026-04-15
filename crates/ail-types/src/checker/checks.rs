@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use ail_graph::{AilGraph, ContextPacket, NodeId, Pattern};
+use ail_graph::{ContextPacket, GraphBackend, NodeId, Pattern};
 
 use crate::errors::TypeError;
 use crate::expr::parse_constraint_expr;
@@ -17,8 +17,8 @@ use super::resolver::{find_type_node_by_name, resolve_type_ref};
 /// `metadata.carries[*].type_ref`.
 ///
 /// Emits [`TypeError::UndefinedType`] for each string that does not resolve.
-pub(super) fn check_all_node_type_refs(graph: &AilGraph, errors: &mut Vec<TypeError>) {
-    for node in graph.all_nodes() {
+pub(super) fn check_all_node_type_refs(graph: &dyn GraphBackend, errors: &mut Vec<TypeError>) {
+    for node in graph.all_nodes_vec() {
         let id = node.id;
 
         for param in &node.metadata.params {
@@ -84,14 +84,14 @@ pub(super) fn check_all_node_type_refs(graph: &AilGraph, errors: &mut Vec<TypeEr
 /// Note: leaf node `expression` fields (value expressions like
 /// `sender.balance - amount`) are not checked here — that is Phase 3 scope.
 pub(super) fn check_contract_field_access(
-    graph: &AilGraph,
+    graph: &dyn GraphBackend,
     packets: &[ContextPacket],
     errors: &mut Vec<TypeError>,
 ) {
     let packet_by_node: HashMap<NodeId, &ContextPacket> =
         packets.iter().map(|p| (p.node_id, p)).collect();
 
-    for node in graph.all_nodes() {
+    for node in graph.all_nodes_vec() {
         let Some(packet) = packet_by_node.get(&node.id) else {
             // No packet for this node — skip field-access checks.
             continue;
@@ -126,7 +126,7 @@ pub(super) fn check_contract_field_access(
 fn collect_constraint_field_errors(
     expr: &ConstraintExpr,
     scope_type: &HashMap<&str, &str>,
-    graph: &AilGraph,
+    graph: &dyn GraphBackend,
     node_id: NodeId,
     errors: &mut Vec<TypeError>,
 ) {
@@ -164,7 +164,7 @@ fn collect_constraint_field_errors(
 fn collect_value_field_errors(
     expr: &ValueExpr,
     scope_type: &HashMap<&str, &str>,
-    graph: &AilGraph,
+    graph: &dyn GraphBackend,
     node_id: NodeId,
     errors: &mut Vec<TypeError>,
 ) {
@@ -208,7 +208,7 @@ fn collect_value_field_errors(
 fn check_ref_chain(
     parts: &[String],
     scope_type: &HashMap<&str, &str>,
-    graph: &AilGraph,
+    graph: &dyn GraphBackend,
     node_id: NodeId,
     errors: &mut Vec<TypeError>,
 ) {
@@ -233,7 +233,7 @@ fn check_ref_chain(
 fn resolve_field_chain(
     remaining_parts: &[String],
     current_type_ref: &str,
-    graph: &AilGraph,
+    graph: &dyn GraphBackend,
     node_id: NodeId,
     errors: &mut Vec<TypeError>,
 ) {
@@ -253,7 +253,8 @@ fn resolve_field_chain(
         return;
     };
 
-    let Ok(type_node) = graph.get_node(type_node_id) else {
+    // AilGraph: never errors; SqliteGraph: degrade gracefully on missing node.
+    let Some(type_node) = graph.get_node(type_node_id).ok().flatten() else {
         return;
     };
 
@@ -306,7 +307,7 @@ fn resolve_field_chain(
 /// TODO(phase-3): replace string equality with Z3-backed subtype check.
 /// See AIL-Rules §5: "Same base + source constraints imply target constraints → subtype."
 pub(super) fn check_data_flow_types(
-    graph: &AilGraph,
+    graph: &dyn GraphBackend,
     packets: &[ContextPacket],
     errors: &mut Vec<TypeError>,
 ) {
@@ -339,7 +340,8 @@ pub(super) fn check_data_flow_types(
         };
 
         // Compare node output type vs must_produce.
-        let Ok(node) = graph.get_node(node_id) else {
+        // AilGraph: never errors; SqliteGraph: degrade gracefully on missing node.
+        let Some(node) = graph.get_node(node_id).ok().flatten() else {
             continue;
         };
         let Some(return_type) = &node.metadata.return_type else {
@@ -379,21 +381,22 @@ pub(super) fn check_data_flow_types(
 /// (parser) creates Ed edges for function calls. Absence of Ed edges is not
 /// an error — `type_check` can be re-run after parsing to catch mismatches.
 pub(super) fn check_do_param_types_from_ed_edges(
-    graph: &AilGraph,
+    graph: &dyn GraphBackend,
     packets: &[ContextPacket],
     errors: &mut Vec<TypeError>,
 ) {
     let packet_by_node: HashMap<NodeId, &ContextPacket> =
         packets.iter().map(|p| (p.node_id, p)).collect();
 
-    for node in graph.all_nodes() {
+    for node in graph.all_nodes_vec() {
         let caller_id = node.id;
-        let Ok(refs) = graph.outgoing_diagonal_refs_of(caller_id) else {
+        let Ok(refs) = graph.outgoing_diagonal_refs(caller_id) else {
             continue;
         };
 
         for callee_id in refs {
-            let Ok(callee) = graph.get_node(callee_id) else {
+            // AilGraph: never errors; SqliteGraph: degrade gracefully on missing node.
+            let Some(callee) = graph.get_node(callee_id).ok().flatten() else {
                 continue;
             };
             if !matches!(callee.pattern, Pattern::Do) {

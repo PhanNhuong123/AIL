@@ -30,13 +30,15 @@ pub(crate) fn emit_test_file(
 
     // Collect top-level Do nodes that have at least one contract.
     let fn_nodes: Vec<_> = graph
-        .all_nodes()
+        .all_nodes_vec()
+        .into_iter()
         .filter(|n| n.pattern == Pattern::Do)
         .filter(|n| {
             let parent_pattern = graph
-                .parent_of(n.id)
-                .unwrap_or(None)
-                .and_then(|pid| graph.get_node(pid).ok())
+                .parent(n.id)
+                .ok()
+                .flatten()
+                .and_then(|pid| graph.get_node(pid).ok().flatten())
                 .map(|p| p.pattern.clone());
             parent_pattern != Some(Pattern::Do)
         })
@@ -169,8 +171,12 @@ mod tests {
         extra_contracts: Vec<(ContractKind, &str)>,
     ) -> Node {
         // Validation requires at least one Before and one After on every Do node.
-        let has_before = extra_contracts.iter().any(|(k, _)| *k == ContractKind::Before);
-        let has_after = extra_contracts.iter().any(|(k, _)| *k == ContractKind::After);
+        let has_before = extra_contracts
+            .iter()
+            .any(|(k, _)| *k == ContractKind::Before);
+        let has_after = extra_contracts
+            .iter()
+            .any(|(k, _)| *k == ContractKind::After);
 
         let mut contracts: Vec<Contract> = extra_contracts
             .into_iter()
@@ -294,11 +300,8 @@ mod tests {
 
     #[test]
     fn test_gen_after_contract_stub() {
-        let do_node = make_do_with_contracts(
-            "pay",
-            vec![],
-            vec![(ContractKind::After, "result > 0")],
-        );
+        let do_node =
+            make_do_with_contracts("pay", vec![], vec![(ContractKind::After, "result > 0")]);
         let verified = build_verified(do_node);
         let config = EmitConfig::default();
         let file = emit_test_file(&verified, &config).unwrap();

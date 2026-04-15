@@ -14,12 +14,9 @@ use ail_graph::Bm25Index;
 use crate::context::ProjectContext;
 use crate::tools::{build, context, search, status, verify};
 use crate::types::protocol::{
-    JsonRpcError, JsonRpcRequest, JsonRpcResponse, INTERNAL_ERROR, INVALID_PARAMS,
-    METHOD_NOT_FOUND,
+    JsonRpcError, JsonRpcRequest, JsonRpcResponse, INTERNAL_ERROR, INVALID_PARAMS, METHOD_NOT_FOUND,
 };
-use crate::types::tool_io::{
-    BuildInput, ContextInput, SearchInput, VerifyInput,
-};
+use crate::types::tool_io::{BuildInput, ContextInput, SearchInput, VerifyInput};
 
 /// The MCP server.
 ///

@@ -1,7 +1,8 @@
 use std::collections::HashSet;
 
 use ail_graph::cic::ScopeVariableKind;
-use ail_graph::graph::AilGraph;
+use ail_graph::compute_context_packet_for_backend;
+use ail_graph::graph::GraphBackend;
 use ail_graph::types::{ContractKind, Node, NodeId};
 use ail_types::parse_constraint_expr;
 
@@ -19,7 +20,7 @@ use super::scope::collect_top_level_refs;
 /// - Internal bindings (Let, Fetch, ForEach loop variables) are
 ///   implementation details and must not appear in after-contracts.
 pub(crate) fn check_after_contracts(
-    graph: &AilGraph,
+    graph: &dyn GraphBackend,
     node: &Node,
     errors: &mut Vec<ContractError>,
 ) {
@@ -68,9 +69,8 @@ pub(crate) fn check_after_contracts(
 /// Allowed: declared input parameters + the special name `"result"`.
 /// Excluded: internal bindings (Let/Fetch/ForEach) which are implementation
 /// details not part of the stable observable interface.
-fn build_after_allowed_set(graph: &AilGraph, node_id: NodeId) -> HashSet<String> {
-    let mut allowed: HashSet<String> = graph
-        .compute_context_packet(node_id)
+fn build_after_allowed_set(graph: &dyn GraphBackend, node_id: NodeId) -> HashSet<String> {
+    let mut allowed: HashSet<String> = compute_context_packet_for_backend(graph, node_id)
         .map(|packet| {
             packet
                 .scope

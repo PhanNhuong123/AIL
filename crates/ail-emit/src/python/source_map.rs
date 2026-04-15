@@ -51,14 +51,16 @@ struct ContractEntry {
 pub(crate) fn emit_source_map(verified: &VerifiedGraph) -> Option<EmittedFile> {
     let graph = verified.graph();
 
-    let functions: Vec<FunctionEntry> = graph
-        .all_nodes()
+    let all_nodes = graph.all_nodes_vec();
+    let functions: Vec<FunctionEntry> = all_nodes
+        .into_iter()
         .filter(|n| n.pattern == Pattern::Do)
         .filter(|n| {
             let parent_pattern = graph
-                .parent_of(n.id)
-                .unwrap_or(None)
-                .and_then(|pid| graph.get_node(pid).ok())
+                .parent(n.id)
+                .ok()
+                .flatten()
+                .and_then(|pid| graph.get_node(pid).ok().flatten())
                 .map(|p| p.pattern.clone());
             parent_pattern != Some(Pattern::Do)
         })
@@ -246,8 +248,7 @@ mod tests {
 
     #[test]
     fn source_map_version_is_1_0() {
-        let verified =
-            build_verified_with_do("foo", vec![(ContractKind::Before, "true == true")]);
+        let verified = build_verified_with_do("foo", vec![(ContractKind::Before, "true == true")]);
         let file = emit_source_map(&verified).unwrap();
         assert!(file.content.contains("\"version\": \"1.0\""));
     }

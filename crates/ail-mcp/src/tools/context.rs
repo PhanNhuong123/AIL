@@ -5,9 +5,7 @@
 
 use ail_graph::{AilGraph, Bm25Index, NodeId};
 
-use crate::types::tool_io::{
-    ContextInput, ContextNode, ContextOutput, ContextSummary, ScopeEntry,
-};
+use crate::types::tool_io::{ContextInput, ContextNode, ContextOutput, ContextSummary, ScopeEntry};
 
 /// Approximate words in a JSON-serialised [`ContextOutput`], used for budget
 /// capping.  We use a rough 1-word = 6-byte heuristic on the serialised form.
@@ -35,8 +33,8 @@ pub(crate) fn run_context(graph: &AilGraph, input: &ContextInput) -> ContextOutp
     let candidates = index.search(&input.task, CANDIDATE_BUDGET, graph);
 
     // ── 2. Rank + split ──────────────────────────────────────────────────────
-    let n_primary = (candidates.len() * PRIMARY_FRACTION_NUMERATOR)
-        .div_ceil(PRIMARY_FRACTION_DENOMINATOR);
+    let n_primary =
+        (candidates.len() * PRIMARY_FRACTION_NUMERATOR).div_ceil(PRIMARY_FRACTION_DENOMINATOR);
     let (primary_raw, secondary_raw) = candidates.split_at(n_primary.min(candidates.len()));
 
     // ── 3. Expand primary nodes to full CIC packets ──────────────────────────
@@ -55,8 +53,7 @@ pub(crate) fn run_context(graph: &AilGraph, input: &ContextInput) -> ContextOutp
         .collect();
 
     // Rough cap: serialize what we have so far and trim secondary.
-    let primary_json =
-        serde_json::to_string(&primary).unwrap_or_default();
+    let primary_json = serde_json::to_string(&primary).unwrap_or_default();
     let mut used = approx_words(&primary_json);
     secondary.retain(|s| {
         let w = approx_words(&s.intent) + 4; // node_id + fields overhead

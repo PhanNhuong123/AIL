@@ -178,6 +178,9 @@ mod tests {
         let rendered = imports.render();
         let runtime_pos = rendered.find("from ail_runtime import").unwrap();
         let types_pos = rendered.find("from .types import").unwrap();
-        assert!(types_pos > runtime_pos, "cross-file import must come after ail_runtime import");
+        assert!(
+            types_pos > runtime_pos,
+            "cross-file import must come after ail_runtime import"
+        );
     }
 }

@@ -1,7 +1,8 @@
 use std::collections::HashSet;
 
 use ail_graph::cic::ScopeVariableKind;
-use ail_graph::graph::AilGraph;
+use ail_graph::compute_context_packet_for_backend;
+use ail_graph::graph::GraphBackend;
 use ail_graph::types::{ContractKind, Node};
 use ail_types::parse_constraint_expr;
 
@@ -17,7 +18,7 @@ use super::scope::{check_has_old, collect_top_level_refs};
 /// - All direct variable references must be declared input parameters of the
 ///   nearest enclosing `Do` node (resolved via the CIC context packet).
 pub(crate) fn check_before_contracts(
-    graph: &AilGraph,
+    graph: &dyn GraphBackend,
     node: &Node,
     errors: &mut Vec<ContractError>,
 ) {
@@ -79,9 +80,11 @@ pub(crate) fn check_before_contracts(
 /// Only `ScopeVariableKind::Parameter` variables are included: before-contracts
 /// run before the function body, so no internal bindings (Let/Fetch/Loop)
 /// exist yet.
-fn build_parameter_scope(graph: &AilGraph, node_id: ail_graph::types::NodeId) -> HashSet<String> {
-    graph
-        .compute_context_packet(node_id)
+fn build_parameter_scope(
+    graph: &dyn GraphBackend,
+    node_id: ail_graph::types::NodeId,
+) -> HashSet<String> {
+    compute_context_packet_for_backend(graph, node_id)
         .map(|packet| {
             packet
                 .scope

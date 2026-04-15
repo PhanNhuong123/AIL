@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use ail_graph::{AilGraph, Node, NodeId, Pattern};
+use ail_graph::{GraphBackend, Node, NodeId, Pattern};
 
 use crate::constants::PYTHON_INDENT;
 use crate::errors::EmitError;
@@ -63,7 +63,7 @@ pub(crate) fn slugify_name(intent: &str) -> String {
 ///     {body}
 /// ```
 pub(crate) fn emit_do_function(
-    graph: &AilGraph,
+    graph: &dyn GraphBackend,
     node: &Node,
     config: &EmitConfig,
     imports: &mut ImportSet,
@@ -105,8 +105,7 @@ pub(crate) fn emit_do_function(
     ];
 
     // Collect old() snapshot assignments for after-contracts.
-    let old_refs = collect_old_refs(node.id, &node.contracts)
-        .map_err(|e| vec![e])?;
+    let old_refs = collect_old_refs(node.id, &node.contracts).map_err(|e| vec![e])?;
     for (snapshot_name, source_expr) in &old_refs {
         lines.push(format!("{PYTHON_INDENT}{snapshot_name} = {source_expr}"));
     }
@@ -185,7 +184,7 @@ pub(crate) fn emit_do_function(
 /// This is the public variant used by block emitters that do not carry `following`
 /// template refs. It delegates to `emit_do_body_phased` with an empty phase-marker set.
 pub(crate) fn emit_do_body(
-    graph: &AilGraph,
+    graph: &dyn GraphBackend,
     children: &[NodeId],
     indent_level: usize,
     config: &EmitConfig,
@@ -212,7 +211,7 @@ pub(crate) fn emit_do_body(
 /// (at this indent level and all nested depths — except inside `together` blocks).
 #[allow(clippy::too_many_arguments)]
 fn emit_do_body_phased(
-    graph: &AilGraph,
+    graph: &dyn GraphBackend,
     parent_node_id: NodeId,
     children: &[NodeId],
     indent_level: usize,
@@ -227,11 +226,12 @@ fn emit_do_body_phased(
     let mut seen_phases: HashSet<String> = HashSet::new();
 
     for &child_id in children {
-        let child = match graph.get_node(child_id) {
-            Ok(n) => n,
+        let child_owned = match graph.get_node(child_id).ok().flatten() {
+            Some(n) => n,
             // Logically impossible in a VerifiedGraph.
-            Err(_) => continue,
+            None => continue,
         };
+        let child = &child_owned;
 
         // Inject phase separator comment before matching children.
         if let Some(ref name) = child.metadata.name {
@@ -278,7 +278,14 @@ fn emit_do_body_phased(
             },
 
             Pattern::ForEach => {
-                match emit_foreach_block(graph, child, indent_level, config, imports, after_contracts) {
+                match emit_foreach_block(
+                    graph,
+                    child,
+                    indent_level,
+                    config,
+                    imports,
+                    after_contracts,
+                ) {
                     Ok(block_lines) => lines.extend(block_lines),
                     Err(errs) => errors.extend(errs),
                 }
@@ -337,7 +344,8 @@ fn emit_do_body_phased(
             }
 
             Pattern::Retry => {
-                match emit_retry_block(graph, child, indent_level, config, imports, after_contracts) {
+                match emit_retry_block(graph, child, indent_level, config, imports, after_contracts)
+                {
                     Ok(block_lines) => lines.extend(block_lines),
                     Err(errs) => errors.extend(errs),
                 }
@@ -375,7 +383,7 @@ fn emit_do_body_phased(
 /// `after_contracts` are threaded through so returns inside the loop body
 /// also receive after-contract injection.
 fn emit_foreach_block(
-    graph: &AilGraph,
+    graph: &dyn GraphBackend,
     node: &Node,
     indent_level: usize,
     config: &EmitConfig,
@@ -397,7 +405,14 @@ fn emit_foreach_block(
     let mut lines = vec![format!("{indent}for {var_name} in {collection}:")];
 
     if let Some(children) = &node.children {
-        match emit_do_body(graph, children, indent_level + 1, config, imports, after_contracts) {
+        match emit_do_body(
+            graph,
+            children,
+            indent_level + 1,
+            config,
+            imports,
+            after_contracts,
+        ) {
             Ok(body) => {
                 if body.is_empty() {
                     let inner = PYTHON_INDENT.repeat(indent_level + 1);
@@ -423,7 +438,7 @@ fn emit_foreach_block(
 /// documented limitation). After-contracts are injected at the enclosing
 /// function's return point instead.
 fn emit_together_block(
-    graph: &AilGraph,
+    graph: &dyn GraphBackend,
     node: &Node,
     indent_level: usize,
     config: &EmitConfig,
@@ -436,7 +451,10 @@ fn emit_together_block(
 
     let mut lines = vec![format!("{indent}async with transaction():")];
 
-    let async_config = EmitConfig { async_mode: true, ..Default::default() };
+    let async_config = EmitConfig {
+        async_mode: true,
+        ..Default::default()
+    };
     let effective_config = if config.async_mode {
         config
     } else {
@@ -445,7 +463,14 @@ fn emit_together_block(
 
     if let Some(children) = &node.children {
         // &[] — do not inject after-contracts inside a transaction block.
-        match emit_do_body(graph, children, indent_level + 1, effective_config, imports, &[]) {
+        match emit_do_body(
+            graph,
+            children,
+            indent_level + 1,
+            effective_config,
+            imports,
+            &[],
+        ) {
             Ok(body) => {
                 if body.is_empty() {
                     let inner = PYTHON_INDENT.repeat(indent_level + 1);
@@ -469,7 +494,7 @@ fn emit_together_block(
 /// `after_contracts` are threaded through so returns inside the retry body
 /// also receive after-contract injection.
 fn emit_retry_block(
-    graph: &AilGraph,
+    graph: &dyn GraphBackend,
     node: &Node,
     indent_level: usize,
     config: &EmitConfig,
@@ -516,7 +541,14 @@ fn emit_retry_block(
     ];
 
     if let Some(children) = &node.children {
-        match emit_do_body(graph, children, indent_level + 2, config, imports, after_contracts) {
+        match emit_do_body(
+            graph,
+            children,
+            indent_level + 2,
+            config,
+            imports,
+            after_contracts,
+        ) {
             Ok(body) => {
                 if body.is_empty() {
                     lines.push(format!("{i2}pass"));
@@ -635,7 +667,10 @@ mod tests {
         graph.add_edge(root_id, do_id, EdgeKind::Ev).unwrap();
 
         let do_node_ref = graph.get_node(do_id).unwrap();
-        let config = EmitConfig { async_mode: false, ..Default::default() };
+        let config = EmitConfig {
+            async_mode: false,
+            ..Default::default()
+        };
         let mut imports = ImportSet::new();
         let result = emit_do_function(&graph, do_node_ref, &config, &mut imports).unwrap();
 
@@ -668,7 +703,10 @@ mod tests {
         graph.add_edge(root_id, do_id, EdgeKind::Ev).unwrap();
 
         let do_node_ref = graph.get_node(do_id).unwrap();
-        let config = EmitConfig { async_mode: true, ..Default::default() };
+        let config = EmitConfig {
+            async_mode: true,
+            ..Default::default()
+        };
         let mut imports = ImportSet::new();
         let result = emit_do_function(&graph, do_node_ref, &config, &mut imports).unwrap();
 
@@ -697,7 +735,10 @@ mod tests {
         graph.add_edge(root_id, do_id, EdgeKind::Ev).unwrap();
 
         let do_node_ref = graph.get_node(do_id).unwrap();
-        let config = EmitConfig { async_mode: false, ..Default::default() };
+        let config = EmitConfig {
+            async_mode: false,
+            ..Default::default()
+        };
         let mut imports = ImportSet::new();
         let result = emit_do_function(&graph, do_node_ref, &config, &mut imports).unwrap();
 
@@ -730,7 +771,10 @@ mod tests {
         graph.add_edge(root_id, do_id, EdgeKind::Ev).unwrap();
 
         let do_node_ref = graph.get_node(do_id).unwrap();
-        let config = EmitConfig { async_mode: false, ..Default::default() };
+        let config = EmitConfig {
+            async_mode: false,
+            ..Default::default()
+        };
         let mut imports = ImportSet::new();
         let result = emit_do_function(&graph, do_node_ref, &config, &mut imports).unwrap();
 
