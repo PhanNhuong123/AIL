@@ -45,9 +45,11 @@ mod index;
 pub use errors::SearchError;
 pub use hybrid::{hybrid_search, HybridSearchResult, RankingSource};
 pub use index::{cosine_similarity, node_embedding_text, EmbeddingIndex, SemanticResult};
-pub use provider::EmbeddingProvider;
+pub use provider::{EmbeddingProvider, SearchProviderConfig};
 
 #[cfg(feature = "embeddings")]
 pub use provider::OnnxEmbeddingProvider;
 #[cfg(feature = "embeddings")]
 pub use provider::DEFAULT_MODEL_NAME;
+#[cfg(feature = "embeddings")]
+pub use provider::ONNX_DIMENSION;

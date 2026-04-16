@@ -8,6 +8,7 @@ use std::cell::RefCell;
 use std::path::Path;
 
 use ail_graph::Bm25Index;
+use ail_search::EmbeddingIndex;
 
 use crate::context::ProjectContext;
 use crate::pipeline::refresh_from_path;
@@ -22,12 +23,14 @@ pub(crate) fn run_verify(
     project_root: &Path,
     context: &RefCell<ProjectContext>,
     search_cache: &RefCell<Option<Bm25Index>>,
+    embedding_cache: &RefCell<Option<EmbeddingIndex>>,
     _input: &VerifyInput, // `file` hint ignored in v0.1; always verifies whole project
 ) -> VerifyOutput {
     match refresh_from_path(project_root) {
         Ok(new_ctx) => {
             *context.borrow_mut() = new_ctx;
-            *search_cache.borrow_mut() = None; // invalidate stale index
+            *search_cache.borrow_mut() = None; // invalidate stale BM25 index
+            *embedding_cache.borrow_mut() = None; // invalidate stale embeddings
             VerifyOutput {
                 ok: true,
                 errors: Vec::new(),

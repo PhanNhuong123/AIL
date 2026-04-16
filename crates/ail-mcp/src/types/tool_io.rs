@@ -23,10 +23,20 @@ pub struct SearchOutput {
 #[derive(Debug, Serialize)]
 pub struct SearchItem {
     pub node_id: String,
+    /// BM25 or RRF score as f32 — kept for backward compatibility.
     pub score: f32,
     pub intent: String,
     pub pattern: String,
     pub path: Vec<String>,
+    // Ranking provenance — populated by hybrid_search (Phase 10 gap closure).
+    /// Ranking source: `"bm25_only"`, `"semantic_only"`, or `"both"`.
+    pub source: String,
+    /// Combined RRF score (1/60+rank+1 across sources). Equals `score as f64`.
+    pub rrf_score: f64,
+    /// 0-based rank in the BM25 result list, or `None` if not a BM25 hit.
+    pub bm25_rank: Option<usize>,
+    /// 0-based rank in the semantic result list, or `None` if not a semantic hit.
+    pub semantic_rank: Option<usize>,
 }
 
 // ── ail.context ──────────────────────────────────────────────────────────────

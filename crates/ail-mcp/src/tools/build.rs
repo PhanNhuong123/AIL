@@ -8,6 +8,7 @@ use std::path::Path;
 
 use ail_emit::{emit_function_definitions, emit_type_definitions, ContractMode, EmitConfig};
 use ail_graph::Bm25Index;
+use ail_search::EmbeddingIndex;
 
 use crate::context::ProjectContext;
 use crate::pipeline::refresh_from_path;
@@ -21,6 +22,7 @@ pub(crate) fn run_build(
     project_root: &Path,
     context: &RefCell<ProjectContext>,
     search_cache: &RefCell<Option<Bm25Index>>,
+    embedding_cache: &RefCell<Option<EmbeddingIndex>>,
     input: &BuildInput,
 ) -> BuildOutput {
     // Ensure the context is Verified (refresh if needed).
@@ -29,6 +31,7 @@ pub(crate) fn run_build(
             Ok(new_ctx) => {
                 *context.borrow_mut() = new_ctx;
                 *search_cache.borrow_mut() = None;
+                *embedding_cache.borrow_mut() = None;
             }
             Err(errors) => {
                 return BuildOutput {

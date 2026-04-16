@@ -11,6 +11,11 @@ path = "src/lib.rs"
 name = "ail"
 path = "src/main.rs"
 
+[features]
+# Enable `ail reindex --embeddings`: loads and runs the local ONNX model to
+# build the embedding index stored in `.ail.db`.
+embeddings = ["dep:ail-search", "ail-search/embeddings"]
+
 [dependencies]
 ail-graph    = { workspace = true }
 ail-types    = { workspace = true }
@@ -19,6 +24,7 @@ ail-text     = { workspace = true }
 ail-emit     = { workspace = true }
 ail-mcp      = { workspace = true }
 ail-db       = { workspace = true }
+ail-search   = { workspace = true, optional = true }
 clap         = { workspace = true }
 thiserror    = { workspace = true }
 miette       = { workspace = true }

@@ -18,7 +18,9 @@ pub use commands::{
     migrate::{
         migrate_graph, run_export, run_migrate, run_verify_graph, MigrationReport, VerifyResult,
     },
+    reindex::run_reindex,
     run_cmd::run_run,
+    search::run_search,
     serve::run_serve,
     status::run_status,
     test_cmd::run_test,
@@ -65,6 +67,16 @@ pub fn run() -> Result<(), CliError> {
         Command::Serve => run_serve(&cwd),
 
         Command::Status => run_status(&cwd),
+
+        Command::Search {
+            query,
+            budget,
+            setup,
+            semantic,
+            bm25_only,
+        } => run_search(&cwd, query.as_deref(), budget, setup, semantic, bm25_only),
+
+        Command::Reindex { embeddings } => run_reindex(&cwd, embeddings),
 
         Command::Migrate { from, to, verify } => run_migrate(&from, &to, verify),
 
@@ -133,6 +145,35 @@ pub enum Command {
 
     /// Show the highest pipeline stage reached and node/edge counts.
     Status,
+
+    /// Set up or run semantic search for the current project.
+    Search {
+        /// Query string. Omit when using --setup.
+        query: Option<String>,
+
+        /// Maximum number of results to return.
+        #[arg(long, default_value_t = 20)]
+        budget: usize,
+
+        /// Verify the embedding model directory and print setup instructions.
+        #[arg(long)]
+        setup: bool,
+
+        /// Use hybrid (BM25 + semantic) search with ONNX embeddings.
+        #[arg(long)]
+        semantic: bool,
+
+        /// Use BM25 keyword search only (no semantic ranking).
+        #[arg(long)]
+        bm25_only: bool,
+    },
+
+    /// Rebuild the embedding index for the current project database.
+    Reindex {
+        /// Clear and rebuild embedding vectors (requires model files at ~/.ail/models/).
+        #[arg(long)]
+        embeddings: bool,
+    },
 
     /// Migrate a filesystem `.ail` project to a `.ail.db` SQLite database.
     Migrate {

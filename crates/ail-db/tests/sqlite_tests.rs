@@ -1481,3 +1481,225 @@ fn t103_incremental_update_on_node_change() {
     // Only one row — INSERT OR REPLACE, not a second row.
     assert_eq!(db.embedding_count().unwrap(), 1);
 }
+
+/// save_embedding writes the embedding_model meta key.
+#[test]
+fn t103_save_embedding_sets_embedding_model_meta() {
+    let (_guard, mut db) = fresh_db();
+    let n = make_do("meta check");
+    let nid = n.id;
+    GraphBackend::add_node(&mut db, n).unwrap();
+
+    db.save_embedding(&nid, &[1.0_f32, 2.0], "test/model-a")
+        .unwrap();
+
+    assert_eq!(
+        db.get_meta("embedding_model").unwrap().as_deref(),
+        Some("test/model-a")
+    );
+}
+
+/// Embedding model meta persists across compatibility checks.
+#[test]
+fn t103_save_embedding_meta_persists_across_check() {
+    let (_guard, mut db) = fresh_db();
+    let n = make_do("persist check");
+    let nid = n.id;
+    GraphBackend::add_node(&mut db, n).unwrap();
+
+    db.save_embedding(&nid, &[1.0_f32, 2.0, 3.0], "onnx/all-MiniLM-L6-v2")
+        .unwrap();
+
+    assert_eq!(
+        db.check_embedding_model("onnx/all-MiniLM-L6-v2").unwrap(),
+        EmbeddingModelStatus::Compatible
+    );
+    // Second call must still be Compatible (meta not consumed).
+    assert_eq!(
+        db.check_embedding_model("onnx/all-MiniLM-L6-v2").unwrap(),
+        EmbeddingModelStatus::Compatible
+    );
+}
+
+/// save_embedding writes all four extended metadata keys.
+#[test]
+fn t103_save_embedding_writes_extended_metadata() {
+    let (_guard, mut db) = fresh_db();
+    let n = make_do("extended meta");
+    let nid = n.id;
+    GraphBackend::add_node(&mut db, n).unwrap();
+
+    db.save_embedding(&nid, &[1.0_f32, 2.0, 3.0], "onnx/all-MiniLM-L6-v2")
+        .unwrap();
+
+    assert_eq!(
+        db.get_meta("embedding_model").unwrap().as_deref(),
+        Some("onnx/all-MiniLM-L6-v2")
+    );
+    assert_eq!(
+        db.get_meta("embedding_provider").unwrap().as_deref(),
+        Some("onnx")
+    );
+    assert_eq!(
+        db.get_meta("embedding_dimensions").unwrap().as_deref(),
+        Some("3")
+    );
+    assert_eq!(
+        db.get_meta("embedding_index_version").unwrap().as_deref(),
+        Some("1")
+    );
+}
+
+/// save_embeddings_bulk writes all four extended metadata keys.
+#[test]
+fn t103_bulk_save_writes_extended_metadata() {
+    let (_guard, mut db) = fresh_db();
+    let n = make_do("bulk meta");
+    let nid = n.id;
+    GraphBackend::add_node(&mut db, n).unwrap();
+
+    db.save_embeddings_bulk(&[(nid, vec![1.0_f32, 2.0, 3.0])], "onnx/all-MiniLM-L6-v2")
+        .unwrap();
+
+    assert_eq!(
+        db.get_meta("embedding_model").unwrap().as_deref(),
+        Some("onnx/all-MiniLM-L6-v2")
+    );
+    assert_eq!(
+        db.get_meta("embedding_provider").unwrap().as_deref(),
+        Some("onnx")
+    );
+    assert_eq!(
+        db.get_meta("embedding_dimensions").unwrap().as_deref(),
+        Some("3")
+    );
+    assert_eq!(
+        db.get_meta("embedding_index_version").unwrap().as_deref(),
+        Some("1")
+    );
+}
+
+/// check_embedding_metadata detects provider and dimension mismatches.
+#[test]
+fn t103_check_embedding_metadata_detects_provider_mismatch() {
+    let (_guard, mut db) = fresh_db();
+    let n = make_do("provider check");
+    let nid = n.id;
+    GraphBackend::add_node(&mut db, n).unwrap();
+
+    db.save_embedding(&nid, &[1.0_f32, 2.0, 3.0], "onnx/all-MiniLM-L6-v2")
+        .unwrap();
+
+    // Same model, same provider, same dims → Compatible.
+    assert_eq!(
+        db.check_embedding_metadata("onnx/all-MiniLM-L6-v2", "onnx", 3)
+            .unwrap(),
+        EmbeddingModelStatus::Compatible
+    );
+
+    // Same model but wrong provider → Changed.
+    match db
+        .check_embedding_metadata("onnx/all-MiniLM-L6-v2", "openai", 3)
+        .unwrap()
+    {
+        EmbeddingModelStatus::Changed { stored } => {
+            assert!(stored.contains("onnx"), "should mention stored provider");
+        }
+        other => panic!("expected Changed for provider mismatch, got {:?}", other),
+    }
+
+    // Same model but wrong dimensions → Changed.
+    match db
+        .check_embedding_metadata("onnx/all-MiniLM-L6-v2", "onnx", 768)
+        .unwrap()
+    {
+        EmbeddingModelStatus::Changed { stored } => {
+            assert!(stored.contains("3"), "should mention stored dimensions");
+        }
+        other => panic!("expected Changed for dimension mismatch, got {:?}", other),
+    }
+}
+
+/// clear_embeddings removes all four extended metadata keys.
+#[test]
+fn t103_clear_embeddings_removes_extended_metadata() {
+    let (_guard, mut db) = fresh_db();
+    let n = make_do("clear meta node");
+    let nid = n.id;
+    GraphBackend::add_node(&mut db, n).unwrap();
+
+    db.save_embedding(&nid, &[1.0_f32], "test/v1").unwrap();
+    assert!(db.get_meta("embedding_provider").unwrap().is_some());
+
+    db.clear_embeddings().unwrap();
+
+    assert!(db.get_meta("embedding_model").unwrap().is_none());
+    assert!(db.get_meta("embedding_provider").unwrap().is_none());
+    assert!(db.get_meta("embedding_dimensions").unwrap().is_none());
+    assert!(db.get_meta("embedding_index_version").unwrap().is_none());
+}
+
+/// Bulk save rejects vectors with inconsistent dimensions.
+#[test]
+fn t103_bulk_save_rejects_dimension_mismatch() {
+    let (_guard, mut db) = fresh_db();
+    let n1 = make_do("dim check 1");
+    let n2 = make_do("dim check 2");
+    let id1 = n1.id;
+    let id2 = n2.id;
+    GraphBackend::add_node(&mut db, n1).unwrap();
+    GraphBackend::add_node(&mut db, n2).unwrap();
+
+    let result = db.save_embeddings_bulk(
+        &[(id1, vec![1.0_f32, 2.0, 3.0]), (id2, vec![4.0, 5.0])],
+        "test/model-a",
+    );
+    assert!(result.is_err());
+    let msg = result.unwrap_err().to_string();
+    assert!(msg.contains("dimension mismatch"), "error message: {msg}");
+
+    // No partial writes — embedding count must be 0.
+    assert_eq!(db.embedding_count().unwrap(), 0);
+}
+
+/// Missing metadata keys (legacy DB) must be treated as stale, not compatible.
+#[test]
+fn t103_check_embedding_metadata_rejects_missing_keys() {
+    let (_guard, path) = tmp_path();
+
+    // Phase 1: save an embedding (writes all 4 metadata keys + the vector row).
+    {
+        let mut db = SqliteGraph::open_or_create(&path).unwrap();
+        let n = make_do("legacy check");
+        let nid = n.id;
+        GraphBackend::add_node(&mut db, n).unwrap();
+        db.save_embedding(&nid, &[1.0_f32, 2.0, 3.0], "onnx/all-MiniLM-L6-v2")
+            .unwrap();
+    }
+
+    // Phase 2: delete extended metadata keys via raw SQL to simulate a legacy DB
+    // that has rows + model key but no provider/dimensions/version keys.
+    {
+        let raw = rusqlite::Connection::open(&path).unwrap();
+        raw.execute_batch(
+            "DELETE FROM project_meta WHERE key IN (\
+             'embedding_provider', 'embedding_dimensions', 'embedding_index_version')",
+        )
+        .unwrap();
+    }
+
+    // Phase 3: verify that missing keys are treated as Changed.
+    let db = SqliteGraph::open(&path).unwrap();
+    match db
+        .check_embedding_metadata("onnx/all-MiniLM-L6-v2", "onnx", 3)
+        .unwrap()
+    {
+        EmbeddingModelStatus::Changed { stored } => {
+            assert!(
+                stored.contains("missing"),
+                "should indicate missing metadata: {stored}"
+            );
+        }
+        other => panic!("expected Changed for missing provider, got {:?}", other),
+    }
+}

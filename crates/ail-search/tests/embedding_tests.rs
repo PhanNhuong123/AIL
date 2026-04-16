@@ -161,9 +161,13 @@ fn t101_local_provider_different_texts_low_cosine() {
 
 #[test]
 #[cfg(feature = "embeddings")]
-#[ignore = "integration — requires OPENAI_API_KEY; OpenAI provider deferred to hardening task"]
+#[ignore = "integration — requires OPENAI_API_KEY; cloud provider deferred to hardening task"]
 fn t101_cloud_provider_embeds_text() {
-    todo!("OpenAI provider deferred to hardening task after HTTP-client choice is settled")
+    // Placeholder: will call OpenAI embedding API once HTTP-client choice is settled.
+    // To run manually: set OPENAI_API_KEY and un-ignore this test.
+    let _api_key =
+        std::env::var("OPENAI_API_KEY").expect("OPENAI_API_KEY must be set to run this test");
+    unimplemented!("OpenAI provider not yet implemented")
 }
 
 #[test]

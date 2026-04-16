@@ -16,4 +16,4 @@ ail-graph  = { workspace = true }
 # Optional: local ONNX inference (only in ail-search; not a shared workspace dep)
 # ort 2.x is still in release-candidate phase; pin to latest rc.
 ort        = { version = "=2.0.0-rc.12", features = ["download-binaries"], optional = true }
-tokenizers = { version = "0.19", optional = true }
+tokenizers = { version = "0.19", optional = true, default-features = false, features = ["onig"] }

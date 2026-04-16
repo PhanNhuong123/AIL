@@ -1,7 +1,9 @@
 pub mod build;
 pub mod init;
 pub mod migrate;
+pub mod reindex;
 pub mod run_cmd;
+pub mod search;
 pub mod serve;
 pub mod status;
 pub mod test_cmd;

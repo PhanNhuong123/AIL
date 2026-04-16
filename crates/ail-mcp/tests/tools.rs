@@ -135,6 +135,79 @@ fn mcp_search_budget_limits_results() {
     );
 }
 
+// ── Phase 10 gap closure: ranking provenance fields ──────────────────────────
+
+#[test]
+fn t110_search_item_has_source_field() {
+    let (graph, _, _) = wallet_concept_graph();
+    let server = memory_server(graph);
+
+    let req = tools_call("ail.search", json!({"query": "wallet"}));
+    let resp = server.handle(req).unwrap();
+    let result = resp.result.unwrap();
+    let results = result["results"].as_array().unwrap();
+
+    assert!(!results.is_empty(), "expected results for 'wallet'");
+    for item in results {
+        assert!(
+            item.get("source").is_some(),
+            "SearchItem must have a 'source' field: {item}"
+        );
+        assert!(
+            item.get("rrf_score").is_some(),
+            "SearchItem must have an 'rrf_score' field: {item}"
+        );
+        assert!(
+            item.get("bm25_rank").is_some(),
+            "SearchItem must have a 'bm25_rank' field: {item}"
+        );
+        assert!(
+            item.get("semantic_rank").is_some(),
+            "SearchItem must have a 'semantic_rank' field: {item}"
+        );
+    }
+}
+
+#[test]
+fn t110_search_bm25_fallback_source_is_bm25_only() {
+    let (graph, _, _) = wallet_concept_graph();
+    let server = memory_server(graph);
+
+    let req = tools_call("ail.search", json!({"query": "wallet"}));
+    let resp = server.handle(req).unwrap();
+    let result = resp.result.unwrap();
+    let results = result["results"].as_array().unwrap();
+
+    assert!(!results.is_empty(), "expected results for 'wallet'");
+    for item in results {
+        assert_eq!(
+            item["source"].as_str().unwrap(),
+            "bm25_only",
+            "without embeddings all results must have source='bm25_only'"
+        );
+    }
+}
+
+#[test]
+fn t110_search_bm25_fallback_rrf_score_positive() {
+    let (graph, _, _) = wallet_concept_graph();
+    let server = memory_server(graph);
+
+    let req = tools_call("ail.search", json!({"query": "wallet"}));
+    let resp = server.handle(req).unwrap();
+    let result = resp.result.unwrap();
+    let results = result["results"].as_array().unwrap();
+
+    assert!(!results.is_empty(), "expected results for 'wallet'");
+    for item in results {
+        let rrf = item["rrf_score"].as_f64().unwrap_or(0.0);
+        assert!(
+            rrf > 0.0,
+            "rrf_score must be positive for BM25-only results, got {rrf}"
+        );
+    }
+}
+
 // ── ail.context ───────────────────────────────────────────────────────────────
 
 #[test]

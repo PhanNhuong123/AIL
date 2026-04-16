@@ -10,6 +10,7 @@ use std::path::PathBuf;
 use serde_json::{json, Value};
 
 use ail_graph::Bm25Index;
+use ail_search::EmbeddingIndex;
 
 use crate::context::ProjectContext;
 use crate::tools::{build, context, search, status, verify};
@@ -29,6 +30,10 @@ pub struct McpServer {
     /// Lazy BM25 index. Built on first `ail.search` call; cleared when the
     /// pipeline is refreshed so the next search reflects the updated graph.
     search_cache: RefCell<Option<Bm25Index>>,
+    /// Lazy embedding index. Loaded once from `project_root/*.ail.db` when the
+    /// `embeddings` feature is active and model files are present. Always `None`
+    /// without the feature or when the DB has no compatible vectors.
+    embedding_cache: RefCell<Option<EmbeddingIndex>>,
 }
 
 impl McpServer {
@@ -38,6 +43,7 @@ impl McpServer {
             project_root,
             context: RefCell::new(initial),
             search_cache: RefCell::new(None),
+            embedding_cache: RefCell::new(None),
         }
     }
 
@@ -83,10 +89,23 @@ impl McpServer {
     fn dispatch_tool(&self, name: &str, args: Value) -> Result<Value, JsonRpcError> {
         match name {
             "ail.search" => {
+                // Feature-gated: lazily populate the embedding index from the
+                // project DB + ONNX model. The mut borrow ends before the
+                // shared borrow below, avoiding a RefCell panic.
+                #[cfg(feature = "embeddings")]
+                {
+                    let mut emb = self.embedding_cache.borrow_mut();
+                    if emb.is_none() {
+                        *emb = search::try_load_embedding_index(&self.project_root);
+                    }
+                }
+
                 let input: SearchInput = serde_json::from_value(args)
                     .map_err(|e| JsonRpcError::new(INVALID_PARAMS, e.to_string()))?;
                 let borrow = self.context.borrow();
-                let out = search::run_search(borrow.graph(), &self.search_cache, &input);
+                let emb = self.embedding_cache.borrow();
+                let out =
+                    search::run_search(borrow.graph(), &self.search_cache, emb.as_ref(), &input);
                 serde_json::to_value(out)
                     .map_err(|e| JsonRpcError::new(INTERNAL_ERROR, e.to_string()))
             }
@@ -107,6 +126,7 @@ impl McpServer {
                     &self.project_root,
                     &self.context,
                     &self.search_cache,
+                    &self.embedding_cache,
                     &input,
                 );
                 serde_json::to_value(out)
@@ -120,6 +140,7 @@ impl McpServer {
                     &self.project_root,
                     &self.context,
                     &self.search_cache,
+                    &self.embedding_cache,
                     &input,
                 );
                 serde_json::to_value(out)

@@ -4,10 +4,15 @@ version = "0.1.0"
 edition = "2021"
 
 [features]
-z3-verify = ["ail-contract/z3-verify"]
+# Enable ONNX-backed semantic search: loads embeddings from .ail.db and uses
+# OnnxEmbeddingProvider for query embedding, enabling true hybrid search in MCP.
+embeddings = ["ail-search/embeddings", "dep:ail-db"]
+z3-verify  = ["ail-contract/z3-verify"]
 
 [dependencies]
+ail-db       = { workspace = true, optional = true }
 ail-graph    = { workspace = true }
+ail-search   = { workspace = true }
 ail-types    = { workspace = true }
 ail-contract = { workspace = true }
 ail-emit     = { workspace = true }

@@ -142,6 +142,9 @@ impl SqliteGraph {
              VALUES (?, ?, ?)",
             params![node_id.to_string(), blob, model_name],
         )?;
+        // Keep project_meta in sync so check_embedding_model and
+        // check_embedding_metadata are authoritative after incremental saves.
+        write_embedding_meta(&db, model_name, vector.len())?;
         Ok(())
     }
 
@@ -175,6 +178,20 @@ impl SqliteGraph {
             }
         }
 
+        // Dimension consistency guard — reject before opening a transaction.
+        if let Some((_, first)) = items.first() {
+            let expected = first.len();
+            for (i, (_, v)) in items.iter().enumerate().skip(1) {
+                if v.len() != expected {
+                    return Err(DbError::Other(format!(
+                        "dimension mismatch in bulk save: first vector has {expected} \
+                         dimensions, but vector at index {i} has {}",
+                        v.len()
+                    )));
+                }
+            }
+        }
+
         let db = self.db();
 
         // Single transaction — one fsync for the whole batch.
@@ -187,11 +204,9 @@ impl SqliteGraph {
                 params![node_id.to_string(), blob, model_name],
             )?;
         }
-        // Write model key once at the end.
-        db.execute(
-            "INSERT OR REPLACE INTO project_meta (key, value) VALUES (?, ?)",
-            params!["embedding_model", model_name],
-        )?;
+        // Write model and metadata keys once at the end.
+        let dims = items.first().map(|(_, v)| v.len()).unwrap_or(0);
+        write_embedding_meta(&db, model_name, dims)?;
         db.execute_batch("COMMIT")?;
         Ok(())
     }
@@ -236,8 +251,8 @@ impl SqliteGraph {
         Ok(map)
     }
 
-    /// Wipe all embedding vectors and the `embedding_model` meta key in a
-    /// single transaction.
+    /// Wipe all embedding vectors and all embedding meta keys in a single
+    /// transaction.
     ///
     /// After this call [`check_embedding_model`] returns [`EmbeddingModelStatus::Empty`]
     /// and [`save_embeddings_bulk`] accepts any model name.
@@ -248,8 +263,111 @@ impl SqliteGraph {
         let db = self.db();
         db.execute_batch("BEGIN")?;
         db.execute("DELETE FROM embeddings", [])?;
-        db.execute("DELETE FROM project_meta WHERE key = 'embedding_model'", [])?;
+        db.execute(
+            "DELETE FROM project_meta WHERE key IN (\
+             'embedding_model', 'embedding_provider', \
+             'embedding_dimensions', 'embedding_index_version')",
+            [],
+        )?;
         db.execute_batch("COMMIT")?;
         Ok(())
     }
+
+    /// Check embedding metadata consistency: model, provider, dimensions, and
+    /// index version.
+    ///
+    /// Extends [`check_embedding_model`] with provider, dimension, and index
+    /// version validation. Returns [`EmbeddingModelStatus::Changed`] if any
+    /// stored key differs from the expected value **or is missing** (legacy DB
+    /// without metadata is treated as stale, never silently compatible).
+    ///
+    /// [`check_embedding_model`]: SqliteGraph::check_embedding_model
+    pub fn check_embedding_metadata(
+        &self,
+        current_model: &str,
+        expected_provider: &str,
+        expected_dimensions: usize,
+    ) -> Result<EmbeddingModelStatus, DbError> {
+        let base = self.check_embedding_model(current_model)?;
+        if base != EmbeddingModelStatus::Compatible {
+            return Ok(base);
+        }
+
+        // Provider: missing metadata is stale (legacy DB).
+        match self.get_meta("embedding_provider")? {
+            Some(stored) if stored == expected_provider => {}
+            Some(stored) => {
+                return Ok(EmbeddingModelStatus::Changed {
+                    stored: format!("provider '{stored}' (expected '{expected_provider}')"),
+                });
+            }
+            None => {
+                return Ok(EmbeddingModelStatus::Changed {
+                    stored: format!("missing provider metadata (expected '{expected_provider}')"),
+                });
+            }
+        }
+
+        // Dimensions: missing metadata is stale.
+        let expected_dims_str = expected_dimensions.to_string();
+        match self.get_meta("embedding_dimensions")? {
+            Some(stored) if stored == expected_dims_str => {}
+            Some(stored) => {
+                return Ok(EmbeddingModelStatus::Changed {
+                    stored: format!("dimensions {stored} (expected {expected_dimensions})"),
+                });
+            }
+            None => {
+                return Ok(EmbeddingModelStatus::Changed {
+                    stored: format!("missing dimensions metadata (expected {expected_dimensions})"),
+                });
+            }
+        }
+
+        // Index version: missing or mismatched is stale.
+        match self.get_meta("embedding_index_version")? {
+            Some(stored) if stored == EMBEDDING_INDEX_VERSION => {}
+            Some(stored) => {
+                return Ok(EmbeddingModelStatus::Changed {
+                    stored: format!(
+                        "index version '{stored}' (expected '{EMBEDDING_INDEX_VERSION}')"
+                    ),
+                });
+            }
+            None => {
+                return Ok(EmbeddingModelStatus::Changed {
+                    stored: format!("missing index version (expected '{EMBEDDING_INDEX_VERSION}')"),
+                });
+            }
+        }
+
+        Ok(EmbeddingModelStatus::Compatible)
+    }
+}
+
+// ─── Internal helpers ────────────────────────────────────────────────────────
+
+/// Current embedding index version. Bump when the storage format or encoding
+/// changes so that `check_embedding_metadata` rejects stale indexes.
+const EMBEDDING_INDEX_VERSION: &str = "1";
+
+/// Write all embedding metadata keys to `project_meta`.
+///
+/// Called by both `save_embedding` and `save_embeddings_bulk` to keep metadata
+/// consistent. The provider is extracted from the model name prefix (before `/`).
+fn write_embedding_meta(
+    db: &rusqlite::Connection,
+    model_name: &str,
+    dimensions: usize,
+) -> Result<(), DbError> {
+    let provider = model_name.split('/').next().unwrap_or("unknown");
+    let sql = "INSERT OR REPLACE INTO project_meta (key, value) VALUES (?, ?)";
+    db.execute(sql, params!["embedding_model", model_name])?;
+    db.execute(sql, params!["embedding_provider", provider])?;
+    db.execute(sql, params!["embedding_dimensions", dimensions.to_string()])?;
+    db.execute(
+        sql,
+        params!["embedding_index_version", EMBEDDING_INDEX_VERSION],
+    )?;
+    Ok(())
 }

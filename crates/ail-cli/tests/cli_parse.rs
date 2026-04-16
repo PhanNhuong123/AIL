@@ -133,3 +133,82 @@ fn cli_parse_serve() {
     let cmd = parse(&["ail", "serve"]);
     assert!(matches!(cmd, Command::Serve));
 }
+
+// ── Phase 10 gap closure: search + reindex parse tests ───────────────────────
+
+#[test]
+fn t111_cli_parses_search_setup() {
+    let cmd = parse(&["ail", "search", "--setup"]);
+    let Command::Search {
+        query,
+        budget,
+        setup,
+        semantic,
+        bm25_only,
+    } = cmd
+    else {
+        panic!("expected Search");
+    };
+    assert!(setup, "--setup flag must be true");
+    assert!(
+        query.is_none(),
+        "query must be None when only --setup is given"
+    );
+    assert_eq!(budget, 20, "default budget must be 20");
+    assert!(!semantic);
+    assert!(!bm25_only);
+}
+
+#[test]
+fn t111_cli_parses_search_query() {
+    let cmd = parse(&["ail", "search", "wallet balance"]);
+    let Command::Search {
+        query,
+        setup,
+        semantic,
+        bm25_only,
+        ..
+    } = cmd
+    else {
+        panic!("expected Search");
+    };
+    assert_eq!(query.as_deref(), Some("wallet balance"));
+    assert!(!setup);
+    assert!(!semantic);
+    assert!(!bm25_only);
+}
+
+#[test]
+fn t111_cli_parses_search_semantic() {
+    let cmd = parse(&["ail", "search", "--semantic", "wallet balance"]);
+    let Command::Search {
+        query,
+        semantic,
+        bm25_only,
+        ..
+    } = cmd
+    else {
+        panic!("expected Search");
+    };
+    assert_eq!(query.as_deref(), Some("wallet balance"));
+    assert!(semantic, "--semantic flag must be true");
+    assert!(!bm25_only);
+}
+
+#[test]
+fn t111_cli_parses_reindex() {
+    let cmd = parse(&["ail", "reindex"]);
+    let Command::Reindex { embeddings } = cmd else {
+        panic!("expected Reindex");
+    };
+    assert!(!embeddings, "default --embeddings must be false");
+}
+
+#[test]
+fn t111_cli_parses_reindex_embeddings() {
+    let cmd = parse(&["ail", "reindex", "--embeddings"]);
+    let Command::Reindex { embeddings } = cmd else {
+        panic!("expected Reindex");
+    };
+    assert!(embeddings, "--embeddings flag must be true");
+}

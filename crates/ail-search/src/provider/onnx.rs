@@ -9,7 +9,7 @@ use crate::errors::SearchError;
 use crate::provider::EmbeddingProvider;
 
 /// Embedding dimensions for `all-MiniLM-L6-v2`.
-const DIMENSION: usize = 384;
+pub const DIMENSION: usize = 384;
 
 /// Provider name used in `EmbeddingProvider::name()` and for index model tracking.
 ///
