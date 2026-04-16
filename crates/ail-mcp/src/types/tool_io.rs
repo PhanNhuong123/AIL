@@ -1,4 +1,4 @@
-//! Typed input and output structs for all five MCP tools.
+//! Typed input and output structs for all seven MCP tools.
 
 use serde::{Deserialize, Serialize};
 
@@ -155,6 +155,154 @@ pub struct BuildFile {
     /// `"Generated"` (always overwrite) or `"Scaffolded"` (create once).
     pub ownership: String,
     pub size_bytes: usize,
+}
+
+// ── ail.write ───────────────────────────────────────────────────────────────
+
+/// Input for the `ail.write` MCP tool — create a new node.
+#[derive(Debug, Deserialize)]
+pub struct WriteInput {
+    /// Node ID of the parent to insert under.
+    pub parent_id: String,
+    /// AIL pattern: "do", "define", "describe", "check", "let", etc.
+    pub pattern: String,
+    /// Human-readable intent for the node.
+    pub intent: String,
+    /// Raw expression text (optional — leaf nodes only).
+    pub expression: Option<String>,
+    /// 0-based position among siblings. Defaults to appending as last child.
+    pub position: Option<usize>,
+    /// Contracts to attach to the new node.
+    pub contracts: Option<Vec<ContractInput>>,
+}
+
+/// A contract supplied through the MCP write/patch interface.
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct ContractInput {
+    /// Contract kind: "before", "after", or "always".
+    pub kind: String,
+    /// Raw contract expression text.
+    pub expression: String,
+}
+
+/// Output from `ail.write`.
+#[derive(Debug, Serialize)]
+pub struct WriteOutput {
+    pub status: String,
+    pub node_id: String,
+    pub depth: usize,
+    pub path: Vec<String>,
+    pub auto_edges: Vec<AutoEdgeOutput>,
+    pub cic_invalidated: usize,
+    pub warnings: Vec<String>,
+}
+
+/// An auto-detected Ed edge created after a write or patch.
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+pub struct AutoEdgeOutput {
+    /// Always `"ed"` for diagonal cross-references.
+    pub kind: String,
+    /// Node ID of the referenced target.
+    pub target: String,
+    /// Relationship label: `"uses_type"`, `"raises"`, or `"calls"`.
+    pub label: String,
+}
+
+// ── ail.patch ───────────────────────────────────────────────────────────────
+
+/// Input for the `ail.patch` MCP tool — update existing node fields.
+#[derive(Debug, Deserialize)]
+pub struct PatchInput {
+    /// Node ID to patch.
+    pub node_id: String,
+    /// Fields to update. Only provided fields are changed.
+    pub fields: PatchFields,
+}
+
+/// Patchable fields for `ail.patch`. All optional — only provided fields are
+/// applied. Use `ail.move` for parent/position changes.
+#[derive(Debug, Deserialize)]
+pub struct PatchFields {
+    pub intent: Option<String>,
+    pub expression: Option<String>,
+    pub pattern: Option<String>,
+    /// When provided, replaces all existing contracts on the node.
+    pub contracts: Option<Vec<ContractInput>>,
+    /// When provided, merged into existing metadata (shallow merge).
+    pub metadata: Option<serde_json::Value>,
+}
+
+/// Output from `ail.patch`.
+#[derive(Debug, Serialize)]
+pub struct PatchOutput {
+    pub status: String,
+    pub node_id: String,
+    pub changed_fields: Vec<String>,
+    pub auto_edges_added: Vec<AutoEdgeOutput>,
+    pub auto_edges_removed: Vec<AutoEdgeOutput>,
+    pub cic_invalidated: usize,
+    pub warnings: Vec<String>,
+}
+
+// ── ail.move ────────────────────────────────────────────────────────────────
+
+/// Input for the `ail.move` MCP tool — restructure a node under a new parent.
+#[derive(Debug, Deserialize)]
+pub struct MoveInput {
+    /// Node ID to move.
+    pub node_id: String,
+    /// New parent's node ID.
+    pub new_parent_id: String,
+    /// 0-based position among new siblings. Defaults to appending as last child.
+    pub position: Option<usize>,
+}
+
+/// Output from `ail.move`.
+#[derive(Debug, Serialize)]
+pub struct MoveOutput {
+    pub status: String,
+    pub node_id: String,
+    /// `None` when moving a node that previously had no parent (a root).
+    pub old_parent_id: Option<String>,
+    pub new_parent_id: String,
+    pub old_depth: usize,
+    pub new_depth: usize,
+    /// Number of descendants that moved with the node.
+    pub descendants_moved: usize,
+    pub cic_invalidated: usize,
+    pub warnings: Vec<String>,
+}
+
+// ── ail.delete ──────────────────────────────────────────────────────────────
+
+/// Input for the `ail.delete` MCP tool.
+#[derive(Debug, Deserialize)]
+pub struct DeleteInput {
+    /// Node ID to delete.
+    pub node_id: String,
+    /// Strategy: `"cascade"` (default), `"orphan"`, or `"dry_run"`.
+    pub strategy: Option<String>,
+}
+
+/// Output from `ail.delete`. Field population depends on the chosen strategy.
+#[derive(Debug, Serialize)]
+pub struct DeleteOutput {
+    /// `"deleted"`, `"orphaned"`, or `"dry_run"`.
+    pub status: String,
+    /// Number of nodes actually removed (0 for `dry_run`).
+    pub deleted_nodes: usize,
+    /// IDs of nodes actually removed (empty for `dry_run`).
+    pub deleted_node_ids: Vec<String>,
+    /// For `dry_run` only — how many nodes a cascade would remove.
+    pub would_delete: usize,
+    /// For `dry_run` only — IDs a cascade would remove.
+    pub would_delete_ids: Vec<String>,
+    /// For `orphan` only — how many direct children were lifted to the parent.
+    pub reparented_children: usize,
+    /// Count of incident Ed edges removed (or that would be, for `dry_run`).
+    pub affected_ed_edges: usize,
+    pub cic_invalidated: usize,
+    pub warnings: Vec<String>,
 }
 
 // ── ail.status ───────────────────────────────────────────────────────────────

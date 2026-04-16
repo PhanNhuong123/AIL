@@ -13,6 +13,10 @@
 //! | `ail.verify` | Run contract verification on a function |
 //! | `ail.build` | Trigger a full build and return generated file paths |
 //! | `ail.status` | Return the pipeline stage reached and graph statistics |
+//! | `ail.write` | Create a new node under an existing parent |
+//! | `ail.patch` | Update fields on an existing node |
+//! | `ail.move` | Move a node under a new parent and sibling position |
+//! | `ail.delete` | Delete a node with cascade, orphan, or dry_run strategy |
 //!
 //! ## Entry points
 //!

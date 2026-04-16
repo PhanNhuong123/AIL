@@ -1,8 +1,8 @@
 //! [`McpServer`] — the MCP server core.
 //!
-//! Holds project state and routes JSON-RPC 2.0 requests to the five tool
-//! handlers. The server is single-threaded; mutability is tracked via
-//! `RefCell`.
+//! Holds project state and routes JSON-RPC 2.0 requests to the seven tool
+//! handlers (five read + two write). The server is single-threaded; mutability
+//! is tracked via `RefCell`.
 
 use std::cell::RefCell;
 use std::path::PathBuf;
@@ -13,11 +13,14 @@ use ail_graph::Bm25Index;
 use ail_search::EmbeddingIndex;
 
 use crate::context::ProjectContext;
-use crate::tools::{build, context, search, status, verify};
+use crate::tools::{build, context, search, status, structure, verify, write};
 use crate::types::protocol::{
     JsonRpcError, JsonRpcRequest, JsonRpcResponse, INTERNAL_ERROR, INVALID_PARAMS, METHOD_NOT_FOUND,
 };
-use crate::types::tool_io::{BuildInput, ContextInput, SearchInput, VerifyInput};
+use crate::types::tool_io::{
+    BuildInput, ContextInput, DeleteInput, MoveInput, PatchInput, SearchInput, VerifyInput,
+    WriteInput,
+};
 
 /// The MCP server.
 ///
@@ -154,6 +157,83 @@ impl McpServer {
                     .map_err(|e| JsonRpcError::new(INTERNAL_ERROR, e.to_string()))
             }
 
+            "ail.write" => {
+                let input: WriteInput = serde_json::from_value(args)
+                    .map_err(|e| JsonRpcError::new(INVALID_PARAMS, e.to_string()))?;
+                let out = {
+                    let mut ctx = self.context.borrow_mut();
+                    let graph = ctx.graph_mut();
+                    write::run_write(graph, &input)
+                };
+                // Clear search caches — the graph was mutated.
+                *self.search_cache.borrow_mut() = None;
+                *self.embedding_cache.borrow_mut() = None;
+                match out {
+                    Ok(output) => serde_json::to_value(output)
+                        .map_err(|e| JsonRpcError::new(INTERNAL_ERROR, e.to_string())),
+                    Err(e) => Err(JsonRpcError::new(INVALID_PARAMS, e)),
+                }
+            }
+
+            "ail.patch" => {
+                let input: PatchInput = serde_json::from_value(args)
+                    .map_err(|e| JsonRpcError::new(INVALID_PARAMS, e.to_string()))?;
+                let out = {
+                    let mut ctx = self.context.borrow_mut();
+                    let graph = ctx.graph_mut();
+                    write::run_patch(graph, &input)
+                };
+                *self.search_cache.borrow_mut() = None;
+                *self.embedding_cache.borrow_mut() = None;
+                match out {
+                    Ok(output) => serde_json::to_value(output)
+                        .map_err(|e| JsonRpcError::new(INTERNAL_ERROR, e.to_string())),
+                    Err(e) => Err(JsonRpcError::new(INVALID_PARAMS, e)),
+                }
+            }
+
+            "ail.move" => {
+                let input: MoveInput = serde_json::from_value(args)
+                    .map_err(|e| JsonRpcError::new(INVALID_PARAMS, e.to_string()))?;
+                let out = {
+                    let mut ctx = self.context.borrow_mut();
+                    let graph = ctx.graph_mut();
+                    structure::run_move(graph, &input)
+                };
+                *self.search_cache.borrow_mut() = None;
+                *self.embedding_cache.borrow_mut() = None;
+                match out {
+                    Ok(output) => serde_json::to_value(output)
+                        .map_err(|e| JsonRpcError::new(INTERNAL_ERROR, e.to_string())),
+                    Err(e) => Err(JsonRpcError::new(INVALID_PARAMS, e)),
+                }
+            }
+
+            "ail.delete" => {
+                let input: DeleteInput = serde_json::from_value(args)
+                    .map_err(|e| JsonRpcError::new(INVALID_PARAMS, e.to_string()))?;
+                let is_dry_run = input.strategy.as_deref() == Some("dry_run");
+
+                let out = if is_dry_run {
+                    // No mutation, no demotion: borrow immutably.
+                    let ctx = self.context.borrow();
+                    structure::run_delete_dry_run(ctx.graph(), &input)
+                } else {
+                    let mut ctx = self.context.borrow_mut();
+                    let graph = ctx.graph_mut();
+                    structure::run_delete(graph, &input)
+                };
+                if !is_dry_run {
+                    *self.search_cache.borrow_mut() = None;
+                    *self.embedding_cache.borrow_mut() = None;
+                }
+                match out {
+                    Ok(output) => serde_json::to_value(output)
+                        .map_err(|e| JsonRpcError::new(INTERNAL_ERROR, e.to_string())),
+                    Err(e) => Err(JsonRpcError::new(INVALID_PARAMS, e)),
+                }
+            }
+
             _ => Err(JsonRpcError::new(
                 METHOD_NOT_FOUND,
                 format!("Unknown tool: {name}"),
@@ -177,7 +257,7 @@ impl McpServer {
         })
     }
 
-    /// MCP `tools/list` response — full JSON Schema for all five tools.
+    /// MCP `tools/list` response — full JSON Schema for all seven tools.
     fn tools_list() -> Value {
         json!({
             "tools": [
@@ -233,6 +313,91 @@ impl McpServer {
                     "inputSchema": {
                         "type": "object",
                         "properties": {}
+                    }
+                },
+                {
+                    "name": "ail.write",
+                    "description": "Create a new node under an existing parent",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "parent_id":  { "type": "string",  "description": "Node ID of the parent" },
+                            "pattern":    { "type": "string",  "description": "AIL pattern (do, define, describe, check, let, ...)" },
+                            "intent":     { "type": "string",  "description": "Human-readable intent" },
+                            "expression": { "type": "string",  "description": "Raw expression text (optional)" },
+                            "position":   { "type": "integer", "description": "0-based position among siblings (default: append)" },
+                            "contracts":  {
+                                "type": "array",
+                                "description": "Contracts to attach",
+                                "items": {
+                                    "type": "object",
+                                    "properties": {
+                                        "kind":       { "type": "string", "description": "before, after, or always" },
+                                        "expression": { "type": "string", "description": "Contract expression" }
+                                    },
+                                    "required": ["kind", "expression"]
+                                }
+                            }
+                        },
+                        "required": ["parent_id", "pattern", "intent"]
+                    }
+                },
+                {
+                    "name": "ail.patch",
+                    "description": "Update fields on an existing node",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "node_id": { "type": "string", "description": "Node ID to patch" },
+                            "fields": {
+                                "type": "object",
+                                "description": "Fields to update (only provided fields are changed)",
+                                "properties": {
+                                    "intent":     { "type": "string",  "description": "New intent text" },
+                                    "expression": { "type": "string",  "description": "New expression text" },
+                                    "pattern":    { "type": "string",  "description": "New pattern (caution: may break structure)" },
+                                    "contracts":  {
+                                        "type": "array",
+                                        "description": "Replace all contracts",
+                                        "items": {
+                                            "type": "object",
+                                            "properties": {
+                                                "kind":       { "type": "string" },
+                                                "expression": { "type": "string" }
+                                            },
+                                            "required": ["kind", "expression"]
+                                        }
+                                    },
+                                    "metadata": { "type": "object", "description": "Shallow-merge into existing metadata" }
+                                }
+                            }
+                        },
+                        "required": ["node_id", "fields"]
+                    }
+                },
+                {
+                    "name": "ail.move",
+                    "description": "Move a node under a new parent and optional sibling position",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "node_id":       { "type": "string",  "description": "Node ID to move" },
+                            "new_parent_id": { "type": "string",  "description": "New parent's node ID" },
+                            "position":      { "type": "integer", "description": "0-based position among new siblings (default: append)" }
+                        },
+                        "required": ["node_id", "new_parent_id"]
+                    }
+                },
+                {
+                    "name": "ail.delete",
+                    "description": "Delete a node with cascade, orphan, or dry_run strategy",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "node_id":  { "type": "string", "description": "Node ID to delete" },
+                            "strategy": { "type": "string", "description": "cascade (default), orphan, or dry_run" }
+                        },
+                        "required": ["node_id"]
                     }
                 }
             ]

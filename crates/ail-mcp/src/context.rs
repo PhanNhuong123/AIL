@@ -61,4 +61,27 @@ impl ProjectContext {
             _ => None,
         }
     }
+
+    /// Return a mutable reference to the underlying `AilGraph`, demoting the
+    /// pipeline stage to `Raw`.
+    ///
+    /// Write operations invalidate validation, type-checking, and verification
+    /// guarantees, so the context drops back to `Raw` on first mutable access.
+    /// Callers should clear search caches after calling this.
+    pub fn graph_mut(&mut self) -> &mut AilGraph {
+        if !matches!(self, Self::Raw(_)) {
+            let taken = std::mem::replace(self, ProjectContext::Raw(AilGraph::new()));
+            let graph = match taken {
+                ProjectContext::Raw(g) => g,
+                ProjectContext::Valid(v) => v.into_inner(),
+                ProjectContext::Typed(t) => t.into_inner().into_inner(),
+                ProjectContext::Verified(v) => v.into_inner().into_inner().into_inner(),
+            };
+            *self = ProjectContext::Raw(graph);
+        }
+        match self {
+            Self::Raw(g) => g,
+            _ => unreachable!(),
+        }
+    }
 }
