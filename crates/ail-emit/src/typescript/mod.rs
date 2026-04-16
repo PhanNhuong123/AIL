@@ -1,7 +1,12 @@
 pub(crate) mod constraint;
 pub(crate) mod define;
 pub(crate) mod describe;
+pub mod emit_functions;
 pub mod emit_types;
 pub(crate) mod error;
+pub(crate) mod fn_name;
 pub(crate) mod import_tracker;
+pub(crate) mod ts_blocks;
+pub(crate) mod ts_function;
+pub(crate) mod ts_statement;
 pub(crate) mod type_map;

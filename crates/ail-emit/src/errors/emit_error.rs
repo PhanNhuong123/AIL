@@ -71,4 +71,20 @@ pub enum EmitError {
         expression: String,
         message: String,
     },
+
+    // ── TypeScript function emitter errors (AIL-E020–E024) ────────────────────
+    #[error("AIL-E020: TS Do node {node_id} has no name in metadata")]
+    TsDoNodeMissingName { node_id: NodeId },
+
+    #[error("AIL-E021: TS Fetch node {node_id} has no variable name in metadata")]
+    TsFetchNodeMissingName { node_id: NodeId },
+
+    #[error("AIL-E022: TS Save node {node_id} has no name in metadata")]
+    TsSaveNodeMissingName { node_id: NodeId },
+
+    #[error("AIL-E023: TS Return node {node_id} has no type name in metadata")]
+    TsReturnNodeMissingName { node_id: NodeId },
+
+    #[error("AIL-E024: TS Raise node {node_id} has no error name in metadata")]
+    TsRaiseNodeMissingName { node_id: NodeId },
 }
