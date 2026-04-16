@@ -11,6 +11,12 @@ use crate::provider::EmbeddingProvider;
 /// Embedding dimensions for `all-MiniLM-L6-v2`.
 const DIMENSION: usize = 384;
 
+/// Provider name used in `EmbeddingProvider::name()` and for index model tracking.
+///
+/// Exported so callers (e.g., `ail status`, `SqliteGraph::check_embedding_model`)
+/// can compare against the stored model name without importing the ONNX provider.
+pub const DEFAULT_MODEL_NAME: &str = "onnx/all-MiniLM-L6-v2";
+
 /// Model subdirectory name under `~/.ail/models/`.
 const MODEL_DIR_NAME: &str = "all-MiniLM-L6-v2";
 
@@ -148,11 +154,7 @@ impl EmbeddingProvider for OnnxEmbeddingProvider {
             .iter()
             .map(|&x| x as i64)
             .collect();
-        let type_ids: Vec<i64> = encoding
-            .get_type_ids()
-            .iter()
-            .map(|&x| x as i64)
-            .collect();
+        let type_ids: Vec<i64> = encoding.get_type_ids().iter().map(|&x| x as i64).collect();
 
         let input_ids = Tensor::<i64>::from_array(([1usize, seq_len], ids))
             .map_err(|e| SearchError::InferenceFailed(e.to_string()))?;
@@ -201,7 +203,7 @@ impl EmbeddingProvider for OnnxEmbeddingProvider {
     }
 
     fn name(&self) -> &str {
-        "onnx/all-MiniLM-L6-v2"
+        DEFAULT_MODEL_NAME
     }
 }
 

@@ -2,7 +2,7 @@
 ///
 /// All tests use `tempfile::NamedTempFile` so that WAL mode is exercised on a
 /// real file. In-memory SQLite does not support WAL.
-use ail_db::SqliteGraph;
+use ail_db::{EmbeddingModelStatus, SqliteGraph};
 use ail_graph::{
     Contract, ContractKind, EdgeKind, Expression, GraphBackend, Node, NodeId, Pattern, SearchResult,
 };
@@ -1325,4 +1325,159 @@ fn t074_fts_fts5_operator_no_crash() {
         bad.is_err(),
         "malformed FTS5 query must return Err(...) rather than panic"
     );
+}
+
+// ─── t103 — Index Persistence (Task 10.3) ─────────────────────────────────────
+
+/// Vectors survive a save→load cycle with byte-exact LE encoding.
+#[test]
+fn t103_save_and_load_embedding_roundtrip() {
+    let (_guard, mut db) = fresh_db();
+    let node = make_do("transfer money safely");
+    let nid = node.id;
+    GraphBackend::add_node(&mut db, node).unwrap();
+
+    let vector = vec![0.1_f32, -0.5, 0.9, 1.0];
+    db.save_embedding(&nid, &vector, "test/model-a").unwrap();
+
+    let loaded = db.load_embedding(&nid).unwrap();
+    assert!(loaded.is_some(), "embedding must be present after save");
+    let loaded = loaded.unwrap();
+    assert_eq!(loaded.len(), vector.len());
+    for (a, b) in loaded.iter().zip(vector.iter()) {
+        assert!(
+            (a - b).abs() < 1e-7,
+            "loaded f32 must match saved f32 (got {a}, expected {b})"
+        );
+    }
+}
+
+/// Bulk load returns all persisted vectors.
+#[test]
+fn t103_bulk_load_all_embeddings() {
+    let (_guard, mut db) = fresh_db();
+    let nodes: Vec<(NodeId, Vec<f32>)> = (0..3)
+        .map(|i| {
+            let n = make_do(&format!("node intent {i}"));
+            let id = n.id;
+            GraphBackend::add_node(&mut db, n).unwrap();
+            (id, vec![i as f32, i as f32 + 0.5])
+        })
+        .collect();
+
+    // Bulk save all three.
+    db.save_embeddings_bulk(&nodes, "test/model-a").unwrap();
+
+    let all = db.load_all_embeddings().unwrap();
+    assert_eq!(all.len(), 3, "must load exactly 3 embeddings");
+    for (id, expected) in &nodes {
+        let got = all
+            .get(id)
+            .expect("embedding must be present for each node");
+        assert_eq!(got.len(), expected.len());
+        for (a, b) in got.iter().zip(expected.iter()) {
+            assert!((a - b).abs() < 1e-7);
+        }
+    }
+}
+
+/// check_embedding_model correctly signals Compatible vs Changed.
+#[test]
+fn t103_model_change_triggers_reindex() {
+    let (_guard, mut db) = fresh_db();
+    let n = make_do("check model compatibility");
+    let nid = n.id;
+    GraphBackend::add_node(&mut db, n).unwrap();
+
+    let vec_a = vec![1.0_f32, 0.0];
+
+    // 1. No embeddings yet → Empty.
+    assert_eq!(
+        db.check_embedding_model("test/model-a").unwrap(),
+        EmbeddingModelStatus::Empty
+    );
+
+    // 2. Save with model-a → Compatible.
+    db.save_embeddings_bulk(&[(nid, vec_a.clone())], "test/model-a")
+        .unwrap();
+    assert_eq!(
+        db.check_embedding_model("test/model-a").unwrap(),
+        EmbeddingModelStatus::Compatible
+    );
+
+    // 3. Query with model-b → Changed.
+    let status = db.check_embedding_model("test/model-b").unwrap();
+    assert_eq!(
+        status,
+        EmbeddingModelStatus::Changed {
+            stored: "test/model-a".to_string()
+        }
+    );
+
+    // 4. clear_embeddings wipes rows + meta → Empty again.
+    db.clear_embeddings().unwrap();
+    assert_eq!(
+        db.check_embedding_model("test/model-b").unwrap(),
+        EmbeddingModelStatus::Empty
+    );
+
+    // 5. Bulk-save with model-b → Compatible for model-b.
+    db.save_embeddings_bulk(&[(nid, vec![0.0_f32, 1.0])], "test/model-b")
+        .unwrap();
+    assert_eq!(
+        db.check_embedding_model("test/model-b").unwrap(),
+        EmbeddingModelStatus::Compatible
+    );
+}
+
+/// Deleting a node via GraphBackend::remove_node cascades to its embedding row.
+#[test]
+fn t103_cascade_delete_removes_embedding() {
+    let (_guard, mut db) = fresh_db();
+    let n = make_do("cascade delete node");
+    let nid = n.id;
+    GraphBackend::add_node(&mut db, n).unwrap();
+
+    db.save_embedding(&nid, &[0.5_f32, 0.5], "test/model-a")
+        .unwrap();
+    assert_eq!(db.embedding_count().unwrap(), 1);
+
+    // Remove the node — FK ON DELETE CASCADE must remove the embedding.
+    GraphBackend::remove_node(&mut db, nid).unwrap();
+    assert_eq!(
+        db.embedding_count().unwrap(),
+        0,
+        "embedding row must be cascade-deleted when node is removed"
+    );
+}
+
+/// INSERT OR REPLACE updates the stored vector (incremental update path).
+#[test]
+fn t103_incremental_update_on_node_change() {
+    let (_guard, mut db) = fresh_db();
+    let n = make_do("incremental update node");
+    let nid = n.id;
+    GraphBackend::add_node(&mut db, n).unwrap();
+
+    let v1 = vec![1.0_f32, 0.0];
+    let v2 = vec![0.0_f32, 1.0];
+
+    db.save_embedding(&nid, &v1, "test/model-a").unwrap();
+    // Update with v2 (same model — no mismatch error).
+    db.save_embedding(&nid, &v2, "test/model-a").unwrap();
+
+    let loaded = db.load_embedding(&nid).unwrap().unwrap();
+    assert_eq!(loaded.len(), 2);
+    assert!(
+        (loaded[0] - 0.0_f32).abs() < 1e-7,
+        "first component must be v2[0]=0.0, got {}",
+        loaded[0]
+    );
+    assert!(
+        (loaded[1] - 1.0_f32).abs() < 1e-7,
+        "second component must be v2[1]=1.0, got {}",
+        loaded[1]
+    );
+    // Only one row — INSERT OR REPLACE, not a second row.
+    assert_eq!(db.embedding_count().unwrap(), 1);
 }

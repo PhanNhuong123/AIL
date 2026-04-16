@@ -73,8 +73,8 @@ fn t101_local_provider_loads_model() {
 
     let model_dir = OnnxEmbeddingProvider::ensure_model()
         .expect("ensure_model should succeed when model files are present");
-    let _provider = OnnxEmbeddingProvider::new(&model_dir)
-        .expect("new() should succeed with valid model dir");
+    let _provider =
+        OnnxEmbeddingProvider::new(&model_dir).expect("new() should succeed with valid model dir");
 }
 
 #[test]

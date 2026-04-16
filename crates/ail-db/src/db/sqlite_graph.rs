@@ -112,7 +112,8 @@ impl SqliteGraph {
     /// Used in tests to verify cascade deletions and cache state.
     pub fn table_row_count(&self, table: &str) -> Result<i64, DbError> {
         let table = match table {
-            "nodes" | "contracts" | "edges" | "project_meta" | "cic_cache" | "search_fts" => table,
+            "nodes" | "contracts" | "edges" | "project_meta" | "cic_cache" | "search_fts"
+            | "embeddings" => table,
             other => return Err(DbError::Other(format!("unknown table: {other}"))),
         };
         let db = self.db();

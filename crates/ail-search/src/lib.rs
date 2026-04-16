@@ -49,3 +49,5 @@ pub use provider::EmbeddingProvider;
 
 #[cfg(feature = "embeddings")]
 pub use provider::OnnxEmbeddingProvider;
+#[cfg(feature = "embeddings")]
+pub use provider::DEFAULT_MODEL_NAME;

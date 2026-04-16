@@ -8,9 +8,7 @@
 use std::collections::HashMap;
 
 use ail_graph::{AilGraph, Bm25Index, Node, NodeId, Pattern};
-use ail_search::{
-    cosine_similarity, hybrid_search, EmbeddingIndex, RankingSource, SearchError,
-};
+use ail_search::{cosine_similarity, hybrid_search, EmbeddingIndex, RankingSource, SearchError};
 
 // ─── Mock provider ────────────────────────────────────────────────────────────
 
@@ -30,10 +28,9 @@ impl LookupProvider {
 
 impl EmbeddingProvider for LookupProvider {
     fn embed(&self, text: &str) -> Result<Vec<f32>, SearchError> {
-        self.table
-            .get(text)
-            .cloned()
-            .ok_or_else(|| SearchError::InferenceFailed(format!("LookupProvider: unknown text '{text}'")))
+        self.table.get(text).cloned().ok_or_else(|| {
+            SearchError::InferenceFailed(format!("LookupProvider: unknown text '{text}'"))
+        })
     }
     fn dimension(&self) -> usize {
         self.dim
@@ -117,8 +114,14 @@ fn t102_hybrid_search_rrf_scoring_correct() {
     let provider = LookupProvider::new(2, table);
     let index = EmbeddingIndex::from_vectors(Box::new(provider), vectors);
 
-    let results = hybrid_search("transfer money safely", &bm25_results, Some(&index), &graph, 10)
-        .expect("hybrid search should succeed");
+    let results = hybrid_search(
+        "transfer money safely",
+        &bm25_results,
+        Some(&index),
+        &graph,
+        10,
+    )
+    .expect("hybrid search should succeed");
 
     assert_eq!(results.len(), 1);
     let expected_score = 2.0 / 61.0_f64; // rank 0 in both lists
@@ -166,7 +169,10 @@ fn t102_hybrid_search_returns_combined_results() {
     // Both nodes should appear
     let ids: Vec<NodeId> = results.iter().map(|r| r.node_id).collect();
     assert!(ids.contains(&aid), "BM25 match (A) should be in results");
-    assert!(ids.contains(&bid), "semantic match (B) should be in results");
+    assert!(
+        ids.contains(&bid),
+        "semantic match (B) should be in results"
+    );
 }
 
 // ─── BM25-only match ──────────────────────────────────────────────────────────
@@ -196,7 +202,10 @@ fn t102_hybrid_bm25_only_match_still_returned() {
         .expect("hybrid search should succeed");
 
     let ids: Vec<NodeId> = results.iter().map(|r| r.node_id).collect();
-    assert!(ids.contains(&nid), "BM25-matched node must appear in hybrid results");
+    assert!(
+        ids.contains(&nid),
+        "BM25-matched node must appear in hybrid results"
+    );
 }
 
 // ─── Semantic-only match ──────────────────────────────────────────────────────
@@ -229,11 +238,13 @@ fn t102_hybrid_semantic_only_match_still_returned() {
     let provider = LookupProvider::new(2, table);
     let index = EmbeddingIndex::from_vectors(Box::new(provider), vectors);
 
-    let results =
-        hybrid_search("not enough money", &bm25_results, Some(&index), &graph, 10)
-            .expect("hybrid search should succeed");
+    let results = hybrid_search("not enough money", &bm25_results, Some(&index), &graph, 10)
+        .expect("hybrid search should succeed");
 
-    assert!(!results.is_empty(), "semantic-only match must appear in results");
+    assert!(
+        !results.is_empty(),
+        "semantic-only match must appear in results"
+    );
     assert_eq!(results[0].node_id, nid);
     assert_eq!(results[0].source, RankingSource::SemanticOnly);
     assert_eq!(results[0].bm25_rank, None);

@@ -1,7 +1,8 @@
 //! `ail status` — show the highest pipeline stage reached and node/edge counts.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
+use ail_db::{EmbeddingModelStatus, SqliteGraph};
 use ail_graph::{validation::validate_graph, Pattern};
 use ail_text::parse_directory;
 use ail_types::type_check;
@@ -69,6 +70,11 @@ pub fn run_status(root: &Path) -> Result<(), CliError> {
         }
     }
 
+    // ── Embedding index health (optional — requires a .ail.db file) ──────────
+    if let Some(line) = embedding_status_line(root) {
+        println!("{line}");
+    }
+
     Ok(())
 }
 
@@ -78,4 +84,58 @@ fn count_do_nodes(graph: &ail_graph::AilGraph) -> usize {
         .all_nodes()
         .filter(|n| n.pattern == Pattern::Do)
         .count()
+}
+
+// ─── Embedding index health ───────────────────────────────────────────────────
+
+/// Locate an `.ail.db` file in `root`.
+///
+/// Checks `project.ail.db` first (conventional name), then scans the directory
+/// for any `*.ail.db` file and returns the first match.
+fn find_db(root: &Path) -> Option<PathBuf> {
+    let conventional = root.join("project.ail.db");
+    if conventional.exists() {
+        return Some(conventional);
+    }
+    let entries = std::fs::read_dir(root).ok()?;
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.extension().and_then(|e| e.to_str()) == Some("db")
+            && path
+                .file_stem()
+                .and_then(|s| s.to_str())
+                .map(|s| s.ends_with(".ail"))
+                .unwrap_or(false)
+        {
+            return Some(path);
+        }
+    }
+    None
+}
+
+/// Build the embedding health line for `ail status`, or `None` if no DB exists.
+///
+/// The model string `"onnx/all-MiniLM-L6-v2"` is the default local provider
+/// name (from `OnnxEmbeddingProvider::name()`). We use the literal here to avoid
+/// taking a compile-time dependency on the `embeddings` feature of `ail-search`.
+fn embedding_status_line(root: &Path) -> Option<String> {
+    let db_path = find_db(root)?;
+    let db = SqliteGraph::open(&db_path).ok()?;
+    let count = db.embedding_count().ok()?;
+    let model = "onnx/all-MiniLM-L6-v2";
+    let status = db.check_embedding_model(model).ok()?;
+    Some(match status {
+        EmbeddingModelStatus::Empty => {
+            "embedding: none | run 'ail search --setup' to enable".to_string()
+        }
+        EmbeddingModelStatus::Compatible => {
+            format!("embedding: {count} vectors | model: {model} | status: ok")
+        }
+        EmbeddingModelStatus::Changed { stored } => {
+            format!(
+                "embedding: stale | stored model: {stored} | \
+                 run 'ail reindex' to rebuild"
+            )
+        }
+    })
 }

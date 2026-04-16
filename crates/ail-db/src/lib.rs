@@ -19,5 +19,5 @@
 mod db;
 pub mod errors;
 
-pub use db::SqliteGraph;
+pub use db::{EmbeddingModelStatus, SqliteGraph};
 pub use errors::DbError;

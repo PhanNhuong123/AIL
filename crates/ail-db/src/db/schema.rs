@@ -59,6 +59,13 @@ CREATE TABLE IF NOT EXISTS cic_cache (
     computed_at TEXT DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_cic_cache_valid ON cic_cache(valid);
+
+CREATE TABLE IF NOT EXISTS embeddings (
+    node_id    TEXT PRIMARY KEY REFERENCES nodes(id) ON DELETE CASCADE,
+    vector     BLOB NOT NULL,
+    model_name TEXT NOT NULL,
+    updated_at TEXT DEFAULT (datetime('now'))
+);
 ";
 
 // ─── FTS5 ─────────────────────────────────────────────────────────────────────
