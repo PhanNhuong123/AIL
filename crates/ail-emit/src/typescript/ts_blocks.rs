@@ -9,6 +9,9 @@ use crate::typescript::ts_function::emit_ts_do_body;
 // ── ForEach ────────────────────────────────────────────────────────────────────
 
 /// Emit a `for each` loop as `for (const item of collection) { body }`.
+///
+/// `after_contracts` are threaded through so any `return` inside the loop body
+/// also receives after-contract injection.
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn emit_foreach_ts(
     graph: &dyn GraphBackend,
@@ -19,6 +22,7 @@ pub(crate) fn emit_foreach_ts(
     tracker: &mut ImportTracker,
     parent_params: &[Param],
     helpers: &mut Vec<String>,
+    after_contracts: &[String],
 ) -> Result<Vec<String>, Vec<EmitError>> {
     use crate::python::expression_parser::parse_foreach_expression;
 
@@ -54,6 +58,7 @@ pub(crate) fn emit_foreach_ts(
             &HashSet::new(),
             helpers,
             None,
+            after_contracts,
         ) {
             Ok(body) => {
                 if body.is_empty() {
@@ -79,6 +84,10 @@ pub(crate) fn emit_foreach_ts(
 /// All state operations inside the block use `tx` as the repository proxy so
 /// generated code matches the spec pattern. When children reference different
 /// sources, a warning comment is emitted and the first source is used.
+///
+/// After-contracts are NOT threaded into the transaction body (`&[]` is passed).
+/// Transaction bodies never contain `Pattern::Return` nodes — after-contracts are
+/// injected at the enclosing function's return point instead (v2.0 documented limitation).
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn emit_together_ts(
     graph: &dyn GraphBackend,
@@ -110,6 +119,7 @@ pub(crate) fn emit_together_ts(
             &HashSet::new(),
             helpers,
             Some("tx"),
+            &[], // after-contracts not injected inside transaction bodies
         ) {
             Ok(body) => {
                 if body.is_empty() {
@@ -188,6 +198,9 @@ fn collect_together_source(graph: &dyn GraphBackend, node: &Node) -> String {
 /// Variables produced inside the retry body (from `let` bindings) should be
 /// hoisted above the loop. For v2.0, a `let varName: unknown` declaration
 /// is emitted above the loop when the body contains a `let` child.
+///
+/// `after_contracts` are threaded through so any `return` inside the retry body
+/// also receives after-contract injection.
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn emit_retry_ts(
     graph: &dyn GraphBackend,
@@ -198,6 +211,7 @@ pub(crate) fn emit_retry_ts(
     tracker: &mut ImportTracker,
     parent_params: &[Param],
     helpers: &mut Vec<String>,
+    after_contracts: &[String],
 ) -> Result<Vec<String>, Vec<EmitError>> {
     use crate::typescript::fn_name::to_camel_case_var;
     use crate::typescript::type_map::resolve_ts_type;
@@ -266,6 +280,7 @@ pub(crate) fn emit_retry_ts(
             &HashSet::new(),
             helpers,
             None,
+            after_contracts,
         ) {
             Ok(body) => {
                 if body.is_empty() {

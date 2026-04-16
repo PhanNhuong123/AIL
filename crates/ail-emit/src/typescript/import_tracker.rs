@@ -23,6 +23,9 @@ pub(crate) enum TypeKind {
 pub(crate) struct ImportTracker {
     /// Map from module path (e.g. `"./wallet_balance"`) to sorted symbol list.
     imports: BTreeMap<String, Vec<String>>,
+    /// Set when contract mode `On` is active and at least one contract is emitted.
+    /// Causes `render()` to prepend `import { pre, post, keep } from 'ail-runtime-ts';`.
+    pub(crate) needs_runtime: bool,
 }
 
 impl ImportTracker {
@@ -50,14 +53,20 @@ impl ImportTracker {
 
     /// Render all accumulated imports as TypeScript import statements.
     ///
-    /// Emits one `import { ... } from '...'` line per source module, sorted by
-    /// module path for deterministic output.
+    /// When `needs_runtime` is set, prepends
+    /// `import { pre, post, keep } from 'ail-runtime-ts';` (semantic order per spec)
+    /// before any user-type imports.
+    ///
+    /// User-type imports are emitted one per source module, sorted by module path.
     pub(crate) fn render(&self) -> String {
-        if self.imports.is_empty() {
-            return String::new();
+        let mut parts: Vec<String> = Vec::new();
+
+        if self.needs_runtime {
+            parts.push("import { pre, post, keep } from 'ail-runtime-ts';".to_owned());
         }
 
-        self.imports
+        let type_imports = self
+            .imports
             .iter()
             .map(|(module, symbols)| {
                 let mut sorted = symbols.clone();
@@ -65,7 +74,13 @@ impl ImportTracker {
                 format!("import {{ {} }} from '{}';", sorted.join(", "), module)
             })
             .collect::<Vec<_>>()
-            .join("\n")
+            .join("\n");
+
+        if !type_imports.is_empty() {
+            parts.push(type_imports);
+        }
+
+        parts.join("\n")
     }
 }
 

@@ -162,7 +162,7 @@ pub(crate) fn render_contract_lines(
     mode: &ContractMode,
     imports: &mut ImportSet,
 ) -> Result<Vec<String>, EmitError> {
-    if *mode == ContractMode::Off {
+    if matches!(mode, ContractMode::Off | ContractMode::Test) {
         return Ok(vec![]);
     }
 
@@ -182,7 +182,7 @@ pub(crate) fn render_contract_lines(
         ContractMode::Comments => {
             format!("{indent}# assert {py_expr}  # {label}: {raw}")
         }
-        ContractMode::Off => unreachable!("checked above"),
+        ContractMode::Off | ContractMode::Test => unreachable!("checked above"),
     };
 
     Ok(vec![line])

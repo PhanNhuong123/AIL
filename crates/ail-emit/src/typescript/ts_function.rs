@@ -5,6 +5,9 @@ use ail_graph::{GraphBackend, Node, NodeId, Param, Pattern};
 use crate::errors::EmitError;
 use crate::python::using::collect_required_phases;
 use crate::types::EmitConfig;
+use crate::typescript::contract_inject::{
+    collect_old_refs_ts, render_after_contract_lines_ts, render_before_contract_lines_ts,
+};
 use crate::typescript::fn_name::{detect_is_async, to_camel_case_fn};
 use crate::typescript::import_tracker::{ImportTracker, TypeKind};
 use crate::typescript::ts_blocks::{emit_foreach_ts, emit_retry_ts, emit_together_ts};
@@ -57,6 +60,37 @@ pub(crate) fn emit_ts_do_function(
         is_async,
     );
 
+    // ── Contract injection (spec ordering) ────────────────────────────────────
+    // 1. Before + Always contracts → pre()/keep() lines (emitted before old snapshots)
+    let before_lines = render_before_contract_lines_ts(
+        node.id,
+        &node.contracts,
+        "  ",
+        &config.contract_mode,
+        tracker,
+    )
+    .map_err(|e| vec![e])?;
+
+    // 2. old() snapshots for After contracts (captured after pre/keep so a failing
+    //    precondition doesn't execute the snapshot assignment unnecessarily).
+    let old_refs = collect_old_refs_ts(node.id, &node.contracts).map_err(|e| vec![e])?;
+
+    lines.extend(before_lines);
+    for (snapshot_name, source_expr) in &old_refs {
+        lines.push(format!("  const {snapshot_name} = {source_expr};"));
+    }
+
+    // 3. After + Always contracts → post()/keep() lines, threaded into body.
+    //    They are injected immediately before every Pattern::Return.
+    let after_lines = render_after_contract_lines_ts(
+        node.id,
+        &node.contracts,
+        "  ",
+        &config.contract_mode,
+        tracker,
+    )
+    .map_err(|e| vec![e])?;
+
     let required_phases = collect_required_phases(graph, node.id);
 
     let body = if let Some(children) = &node.children {
@@ -72,6 +106,7 @@ pub(crate) fn emit_ts_do_function(
             &required_phases,
             helpers,
             None,
+            &after_lines,
         )?
     } else {
         vec![]
@@ -145,6 +180,10 @@ fn ts_primary_return_type(type_ref: &str) -> String {
 ///
 /// `tx_name`: when inside a `together` block, state ops use this name instead
 /// of the parsed source, matching the spec's `tx.updateUser(...)` pattern.
+///
+/// `after_contracts`: pre-rendered after-contract lines (post + keep re-check) that
+/// are injected immediately before every `Pattern::Return` at any depth, except inside
+/// `together` blocks (transaction bodies — documented v2.0 limitation).
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn emit_ts_do_body(
     graph: &dyn GraphBackend,
@@ -158,6 +197,7 @@ pub(crate) fn emit_ts_do_body(
     phase_markers: &HashSet<String>,
     helpers: &mut Vec<String>,
     tx_name: Option<&str>,
+    after_contracts: &[String],
 ) -> Result<Vec<String>, Vec<EmitError>> {
     let _ = parent_id; // used for error messages in future
     let indent = "  ".repeat(indent_level);
@@ -196,6 +236,7 @@ pub(crate) fn emit_ts_do_body(
                             &HashSet::new(),
                             helpers,
                             tx_name,
+                            after_contracts,
                         ) {
                             Ok(inner) => lines.extend(inner),
                             Err(errs) => errors.extend(errs),
@@ -203,6 +244,8 @@ pub(crate) fn emit_ts_do_body(
                     }
                 } else {
                     // Different params → emit as a private helper function.
+                    // Helper functions are independent — they own their own contracts
+                    // and do not inherit the enclosing function's after_contracts.
                     let orig_fn_name = to_camel_case_fn(&child.intent);
                     let helper_name = format!("_{orig_fn_name}");
                     let child_async = fn_async || detect_is_async(graph, child);
@@ -280,15 +323,23 @@ pub(crate) fn emit_ts_do_body(
                 }
                 Err(e) => errors.push(e),
             },
-            Pattern::Return => match emit_return_ts(child, &indent, type_registry) {
-                Ok(b) => {
-                    if let Some(ty) = child.metadata.name.as_deref() {
-                        register_fn_import(tracker, ty, type_registry);
-                    }
-                    lines.push(b);
+            Pattern::Return => {
+                // Inject after-contracts (post + keep re-check) immediately before
+                // the return statement, re-indented to the current level.
+                for contract_line in after_contracts {
+                    let trimmed = contract_line.trim_start();
+                    lines.push(format!("{indent}{trimmed}"));
                 }
-                Err(e) => errors.push(e),
-            },
+                match emit_return_ts(child, &indent, type_registry) {
+                    Ok(b) => {
+                        if let Some(ty) = child.metadata.name.as_deref() {
+                            register_fn_import(tracker, ty, type_registry);
+                        }
+                        lines.push(b);
+                    }
+                    Err(e) => errors.push(e),
+                }
+            }
             Pattern::Raise => match emit_raise_ts(child, &indent) {
                 Ok(l) => {
                     if let Some(ty) = child.metadata.name.as_deref() {
@@ -308,12 +359,15 @@ pub(crate) fn emit_ts_do_body(
                     tracker,
                     parent_params,
                     helpers,
+                    after_contracts,
                 ) {
                     Ok(b) => lines.extend(b),
                     Err(errs) => errors.extend(errs),
                 }
             }
             Pattern::Together => {
+                // Pass &[] — after-contracts must NOT be injected inside an atomic
+                // transaction scope. together blocks never contain Pattern::Return.
                 match emit_together_ts(
                     graph,
                     child,
@@ -337,6 +391,7 @@ pub(crate) fn emit_ts_do_body(
                     tracker,
                     parent_params,
                     helpers,
+                    after_contracts,
                 ) {
                     Ok(b) => lines.extend(b),
                     Err(errs) => errors.extend(errs),

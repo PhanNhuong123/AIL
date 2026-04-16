@@ -1,4 +1,5 @@
 pub(crate) mod constraint;
+pub(crate) mod contract_inject;
 pub(crate) mod define;
 pub(crate) mod describe;
 pub mod emit_functions;
