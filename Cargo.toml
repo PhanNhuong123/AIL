@@ -9,6 +9,7 @@ members = [
     "crates/ail-emit",
     "crates/ail-mcp",
     "crates/ail-cli",
+    "crates/ail-search",
 ]
 
 [workspace.dependencies]
@@ -45,3 +46,4 @@ ail-contract = { path = "crates/ail-contract" }
 ail-text     = { path = "crates/ail-text" }
 ail-emit     = { path = "crates/ail-emit" }
 ail-mcp      = { path = "crates/ail-mcp" }
+ail-search   = { path = "crates/ail-search" }
