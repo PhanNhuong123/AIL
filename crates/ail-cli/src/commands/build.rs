@@ -1,4 +1,4 @@
-//! `ail build` — run the full pipeline and emit Python output files.
+//! `ail build` — run the full pipeline and emit output files.
 //!
 //! Flags:
 //! - `--contracts on|comments|off`  controls contract emission (default `on`)
@@ -6,7 +6,7 @@
 //! - `--watch`                      poll `src/*.ail` for mtime changes and rebuild
 //! - `--check-breaking`             not yet implemented
 //! - `--check-migration`            not yet implemented
-//! - `--target <target>`            reserved; only `python` is supported in v0.1
+//! - `--target <target>`            emission target: `python` (default) or `typescript`
 
 use std::collections::HashMap;
 use std::fs;
@@ -16,8 +16,9 @@ use std::time::{Duration, SystemTime};
 
 use ail_contract::verify;
 use ail_emit::{
-    emit_function_definitions, emit_scaffold_files, emit_type_definitions, ContractMode,
-    EmitConfig, FileOwnership,
+    emit_function_definitions, emit_scaffold_files, emit_ts_function_definitions,
+    emit_ts_project_files, emit_ts_test_definitions, emit_ts_type_definitions,
+    emit_type_definitions, ContractMode, EmitConfig, FileOwnership,
 };
 use ail_graph::validation::validate_graph;
 use ail_text::parse_directory;
@@ -32,6 +33,8 @@ pub struct BuildArgs<'a> {
     pub watch: bool,
     pub check_breaking: bool,
     pub check_migration: bool,
+    /// Emission target: `"python"` (default when `None`), `"typescript"`.
+    pub target: Option<&'a str>,
 }
 
 /// Entry point for `ail build`.
@@ -55,10 +58,25 @@ pub fn run_build(root: &Path, args: &BuildArgs<'_>) -> Result<(), CliError> {
         ..Default::default()
     };
 
-    if args.watch {
-        run_watch(root, &config, args.source_map)
-    } else {
-        build_once(root, &config, args.source_map)
+    match args.target {
+        None | Some("python") => {
+            if args.watch {
+                run_watch(root, &config, args.source_map)
+            } else {
+                build_once(root, &config, args.source_map)
+            }
+        }
+        Some("typescript") => {
+            if args.watch {
+                // Watch mode for TypeScript uses the same mtime-polling loop.
+                run_watch_typescript(root, &config, args.source_map)
+            } else {
+                build_typescript_once(root, &config, args.source_map)
+            }
+        }
+        Some(other) => Err(CliError::InvalidTarget {
+            value: other.to_owned(),
+        }),
     }
 }
 
@@ -93,6 +111,77 @@ fn build_once(root: &Path, config: &EmitConfig, print_source_map: bool) -> Resul
 
     println!("Built {n} file(s).");
     Ok(())
+}
+
+// ── TypeScript build ──────────────────────────────────────────────────────────
+
+/// Run the full pipeline and emit TypeScript output files into `dist-ts/`.
+///
+/// Per spec integration §12.2, TypeScript output lives in `dist-ts/` (parallel
+/// to Python's `dist/`) so the two targets never clobber each other.
+fn build_typescript_once(
+    root: &Path,
+    config: &EmitConfig,
+    print_source_map: bool,
+) -> Result<(), CliError> {
+    if print_source_map {
+        // TS source maps are not yet implemented in v2.0.
+        println!("[info] source maps not yet implemented for TypeScript target");
+    }
+
+    let verified = run_pipeline(root)?;
+
+    let type_out = emit_ts_type_definitions(&verified).map_err(|errs| CliError::Emit {
+        errors: format_emit_errors(&errs),
+    })?;
+    let fn_out =
+        emit_ts_function_definitions(&verified, config).map_err(|errs| CliError::Emit {
+            errors: format_emit_errors(&errs),
+        })?;
+    let test_out = emit_ts_test_definitions(&verified, config);
+    let project_out = emit_ts_project_files(config);
+
+    let all_files: Vec<_> = type_out
+        .files
+        .into_iter()
+        .chain(fn_out.files)
+        .chain(test_out.files)
+        .chain(project_out.files)
+        .collect();
+
+    let n = all_files.len();
+    let output_root = root.join("dist-ts");
+    write_files(&output_root, &all_files)?;
+
+    println!("Built {n} TypeScript file(s) → dist-ts/");
+    Ok(())
+}
+
+fn run_watch_typescript(
+    root: &Path,
+    config: &EmitConfig,
+    print_source_map: bool,
+) -> Result<(), CliError> {
+    println!("[watching] Ctrl-C to stop.");
+
+    let mut last_mtimes = snapshot_ail_mtimes(root);
+
+    if let Err(e) = build_typescript_once(root, config, print_source_map) {
+        eprintln!("[watch] build failed: {e}");
+    }
+
+    loop {
+        thread::sleep(Duration::from_millis(500));
+
+        let current = snapshot_ail_mtimes(root);
+        if current != last_mtimes {
+            last_mtimes = current;
+            println!("[watch] change detected, rebuilding…");
+            if let Err(e) = build_typescript_once(root, config, print_source_map) {
+                eprintln!("[watch] build failed: {e}");
+            }
+        }
+    }
 }
 
 // ── Pipeline ──────────────────────────────────────────────────────────────────

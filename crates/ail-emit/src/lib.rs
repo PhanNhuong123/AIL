@@ -42,4 +42,5 @@ pub use python::scaffold::emit_scaffold_files;
 pub use types::{ContractMode, EmitConfig, EmitOutput, EmittedFile, FileOwnership, TestFramework};
 pub use typescript::emit_functions::emit_ts_function_definitions;
 pub use typescript::emit_types::emit_ts_type_definitions;
+pub use typescript::project_files::emit_ts_project_files;
 pub use typescript::ts_test_gen::emit_ts_test_definitions;

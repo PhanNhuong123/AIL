@@ -2,9 +2,9 @@ use ail_graph::{Contract, ContractKind, NodeId};
 use ail_types::{parse_constraint_expr, ConstraintExpr, ValueExpr};
 
 use crate::errors::EmitError;
+use crate::types::ContractMode;
 use crate::typescript::constraint::{render_constraint_ts, render_value_ts};
 use crate::typescript::import_tracker::ImportTracker;
-use crate::types::ContractMode;
 
 // ── Old-ref collection ────────────────────────────────────────────────────────
 
@@ -74,9 +74,7 @@ fn collect_old_refs_in_constraint(
 
 fn constraint_has_old(expr: &ConstraintExpr) -> bool {
     match expr {
-        ConstraintExpr::Compare { left, right, .. } => {
-            value_has_old(left) || value_has_old(right)
-        }
+        ConstraintExpr::Compare { left, right, .. } => value_has_old(left) || value_has_old(right),
         ConstraintExpr::In { value, collection } => {
             value_has_old(value) || value_has_old(collection)
         }
@@ -403,9 +401,14 @@ mod tests {
     fn render_mode_off_returns_empty() {
         let contract = make_contract(ContractKind::Before, "x > 0");
         let mut tracker = ImportTracker::new();
-        let lines =
-            render_contract_lines_ts(dummy_id(), &contract, "  ", &ContractMode::Off, &mut tracker)
-                .unwrap();
+        let lines = render_contract_lines_ts(
+            dummy_id(),
+            &contract,
+            "  ",
+            &ContractMode::Off,
+            &mut tracker,
+        )
+        .unwrap();
         assert!(lines.is_empty());
         assert!(!tracker.needs_runtime);
     }
@@ -432,9 +435,14 @@ mod tests {
             make_contract(ContractKind::Always, "balance >= 0"),
         ];
         let mut tracker = ImportTracker::new();
-        let lines =
-            render_after_contract_lines_ts(dummy_id(), &contracts, "  ", &ContractMode::On, &mut tracker)
-                .unwrap();
+        let lines = render_after_contract_lines_ts(
+            dummy_id(),
+            &contracts,
+            "  ",
+            &ContractMode::On,
+            &mut tracker,
+        )
+        .unwrap();
         // post(result > 0, ...) then keep(balance >= 0, ...)
         assert_eq!(lines.len(), 2);
         assert!(lines[0].contains("post("));

@@ -43,4 +43,9 @@ pub enum CliError {
     /// Roundtrip verification found mismatches between the source and the database.
     #[error("Verify failed: {count} mismatch(es)\n{detail}")]
     VerifyFailed { count: usize, detail: String },
+
+    /// The value supplied to `--target` is not recognised.
+    #[error("Unknown target `{value}`. Supported: python, typescript")]
+    #[diagnostic(help("Use --target python (default) or --target typescript"))]
+    InvalidTarget { value: String },
 }

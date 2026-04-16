@@ -159,10 +159,7 @@ fn t093_contracts_on_emits_pre() {
     );
     let output = emit_ts_function_definitions(&verified, &config(ContractMode::On)).unwrap();
     let content = file_content(&output, "fn/validate.ts");
-    assert!(
-        content.contains("pre("),
-        "pre() call missing:\n{content}"
-    );
+    assert!(content.contains("pre("), "pre() call missing:\n{content}");
     assert!(
         content.contains("\"x > 0\""),
         "raw expression missing:\n{content}"
@@ -180,10 +177,7 @@ fn t093_contracts_on_emits_post() {
     );
     let output = emit_ts_function_definitions(&verified, &config(ContractMode::On)).unwrap();
     let content = file_content(&output, "fn/compute.ts");
-    assert!(
-        content.contains("post("),
-        "post() call missing:\n{content}"
-    );
+    assert!(content.contains("post("), "post() call missing:\n{content}");
     // post() must appear before the return statement.
     let post_pos = content.find("post(").expect("post( not found");
     let return_pos = content.find("return ").expect("return not found");
@@ -204,10 +198,7 @@ fn t093_contracts_on_emits_keep() {
     );
     let output = emit_ts_function_definitions(&verified, &config(ContractMode::On)).unwrap();
     let content = file_content(&output, "fn/transfer.ts");
-    assert!(
-        content.contains("keep("),
-        "keep() call missing:\n{content}"
-    );
+    assert!(content.contains("keep("), "keep() call missing:\n{content}");
 }
 
 // ── Mode: Comments ────────────────────────────────────────────────────────────
@@ -225,8 +216,7 @@ fn t093_contracts_comments_emits_comments_only() {
         ],
         vec![return_node("number")],
     );
-    let output =
-        emit_ts_function_definitions(&verified, &config(ContractMode::Comments)).unwrap();
+    let output = emit_ts_function_definitions(&verified, &config(ContractMode::Comments)).unwrap();
     let content = file_content(&output, "fn/validate.ts");
     assert!(
         content.contains("// PRE:"),
@@ -272,7 +262,10 @@ fn t093_contracts_off_emits_nothing() {
     );
     let output = emit_ts_function_definitions(&verified, &config(ContractMode::Off)).unwrap();
     let content = file_content(&output, "fn/validate.ts");
-    assert!(!content.contains("pre("), "pre() must be absent:\n{content}");
+    assert!(
+        !content.contains("pre("),
+        "pre() must be absent:\n{content}"
+    );
     assert!(
         !content.contains("post("),
         "post() must be absent:\n{content}"
@@ -282,7 +275,7 @@ fn t093_contracts_off_emits_nothing() {
         "keep() must be absent:\n{content}"
     );
     assert!(
-        !content.contains("ail-runtime-ts"),
+        !content.contains("../ail-runtime"),
         "runtime import must be absent:\n{content}"
     );
 }
@@ -306,7 +299,7 @@ fn t093_contracts_test_emits_in_test_file_only() {
         "pre() must be absent in fn file for test mode:\n{content}"
     );
     assert!(
-        !content.contains("ail-runtime-ts"),
+        !content.contains("../ail-runtime"),
         "runtime import must be absent:\n{content}"
     );
 }
@@ -319,7 +312,10 @@ fn t093_old_expression_captured_at_entry() {
         "transfer",
         vec![("x", "number"), ("y", "number")],
         "number",
-        vec![make_contract(ContractKind::After, "result is old(x.value) - y")],
+        vec![make_contract(
+            ContractKind::After,
+            "result is old(x.value) - y",
+        )],
         vec![return_node("number")],
     );
     let output = emit_ts_function_definitions(&verified, &config(ContractMode::On)).unwrap();
@@ -346,7 +342,10 @@ fn t093_old_nested_field_captured() {
         "process",
         vec![("a", "number")],
         "number",
-        vec![make_contract(ContractKind::After, "result is old(a.b.c) + 1")],
+        vec![make_contract(
+            ContractKind::After,
+            "result is old(a.b.c) + 1",
+        )],
         vec![return_node("number")],
     );
     let output = emit_ts_function_definitions(&verified, &config(ContractMode::On)).unwrap();
@@ -396,7 +395,10 @@ fn t093_multiple_pre_conditions_all_emitted() {
     let output = emit_ts_function_definitions(&verified, &config(ContractMode::On)).unwrap();
     let content = file_content(&output, "fn/validate.ts");
     let count = content.matches("pre(").count();
-    assert_eq!(count, 2, "expected 2 pre() calls, found {count}:\n{content}");
+    assert_eq!(
+        count, 2,
+        "expected 2 pre() calls, found {count}:\n{content}"
+    );
 }
 
 #[test]
@@ -414,7 +416,10 @@ fn t093_multiple_post_conditions_all_emitted() {
     let output = emit_ts_function_definitions(&verified, &config(ContractMode::On)).unwrap();
     let content = file_content(&output, "fn/compute.ts");
     let count = content.matches("post(").count();
-    assert_eq!(count, 2, "expected 2 post() calls, found {count}:\n{content}");
+    assert_eq!(
+        count, 2,
+        "expected 2 post() calls, found {count}:\n{content}"
+    );
 }
 
 // ── Runtime import ────────────────────────────────────────────────────────────
@@ -431,7 +436,7 @@ fn t093_import_pre_post_keep_from_runtime() {
     let output = emit_ts_function_definitions(&verified, &config(ContractMode::On)).unwrap();
     let content = file_content(&output, "fn/validate.ts");
     assert!(
-        content.contains("import { pre, post, keep } from 'ail-runtime-ts'"),
+        content.contains("import { pre, post, keep } from '../ail-runtime'"),
         "runtime import missing:\n{content}"
     );
 }
@@ -448,7 +453,7 @@ fn t093_import_not_added_when_contracts_off() {
     let output = emit_ts_function_definitions(&verified, &config(ContractMode::Off)).unwrap();
     let content = file_content(&output, "fn/validate.ts");
     assert!(
-        !content.contains("ail-runtime-ts"),
+        !content.contains("../ail-runtime"),
         "runtime import must be absent when mode=Off:\n{content}"
     );
 }
@@ -470,10 +475,7 @@ fn t093_precondition_error_class_used() {
     );
     let output = emit_ts_function_definitions(&verified, &config(ContractMode::On)).unwrap();
     let content = file_content(&output, "fn/validate.ts");
-    assert!(
-        content.contains("pre("),
-        "pre() call missing:\n{content}"
-    );
+    assert!(content.contains("pre("), "pre() call missing:\n{content}");
     assert!(
         content.contains("sender_status === 'active'"),
         "rendered TS expression missing:\n{content}"

@@ -134,10 +134,7 @@ fn build_test_graph(
     }
 
     if !check_ids.is_empty() {
-        graph
-            .get_node_mut(fn_id)
-            .expect("fn")
-            .children = Some(check_ids);
+        graph.get_node_mut(fn_id).expect("fn").children = Some(check_ids);
     }
 
     // Wire sibling edges for root children.
@@ -184,11 +181,16 @@ fn t094_generates_happy_path_test() {
     let content = file_content(&output, "tests/pay.test.ts");
     assert!(
         content.contains("should succeed with valid inputs"),
-        "happy-path stub missing:\n{content}"
+        "happy-path test name missing:\n{content}"
+    );
+    // Real test body — not a stub.
+    assert!(
+        !content.contains("it.todo('should succeed"),
+        "happy-path must not be a todo stub:\n{content}"
     );
     assert!(
-        content.contains("it.todo("),
-        "it.todo() not used:\n{content}"
+        content.contains("expect(result).toBeDefined()"),
+        "happy-path body assertion missing:\n{content}"
     );
 }
 
@@ -207,11 +209,20 @@ fn t094_generates_precondition_violation_test() {
     let content = file_content(&output, "tests/validate.test.ts");
     assert!(
         content.contains("precondition violated: x > 0"),
-        "precondition violation stub missing:\n{content}"
+        "precondition violation test name missing:\n{content}"
+    );
+    // Real test body — not a stub. Function is sync, param is primitive.
+    assert!(
+        !content.contains("it.todo('should throw when precondition"),
+        "precondition violation must not be a todo stub:\n{content}"
+    );
+    assert!(
+        content.contains("expect(() => validate(0)).toThrow()"),
+        "precondition violation body missing:\n{content}"
     );
 }
 
-// ── Postcondition stub ────────────────────────────────────────────────────────
+// ── Postcondition ─────────────────────────────────────────────────────────────
 
 #[test]
 fn t094_generates_postcondition_stub() {
@@ -226,13 +237,18 @@ fn t094_generates_postcondition_stub() {
     let content = file_content(&output, "tests/compute.test.ts");
     assert!(
         content.contains("should satisfy postcondition: result > 0"),
-        "postcondition stub missing:\n{content}"
+        "postcondition test name missing:\n{content}"
     );
-    // Dummy padding must NOT generate a postcondition stub.
+    // Dummy padding must NOT generate an extra postcondition test.
     assert_eq!(
         content.matches("satisfy postcondition").count(),
         1,
-        "dummy after contract generated extra postcondition stub:\n{content}"
+        "dummy after contract generated extra postcondition test:\n{content}"
+    );
+    // Real test body — not a stub.
+    assert!(
+        content.contains("expect(result).toBeDefined()"),
+        "postcondition body assertion missing:\n{content}"
     );
 }
 
@@ -251,7 +267,17 @@ fn t094_generates_error_path_test_per_check() {
     let content = file_content(&output, "tests/transfer.test.ts");
     assert!(
         content.contains("throw InsufficientBalanceError when check fails"),
-        "error-path stub missing:\n{content}"
+        "error-path test name missing:\n{content}"
+    );
+    // Error-path tests use it.skip (triggering the check requires constraint solving).
+    assert!(
+        content.contains("it.skip("),
+        "error-path must use it.skip:\n{content}"
+    );
+    // Must NOT be a runnable it() body (which would pass without actually triggering the error).
+    assert!(
+        !content.contains("it('should throw InsufficientBalanceError"),
+        "error-path must not be a runnable it() body:\n{content}"
     );
 }
 
@@ -270,7 +296,12 @@ fn t094_generates_invariant_test() {
     let content = file_content(&output, "tests/withdraw.test.ts");
     assert!(
         content.contains("should maintain invariant: balance >= 0"),
-        "invariant stub missing:\n{content}"
+        "invariant test name missing:\n{content}"
+    );
+    // Real test body — not a stub.
+    assert!(
+        content.contains("expect(result).toBeDefined()"),
+        "invariant body assertion missing:\n{content}"
     );
 }
 
@@ -386,22 +417,19 @@ fn t094_test_imports_all_required_errors() {
 
 #[test]
 fn t094_test_file_naming_convention() {
-    let verified = build_test_graph(
-        "transfer money",
-        vec![],
-        vec![],
-        vec![],
-        vec![],
-    );
+    let verified = build_test_graph("transfer money", vec![], vec![], vec![], vec![]);
     let output = emit_ts_test_definitions(&verified, &EmitConfig::default());
     assert!(
-        output.files.iter().any(|f| f.path == "tests/transfer_money.test.ts"),
+        output
+            .files
+            .iter()
+            .any(|f| f.path == "tests/transfer_money.test.ts"),
         "expected tests/transfer_money.test.ts, found: {:?}",
         output.files.iter().map(|f| &f.path).collect::<Vec<_>>()
     );
 }
 
-// ── Minimal stub for no contracts (9.4-D) ────────────────────────────────────
+// ── Minimal output for no contracts (9.4-D) ──────────────────────────────────
 
 #[test]
 fn t094_generates_minimal_stub_for_no_contracts() {
@@ -410,27 +438,31 @@ fn t094_generates_minimal_stub_for_no_contracts() {
     let output = emit_ts_test_definitions(&verified, &EmitConfig::default());
     let content = file_content(&output, "tests/simple_fn.test.ts");
 
-    // Happy path stub is always present.
+    // Happy path with real body is always present.
     assert!(
         content.contains("should succeed with valid inputs"),
-        "happy-path stub missing:\n{content}"
+        "happy-path test missing:\n{content}"
+    );
+    assert!(
+        content.contains("expect(result).toBeDefined()"),
+        "happy-path body assertion missing:\n{content}"
     );
 
-    // No precondition, postcondition, invariant, or error stubs.
+    // No precondition, postcondition, invariant, or error tests.
     assert!(
         !content.contains("precondition violated"),
-        "unexpected precondition stub:\n{content}"
+        "unexpected precondition test:\n{content}"
     );
     assert!(
         !content.contains("satisfy postcondition"),
-        "unexpected postcondition stub:\n{content}"
+        "unexpected postcondition test:\n{content}"
     );
     assert!(
         !content.contains("maintain invariant"),
-        "unexpected invariant stub:\n{content}"
+        "unexpected invariant test:\n{content}"
     );
     assert!(
         !content.contains("when check fails"),
-        "unexpected error-path stub:\n{content}"
+        "unexpected error-path test:\n{content}"
     );
 }

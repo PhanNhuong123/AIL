@@ -93,12 +93,21 @@ fn cli_parse_build_check_migration() {
 }
 
 #[test]
-fn cli_parse_build_target() {
+fn cli_parse_build_target_python() {
     let cmd = parse(&["ail", "build", "--target", "python"]);
     let Command::Build { target, .. } = cmd else {
         panic!("expected Build");
     };
     assert_eq!(target.as_deref(), Some("python"));
+}
+
+#[test]
+fn cli_parse_build_target_typescript() {
+    let cmd = parse(&["ail", "build", "--target", "typescript"]);
+    let Command::Build { target, .. } = cmd else {
+        panic!("expected Build");
+    };
+    assert_eq!(target.as_deref(), Some("typescript"));
 }
 
 #[test]

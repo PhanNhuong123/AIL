@@ -65,6 +65,7 @@ fn default_args() -> BuildArgs<'static> {
         watch: false,
         check_breaking: false,
         check_migration: false,
+        target: None,
     }
 }
 

@@ -24,7 +24,7 @@ pub(crate) struct ImportTracker {
     /// Map from module path (e.g. `"./wallet_balance"`) to sorted symbol list.
     imports: BTreeMap<String, Vec<String>>,
     /// Set when contract mode `On` is active and at least one contract is emitted.
-    /// Causes `render()` to prepend `import { pre, post, keep } from 'ail-runtime-ts';`.
+    /// Causes `render()` to prepend `import { pre, post, keep } from '../ail-runtime';`.
     pub(crate) needs_runtime: bool,
 }
 
@@ -54,7 +54,7 @@ impl ImportTracker {
     /// Render all accumulated imports as TypeScript import statements.
     ///
     /// When `needs_runtime` is set, prepends
-    /// `import { pre, post, keep } from 'ail-runtime-ts';` (semantic order per spec)
+    /// `import { pre, post, keep } from '../ail-runtime';` (semantic order per spec)
     /// before any user-type imports.
     ///
     /// User-type imports are emitted one per source module, sorted by module path.
@@ -62,7 +62,9 @@ impl ImportTracker {
         let mut parts: Vec<String> = Vec::new();
 
         if self.needs_runtime {
-            parts.push("import { pre, post, keep } from 'ail-runtime-ts';".to_owned());
+            // Inline runtime lives at the output root; fn/ and repos/ files are one
+            // level deep, so the relative import is always '../ail-runtime'.
+            parts.push("import { pre, post, keep } from '../ail-runtime';".to_owned());
         }
 
         let type_imports = self

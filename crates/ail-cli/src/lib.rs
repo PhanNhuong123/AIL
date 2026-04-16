@@ -40,7 +40,7 @@ pub fn run() -> Result<(), CliError> {
             source_map,
             check_breaking,
             check_migration,
-            target: _,
+            target,
         } => {
             let args = BuildArgs {
                 contracts: contracts.as_deref(),
@@ -48,6 +48,7 @@ pub fn run() -> Result<(), CliError> {
                 watch,
                 check_breaking,
                 check_migration,
+                target: target.as_deref(),
             };
             run_build(&cwd, &args)
         }
@@ -110,7 +111,7 @@ pub enum Command {
         #[arg(long)]
         check_migration: bool,
 
-        /// Emission target language (v0.1: python only).
+        /// Emission target language: python (default) or typescript.
         #[arg(long)]
         target: Option<String>,
     },

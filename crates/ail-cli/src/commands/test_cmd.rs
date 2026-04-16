@@ -15,6 +15,7 @@ pub fn run_test(root: &Path) -> Result<(), CliError> {
         watch: false,
         check_breaking: false,
         check_migration: false,
+        target: None,
     };
     crate::commands::build::run_build(root, &args)?;
 

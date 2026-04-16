@@ -65,6 +65,7 @@ fn build_writes_generated_files() {
         watch: false,
         check_breaking: false,
         check_migration: false,
+        target: None,
     };
     run_build(tmp.path(), &args).expect("build should succeed on wallet fixture");
 
@@ -91,6 +92,7 @@ fn build_scaffolded_files_not_overwritten() {
         watch: false,
         check_breaking: false,
         check_migration: false,
+        target: None,
     };
 
     // First build — scaffolded files are created.
