@@ -982,3 +982,88 @@ fn t083_z3_opaque_function_check_not_promoted() {
          inner post `x > 3` should fail without the fact"
     );
 }
+
+// ── Compositional soundness: errors must block postcondition propagation ─────
+
+#[test]
+fn z3_verify_contradictory_child_does_not_propagate_postconditions() {
+    // Regression test: when a child Do node has ContradictoryPreconditions,
+    // its postconditions must NOT be inserted into verified_posts and must
+    // NOT be compositionally propagated to the parent.
+    //
+    // Structure:
+    //   Describe (root)
+    //     Do parent [pre: x > 0, post: x > 5]  ← not entailed by pre alone
+    //       Do child  [pre: x > 100 AND x < 5 (contradictory), post: x > 5]
+    //
+    // Before the fix, the child's post `x > 5` was propagated despite
+    // ContradictoryPreconditions, causing the parent's `x > 5` to be
+    // incorrectly proved.
+    let mut graph = empty_graph();
+
+    let root_id = {
+        let mut n = Node::new(NodeId::new(), "root", Pattern::Describe);
+        n.children = Some(vec![]);
+        let id = graph.add_node(n).unwrap();
+        graph.set_root(id).unwrap();
+        id
+    };
+
+    let parent_do = {
+        let mut n = Node::new(NodeId::new(), "do parent", Pattern::Do);
+        n.metadata.name = Some("parent_fn".to_string());
+        n.metadata.params = vec![param("x", "PositiveInteger")];
+        n.contracts = vec![before("x > 0"), after("x > 5")];
+        n.children = Some(vec![]);
+        graph.add_node(n).unwrap()
+    };
+    graph.add_edge(root_id, parent_do, EdgeKind::Ev).unwrap();
+    graph
+        .get_node_mut(root_id)
+        .unwrap()
+        .children
+        .as_mut()
+        .unwrap()
+        .push(parent_do);
+
+    let child_do = {
+        let mut n = Node::new(NodeId::new(), "do child", Pattern::Do);
+        n.metadata.name = Some("child_fn".to_string());
+        n.metadata.params = vec![param("x", "PositiveInteger")];
+        // Contradictory: x > 100 AND x < 5 cannot both hold.
+        n.contracts = vec![before("x > 100"), before("x < 5"), after("x > 5")];
+        n.children = Some(vec![]);
+        graph.add_node(n).unwrap()
+    };
+    graph.add_edge(parent_do, child_do, EdgeKind::Ev).unwrap();
+    graph
+        .get_node_mut(parent_do)
+        .unwrap()
+        .children
+        .as_mut()
+        .unwrap()
+        .push(child_do);
+
+    let typed = make_typed(graph);
+    let errors = verify_contracts(&typed);
+
+    // Child must report contradictory preconditions.
+    assert!(
+        errors.iter().any(
+            |e| matches!(e, VerifyError::ContradictoryPreconditions { node_id, .. }
+                if *node_id == child_do)
+        ),
+        "child node must report contradictory preconditions; errors: {errors:?}"
+    );
+
+    // Parent post `x > 5` must NOT be entailed: the child's (unverified)
+    // postcondition `x > 5` must not have been propagated.
+    assert!(
+        errors.iter().any(
+            |e| matches!(e, VerifyError::PostconditionNotEntailed { node_id, .. }
+                if *node_id == parent_do)
+        ),
+        "parent postcondition must not be entailed — child postconditions \
+         should not propagate when child has errors; errors: {errors:?}"
+    );
+}

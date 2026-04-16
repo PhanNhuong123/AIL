@@ -128,6 +128,32 @@ fn collect_affected_ids(conn: &Connection, node_id: &str) -> Result<Vec<String>,
           -- Rule 4 DIAGONAL: nodes that Ed-reference this node (incoming)
           diag(id) AS (
             SELECT source_id FROM edges WHERE target_id = ?1 AND kind = 'ed'
+          ),
+          -- Rule 5 PROMOTION: for Check nodes, walk up through ancestors and
+          -- at each ancestor level collect positional siblings-after + their
+          -- descendants. This mirrors the CIC read path where
+          -- collect_promoted_facts walks the full ancestor chain and recurses
+          -- into preceding Do bodies to find nested Check nodes.
+          -- The seed row filters on pattern = 'check' so this CTE is empty
+          -- (and produces no rows) for non-Check node changes.
+          anc_chain(id, par, pos) AS (
+            SELECT id, parent_id, position FROM nodes
+              WHERE id = ?1 AND pattern = 'check'
+            UNION ALL
+            SELECT n.id, n.parent_id, n.position
+              FROM nodes n INNER JOIN anc_chain ac ON n.id = ac.par
+          ),
+          promo_next(id) AS (
+            SELECT n.id FROM nodes n
+              INNER JOIN anc_chain ac
+                ON n.parent_id = ac.par AND n.position > ac.pos
+              WHERE ac.par IS NOT NULL
+          ),
+          promo_next_desc(id) AS (
+            SELECT id FROM promo_next
+            UNION ALL
+            SELECT n.id FROM nodes n
+              INNER JOIN promo_next_desc ON n.parent_id = promo_next_desc.id
           )
         SELECT ?1 AS id
         UNION SELECT id FROM desc
@@ -135,6 +161,7 @@ fn collect_affected_ids(conn: &Connection, node_id: &str) -> Result<Vec<String>,
         UNION SELECT id FROM pos_next_desc
         UNION SELECT id FROM eh_next_desc
         UNION SELECT id FROM diag
+        UNION SELECT id FROM promo_next_desc
     ";
 
     let mut stmt = conn

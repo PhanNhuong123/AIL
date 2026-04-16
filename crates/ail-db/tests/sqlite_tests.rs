@@ -1035,6 +1035,51 @@ fn t073_update_contract_invalidates_subtree() {
     );
 }
 
+// ─── t073_invalidate_promotion_across_ancestor_levels ────────────────────────
+
+#[test]
+fn t073_invalidate_promotion_across_ancestor_levels() {
+    // Structure:
+    //   root (Do)
+    //     validate (Do)       [position 0]
+    //       check_node (Check) [position 0]
+    //     execute (Do)         [position 1, sibling after validate]
+    //
+    // When check_node is updated, execute's cache must become stale because
+    // the CIC read path collects promoted facts from checks inside preceding
+    // sibling Dos (via collect_facts_from_do_body).
+    let (_guard, mut db) = fresh_db();
+    let root = GraphBackend::add_node(&mut db, make_do("root")).unwrap();
+    let validate = GraphBackend::add_node(&mut db, make_do("validate")).unwrap();
+    let check_node =
+        GraphBackend::add_node(&mut db, make_node("check guard", Pattern::Check)).unwrap();
+    let execute = GraphBackend::add_node(&mut db, make_do("execute")).unwrap();
+
+    // root -> validate (Ev), validate -> check_node (Ev), root -> execute (Ev)
+    GraphBackend::add_edge(&mut db, root, validate, EdgeKind::Ev).unwrap();
+    GraphBackend::add_edge(&mut db, validate, check_node, EdgeKind::Ev).unwrap();
+    GraphBackend::add_edge(&mut db, root, execute, EdgeKind::Ev).unwrap();
+    // validate -> execute (Eh) — execution order
+    GraphBackend::add_edge(&mut db, validate, execute, EdgeKind::Eh).unwrap();
+
+    // Warm all caches.
+    db.get_context_packet(root).unwrap();
+    db.get_context_packet(validate).unwrap();
+    db.get_context_packet(check_node).unwrap();
+    db.get_context_packet(execute).unwrap();
+
+    // Update the check node — must cascade stale to execute via Rule 5 PROMOTION.
+    let mut updated = make_node("check guard updated", Pattern::Check);
+    updated.id = check_node;
+    GraphBackend::update_node(&mut db, check_node, updated).unwrap();
+
+    assert_eq!(
+        db.cic_cache_valid(execute),
+        Some(false),
+        "execute must be stale — it receives a promoted fact from the check inside validate"
+    );
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // Task 7.4 — FTS5 Search Integration
 // ═══════════════════════════════════════════════════════════════════════════

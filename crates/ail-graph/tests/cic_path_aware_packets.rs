@@ -238,3 +238,71 @@ fn t082_cache_invalidated_on_check_insertion() {
     assert!(!affected.contains(&check));
     assert!(!affected.contains(&root));
 }
+
+// ─── t082_cache_invalidated_for_nested_check_in_do ──────────────────────────
+
+#[test]
+fn t082_cache_invalidated_for_nested_check_in_do() {
+    // do root
+    //   do validate [V]
+    //     check x > 0 [C]  ← check changes
+    //   do execute [E]      ← must be invalidated (receives promoted fact from C)
+    //     fetch data [F]    ← must be invalidated (descendant of E)
+    //
+    // The ancestor walk from C:
+    //   Level C: siblings_after(C) inside V = [] (no siblings after C in V)
+    //   Level V: siblings_after(V) under root = [E] → E + descendants(E) = [E, F]
+    let mut g = AilGraph::new();
+    let root = make_node(&mut g, Pattern::Do, "root", None);
+    let validate = make_child(&mut g, root, Pattern::Do, "validate", None);
+    let check = make_check(&mut g, validate, "x > 0");
+    let execute = make_sibling_after(&mut g, validate, root, Pattern::Do, "execute", None);
+    let fetch = make_child(&mut g, execute, Pattern::Fetch, "fetch data", Some("data"));
+    g.set_root(root).unwrap();
+
+    let affected = check_promotion_affected_nodes(&g, check).unwrap();
+
+    assert!(
+        affected.contains(&execute),
+        "execute must be in affected set (sibling of check's parent Do)"
+    );
+    assert!(
+        affected.contains(&fetch),
+        "fetch must be in affected set (descendant of execute)"
+    );
+    assert!(!affected.contains(&check));
+    assert!(!affected.contains(&validate));
+}
+
+// ─── t082_cache_invalidated_for_deeply_nested_check ─────────────────────────
+
+#[test]
+fn t082_cache_invalidated_for_deeply_nested_check() {
+    // do root
+    //   do level_1
+    //     do level_2
+    //       check x > 0 [C]   ← check changes
+    //     do sib_of_l2 [S2]   ← must be invalidated
+    //   do sib_of_l1 [S1]     ← must be invalidated
+    //
+    // The ancestor walk from C:
+    //   Level C: siblings_after(C) in level_2 = [] (no siblings)
+    //   Level level_2: siblings_after(level_2) in level_1 = [S2]
+    //   Level level_1: siblings_after(level_1) in root = [S1]
+    let mut g = AilGraph::new();
+    let root = make_node(&mut g, Pattern::Do, "root", None);
+    let l1 = make_child(&mut g, root, Pattern::Do, "level_1", None);
+    let l2 = make_child(&mut g, l1, Pattern::Do, "level_2", None);
+    let check = make_check(&mut g, l2, "x > 0");
+    let s2 = make_sibling_after(&mut g, l2, l1, Pattern::Do, "sib_of_l2", None);
+    let s1 = make_sibling_after(&mut g, l1, root, Pattern::Do, "sib_of_l1", None);
+    g.set_root(root).unwrap();
+
+    let affected = check_promotion_affected_nodes(&g, check).unwrap();
+
+    assert!(affected.contains(&s2), "sib_of_l2 must be invalidated");
+    assert!(affected.contains(&s1), "sib_of_l1 must be invalidated");
+    assert!(!affected.contains(&check));
+    assert!(!affected.contains(&l2));
+    assert!(!affected.contains(&l1));
+}

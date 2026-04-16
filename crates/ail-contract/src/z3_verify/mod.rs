@@ -136,15 +136,18 @@ pub fn verify_contracts(typed_graph: &TypedGraph) -> Vec<VerifyError> {
 
         let errors = verify_do_node(node, graph, &child_posts, &promoted, &z3_ctx);
 
-        let has_entailment_failure = errors
+        // Block postcondition propagation on node-fatal errors: these
+        // cause verify_do_node to return early without checking post-
+        // conditions, so propagating them would be unsound.
+        // EncodingFailed is non-fatal (individual contract encoding
+        // failure; the verifier continues to the next contract).
+        let has_node_fatal_error = errors
             .iter()
-            .any(|e| matches!(e, VerifyError::PostconditionNotEntailed { .. }));
+            .any(|e| !matches!(e, VerifyError::EncodingFailed { .. }));
 
         all_errors.extend(errors);
 
-        // Record this node's verified postconditions only if every post-condition
-        // was successfully entailed (no PostconditionNotEntailed errors).
-        if !has_entailment_failure {
+        if !has_node_fatal_error {
             let posts = parse_after_contracts(node);
             verified_posts.insert(node.id, posts);
         }
