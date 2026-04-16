@@ -7,6 +7,7 @@
 //! - Source-map JSON (`functions.ailmap.json`) for tracing emitted code back to `.ail` nodes.
 //! - TypeScript type definitions (branded types, interfaces, Error subclasses) ([`emit_ts_type_definitions`]).
 //! - TypeScript function definitions (async functions, repository interfaces) ([`emit_ts_function_definitions`]).
+//! - TypeScript test stubs (vitest/jest `it.todo()` stubs per Do node) ([`emit_ts_test_definitions`]).
 //!
 //! ## Pipeline position
 //!
@@ -16,6 +17,7 @@
 //!              → emit_scaffold_files()               → scaffolded/__init__.py (write-once)
 //!              → emit_ts_type_definitions()          → types/*.ts + errors/*.ts + barrel index.ts
 //!              → emit_ts_function_definitions()      → fn/*.ts + repos/*.ts + barrel index.ts files
+//!              → emit_ts_test_definitions()          → tests/*.test.ts
 //! ```
 //!
 //! ## Entry points
@@ -24,7 +26,8 @@
 //! - [`emit_function_definitions`] — emit Python function bodies with contract assertions.
 //! - [`emit_scaffold_files`] — emit developer-owned scaffold files (never overwritten after first write).
 //! - [`emit_ts_type_definitions`] — emit TypeScript type files (task 9.1).
-//! - [`emit_ts_function_definitions`] — emit TypeScript function files (task 9.2).
+//! - [`emit_ts_function_definitions`] — emit TypeScript function files (task 9.2/9.3).
+//! - [`emit_ts_test_definitions`] — emit TypeScript test stubs (task 9.4).
 
 mod constants;
 mod errors;
@@ -36,6 +39,7 @@ pub use errors::EmitError;
 pub use python::emit_functions::emit_function_definitions;
 pub use python::emit_types::emit_type_definitions;
 pub use python::scaffold::emit_scaffold_files;
-pub use types::{ContractMode, EmitConfig, EmitOutput, EmittedFile, FileOwnership};
+pub use types::{ContractMode, EmitConfig, EmitOutput, EmittedFile, FileOwnership, TestFramework};
 pub use typescript::emit_functions::emit_ts_function_definitions;
 pub use typescript::emit_types::emit_ts_type_definitions;
+pub use typescript::ts_test_gen::emit_ts_test_definitions;

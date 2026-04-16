@@ -4,6 +4,7 @@ pub(crate) mod define;
 pub(crate) mod describe;
 pub mod emit_functions;
 pub mod emit_types;
+pub mod ts_test_gen;
 pub(crate) mod error;
 pub(crate) mod fn_name;
 pub(crate) mod import_tracker;

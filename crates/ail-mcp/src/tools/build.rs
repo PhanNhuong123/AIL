@@ -60,6 +60,7 @@ pub(crate) fn run_build(
         } else {
             ContractMode::Off
         },
+        ..Default::default()
     };
 
     let mut all_files: Vec<BuildFile> = Vec::new();

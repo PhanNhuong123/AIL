@@ -52,6 +52,7 @@ pub fn run_build(root: &Path, args: &BuildArgs<'_>) -> Result<(), CliError> {
     let config = EmitConfig {
         contract_mode,
         async_mode: false,
+        ..Default::default()
     };
 
     if args.watch {
