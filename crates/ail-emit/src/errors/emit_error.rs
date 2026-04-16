@@ -51,4 +51,24 @@ pub enum EmitError {
 
     #[error("AIL-E014: old() reference in non-after contract on node {node_id}: old() is only valid in promise-after expressions")]
     OldRefInNonAfterContract { node_id: NodeId },
+
+    // ── TypeScript emitter errors (AIL-E015–E019) ─────────────────────────────
+    #[error("AIL-E015: TS Define node {node_id} has no name in metadata")]
+    TsDefineNodeMissingName { node_id: NodeId },
+
+    #[error("AIL-E016: TS Define node {node_id} has no base_type in metadata")]
+    TsDefineNodeMissingBaseType { node_id: NodeId },
+
+    #[error("AIL-E017: TS Describe node {node_id} has no name in metadata")]
+    TsDescribeNodeMissingName { node_id: NodeId },
+
+    #[error("AIL-E018: TS Error node {node_id} has no name in metadata")]
+    TsErrorNodeMissingName { node_id: NodeId },
+
+    #[error("AIL-E019: TS constraint parse error on node {node_id}: {message}")]
+    TsConstraintParseError {
+        node_id: NodeId,
+        expression: String,
+        message: String,
+    },
 }
