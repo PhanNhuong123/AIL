@@ -121,6 +121,7 @@ dependencies = [
 name = "ail-search"
 version = "0.1.0"
 dependencies = [
+ "ail-graph",
  "ort",
  "thiserror 2.0.18",
  "tokenizers",

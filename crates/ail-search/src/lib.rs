@@ -1,35 +1,50 @@
-//! `ail-search` — Embedding provider interface for semantic search in AIL.
+//! `ail-search` — Hybrid (BM25 + semantic) search for AIL.
 //!
-//! This crate defines the [`EmbeddingProvider`] trait and the local ONNX-backed
-//! implementation ([`OnnxEmbeddingProvider`]) for `all-MiniLM-L6-v2`.
+//! This crate provides:
+//! - [`EmbeddingProvider`] — provider-agnostic embedding interface.
+//! - [`EmbeddingIndex`] — in-memory index of node embedding vectors.
+//! - [`hybrid_search`] — RRF fusion of BM25 and semantic results.
+//! - [`HybridSearchResult`] / [`RankingSource`] — stable result types with
+//!   provenance metadata for MCP and CLI callers.
+//! - Helper functions: [`cosine_similarity`], [`node_embedding_text`].
 //!
 //! ## Feature flags
 //!
 //! | Feature | What it enables |
 //! |---------|-----------------|
-//! | *(none, default)* | `EmbeddingProvider` trait + `SearchError` only |
+//! | *(none, default)* | Everything above; zero ONNX dependencies |
 //! | `embeddings` | `OnnxEmbeddingProvider` via ONNX Runtime |
 //!
 //! Without the `embeddings` feature the crate compiles with zero ONNX
-//! dependencies. Callers (CLI, MCP) can depend on `ail-search` cheaply and
-//! fall back to BM25-only search when `EmbeddingProvider` is unavailable.
+//! dependencies. Callers can depend on `ail-search` cheaply and use
+//! `hybrid_search` with a custom [`EmbeddingProvider`] or fall back to
+//! BM25-only mode via `embeddings: None`.
 //!
-//! ## Quick start (with `embeddings` feature)
+//! ## Quick start — hybrid search
 //!
 //! ```rust,ignore
-//! // Requires the `embeddings` Cargo feature.
-//! use ail_search::{EmbeddingProvider, OnnxEmbeddingProvider};
+//! use ail_search::{EmbeddingIndex, hybrid_search};
 //!
-//! let model_dir = OnnxEmbeddingProvider::ensure_model().expect("model present");
-//! let provider = OnnxEmbeddingProvider::new(&model_dir).expect("loaded");
-//! let vec = provider.embed("transfer money safely").expect("embed ok");
-//! assert_eq!(vec.len(), 384);
+//! // 1. Build embedding index (requires a provider + GraphBackend).
+//! let index = EmbeddingIndex::build(&graph, provider).expect("built");
+//!
+//! // 2. Run BM25 first (caller-controlled).
+//! let bm25 = Bm25Index::build_from_graph(&graph);
+//! let bm25_results = bm25.search(query, 20, &graph);
+//!
+//! // 3. Fuse with hybrid search.
+//! let results = hybrid_search(query, &bm25_results, Some(&index), &graph, 10).unwrap();
 //! ```
 
 pub mod errors;
 pub mod provider;
 
+mod hybrid;
+mod index;
+
 pub use errors::SearchError;
+pub use hybrid::{hybrid_search, HybridSearchResult, RankingSource};
+pub use index::{cosine_similarity, node_embedding_text, EmbeddingIndex, SemanticResult};
 pub use provider::EmbeddingProvider;
 
 #[cfg(feature = "embeddings")]

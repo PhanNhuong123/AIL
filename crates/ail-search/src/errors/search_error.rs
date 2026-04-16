@@ -27,6 +27,17 @@ pub enum SearchError {
     #[error("AIL-S004: tokenization failed: {0}")]
     TokenizationFailed(String),
 
+    /// AIL-S005 — Graph query failed during embedding index construction.
+    #[error("AIL-S005: embedding index build failed: {0}")]
+    EmbeddingBuildFailed(String),
+
+    /// AIL-S006 — Query vector dimension does not match the indexed vector dimension.
+    ///
+    /// Occurs when the embedding provider is swapped after index construction, or
+    /// when a caller passes a query vector from a different model.
+    #[error("AIL-S006: dimension mismatch: expected {expected}, got {actual}")]
+    DimensionMismatch { expected: usize, actual: usize },
+
     /// Underlying I/O error (e.g., reading model files from disk).
     #[error("I/O error: {0}")]
     Io(#[from] std::io::Error),

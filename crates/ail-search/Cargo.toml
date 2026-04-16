@@ -11,6 +11,7 @@ embeddings = ["dep:ort", "dep:tokenizers"]
 
 [dependencies]
 thiserror  = { workspace = true }
+ail-graph  = { workspace = true }
 
 # Optional: local ONNX inference (only in ail-search; not a shared workspace dep)
 # ort 2.x is still in release-candidate phase; pin to latest rc.
