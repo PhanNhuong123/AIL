@@ -93,11 +93,10 @@ Constraint quên = IMPOSSIBLE.
 ### Kiến trúc
 
 ```
-.ail files → Parse → PSSD Graph → CIC Packets → Z3 Verify → Build → Python/TS/Rust + Tests
-                                      ↑
-                              Hệ thống tính sẵn
-                              TẤT CẢ constraints
-                              cho mọi node
+.ail files → Parse → PSSD Graph → CIC Packets → Z3 Verify → Build → Python/TS + Tests
+                            ↓                                           ↑
+                      .ail.db (SQLite)                            dist/ or dist-ts/
+                    BM25 + embeddings
 ```
 
 ### PSSD Graph — Code là đồ thị ngữ nghĩa
@@ -240,25 +239,63 @@ async def transfer_money_safely(
 
 ## CLI
 
+**Core pipeline**
+
 ```bash
-ail init my_project          # Tạo project mới
-ail verify                   # Z3 formal verification
-ail build --target python    # Emit Python + tests
-ail build --target ts        # Emit TypeScript + tests
-ail build --watch            # Rebuild khi file thay đổi
-ail test                     # Build + chạy tests
-ail serve                    # MCP server cho AI tools
+ail init <name>                          # scaffold a new project
+ail build [--target python|typescript]   # full pipeline → generated source
+ail build --watch                        # rebuild on file change
+ail build --contracts on|comments|off    # contract emission mode
+ail build --source-map                   # write functions.ailmap.json
+ail build --from-db <path>               # build from a specific .ail.db
+ail verify [file] [--from-db <path>]     # run pipeline without emitting
+ail test                                 # build + run pytest
+ail status                               # pipeline stage + graph stats
+```
+
+**Migration**
+
+```bash
+ail migrate --from <src/> --to <db> [--verify]   # filesystem → SQLite
+ail export --from <db> --to <dir>                 # SQLite → export.ail
+```
+
+**Search**
+
+```bash
+ail search <query>                       # BM25 full-text (requires SQLite)
+ail search <query> --semantic            # hybrid RRF (requires embeddings feature)
+ail search <query> --bm25-only           # force BM25 even if --semantic given
+ail search --setup                       # check ONNX model files
+ail search <query> --budget <n>          # cap result count
+ail reindex                              # clear embedding vectors
+ail reindex --embeddings                 # rebuild embedding index
+```
+
+**CIC context**
+
+```bash
+ail context --task "<text>" [--from-db <path>]   # BM25-pick a Do node, print packet
+ail context --node <name>   [--from-db <path>]   # target a node by name
+```
+
+**MCP server**
+
+```bash
+ail serve                                # start the MCP server over stdio
 ```
 
 ## MCP Integration
 
-AI tools (Claude, Cursor) connect qua MCP:
+AI tools (Claude, Cursor) connect via MCP:
 
 ```json
 { "mcpServers": { "ail": { "command": "ail", "args": ["serve"] } } }
 ```
 
-5 tools: `ail.search`, `ail.context`, `ail.verify`, `ail.build`, `ail.status`
+10 tools — 5 read: `ail.search`, `ail.context`, `ail.verify`, `ail.build`,
+`ail.status`. 5 write (v2.0): `ail.write`, `ail.patch`, `ail.move`,
+`ail.delete`, `ail.batch`.
 
 ---
 
@@ -277,23 +314,29 @@ AI tools (Claude, Cursor) connect qua MCP:
 
 ## Tech Stack
 
-**Rust** (compiler) · **petgraph** (PSSD graph) · **Z3** (formal verification) · **pest** (PEG parser)
+**Rust** (compiler) · **petgraph** (PSSD graph) · **Z3** (formal verification) · **pest** (PEG parser) · **SQLite / rusqlite · ONNX / ort · ndarray**
 
 ## Status
 
-**v0.1 — Release Candidate.** Toàn bộ pipeline đã hoàn thiện:
+**v2.0.0.** All v1.0 and v2.0 phases complete:
 
 | Phase | Deliverable | State |
 |-------|-------------|-------|
-| 1 | `ail-graph` — PSSD graph, CIC packets, BM25 search, validation | ✅ Done |
-| 2 | `ail-types` — constraint AST, type checker, `TypedGraph` | ✅ Done |
-| 3 | `ail-contract` — static checks, Z3 formal verification, `VerifiedGraph` | ✅ Done |
-| 4 | `ail-text` — pest parser, deterministic `.ail` renderer | ✅ Done |
-| 5 | `ail-emit` — Python emitter, pytest stubs, source maps | ✅ Done |
-| 5b | `ail-mcp` + `ail-cli` — MCP server, `clap` CLI | ✅ Done |
-| 6 | Polish & release — `wallet_service` example, docs, quality gates | 🔄 In progress |
+| 1 | `ail-graph` — PSSD graph, CIC packets, BM25 search, validation | Done |
+| 2 | `ail-types` — constraint AST, type checker, `TypedGraph` | Done |
+| 3 | `ail-contract` — static checks, Z3 formal verification, `VerifiedGraph` | Done |
+| 4 | `ail-text` — pest parser, deterministic `.ail` renderer | Done |
+| 5a | `ail-emit` — Python emitter, pytest stubs, source maps | Done |
+| 5b | `ail-mcp` + `ail-cli` — MCP server, `clap` CLI | Done |
+| 6 | v1.0 polish & release — `wallet_service` fixture, docs, quality gates | Done |
+| 7 | `ail-db` — SQLite backend, `GraphBackend`, FTS5, CIC cache, `ail migrate`/`ail export` | Done |
+| 8 | Path-sensitive CIC — check promotion, `promoted_facts`, `ail context` | Done |
+| 9 | TypeScript emitter — `dist-ts/`, branded factories, Vitest stubs | Done |
+| 10 | `ail-search` — embedding provider, hybrid RRF, persisted vectors, `ail reindex` | Done |
+| 11 | MCP write tools — `write`, `patch`, `move`, `delete`, `batch` (atomic) | Done |
+| 12 | Integration release — `examples/wallet_service/`, e2e Python + TypeScript | Done |
 
-End-to-end verified: `ail build` on `wallet_service` generates Python + pytest, all 196 tests pass.
+End-to-end verified: `ail build` on `wallet_service` generates Python + TypeScript, all tests pass. See `CHANGELOG.md` for the full v2.0 feature list.
 
 ## License
 

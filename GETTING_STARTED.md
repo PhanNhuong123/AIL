@@ -91,6 +91,8 @@ source_map = true
 async = false
 ```
 
+Note: only `[database] backend` is read by the CLI today — `[build]` fields are placeholders for future config-driven mode. Use CLI flags (`--target`, `--contracts`, `--source-map`) to control build behavior. See `docs/config-reference.md` for the full status table.
+
 ---
 
 ## 3. Write Your First Types
@@ -296,37 +298,219 @@ Available MCP tools:
 | `ail.build` | Trigger a build and return generated file paths |
 | `ail.status` | Return pipeline stage and graph statistics |
 
+v2.0 adds 5 write tools — see §14 MCP Write Tools.
+
+---
+
+## 10. SQLite Migration (v2.0)
+
+By default AIL reads `.ail` text files. v2.0 adds an opt-in SQLite backend
+that stores the graph, contracts, FTS5 index, and CIC cache in a single
+`project.ail.db` file.
+
+```bash
+cd hello_wallet
+ail migrate --from src/ --to project.ail.db --verify
+```
+
+`--verify` re-parses the source after migration and confirms node, edge, and
+contract counts match. Add the SQLite working files to `.gitignore`:
+
+```
+project.ail.db-wal
+project.ail.db-shm
+```
+
+Make the SQLite preference explicit (optional):
+
+```toml
+[database]
+backend = "auto"   # auto | sqlite | filesystem
+```
+
+`auto` selects SQLite when `project.ail.db` exists next to `ail.config.toml`.
+The rest of the pipeline runs unchanged: `ail verify`, `ail build`,
+`ail test`.
+
+To roll back, delete `project.ail.db` (and the `-wal` / `-shm` siblings).
+The filesystem `.ail` tree is untouched by `ail migrate`.
+
+To inspect what is in the database:
+
+```bash
+ail export --from project.ail.db --to exported/
+```
+
+Output is a single `exported/export.ail` file, not a per-node tree.
+
+---
+
+## 11. TypeScript Build (v2.0)
+
+```bash
+ail build --target typescript
+```
+
+This writes `dist-ts/`:
+
+```
+dist-ts/
+├── tsconfig.json        # strict
+├── package.json
+├── ail-runtime.ts       # inlined runtime
+├── types/               # one file per Define / Describe
+├── errors/              # one file per Error node
+├── fn/                  # one file per top-level Do
+└── tests/               # Vitest stubs
+```
+
+Run it with Node:
+
+```bash
+cd dist-ts
+npm install
+npx tsc --noEmit
+npx vitest run
+```
+
+Define types are emitted as branded factories that enforce the parsed
+`where` constraint at runtime:
+
+```ts
+import { createWalletBalance } from "./types/wallet_balance";
+
+createWalletBalance(10);   // ok
+createWalletBalance(-1);   // throws — value >= 0 violated
+```
+
+---
+
+## 12. Search (v2.0)
+
+`ail search` runs over the SQLite backend. BM25 is always available; hybrid
+search requires the `embeddings` Cargo feature plus an ONNX model.
+
+BM25 (no extra setup beyond the SQLite backend):
+
+```bash
+ail search "balance transfer"
+ail search "transfer" --budget 5
+```
+
+Hybrid (BM25 + ONNX semantic, fused with RRF):
+
+```bash
+cargo build -p ail-cli --features embeddings --release
+ail search --setup
+# place model files at ~/.ail/models/all-MiniLM-L6-v2/
+ail reindex --embeddings
+ail search "balance transfer" --semantic
+```
+
+`ail search --bm25-only` forces BM25 even when `--semantic` is also passed.
+
+---
+
+## 13. CIC Context Packets (v2.0)
+
+```bash
+ail context --task "validate transfer"          # BM25-pick the top Do node
+ail context --node transfer_money               # target a specific node
+```
+
+Requires the SQLite backend (filesystem-only projects return an error with a
+remediation hint). The response includes:
+
+- the target node and its inherited constraints (CIC down/up/across/diagonal),
+- `promoted_facts`: facts proven on the prevailing path that the engine has
+  promoted forward (path-sensitive CIC),
+- a `cache_hit` indicator. The first call seeds the `cic_cache` table; the
+  second call for the same node hits the cache.
+
+---
+
+## 14. MCP Write Tools (v2.0)
+
+`ail serve` now exposes 10 MCP tools — 5 read tools plus 5 write tools.
+
+| Tool          | Purpose                                                |
+|---------------|--------------------------------------------------------|
+| `ail.write`   | Create a new node (accepts `metadata`).                |
+| `ail.patch`   | Modify an existing node (`path` / `value`).            |
+| `ail.move`    | Re-parent or reorder a node.                           |
+| `ail.delete`  | Remove a node (`cascade`, `orphan`, `dry_run`).        |
+| `ail.batch`   | Ordered atomic multi-op; rollback on first error.      |
+
+`ail.batch` snapshots the in-memory `AilGraph` (via `Clone`) before running
+ops and restores the snapshot if any op fails. `dry_run` is rejected inside
+a batch.
+
+`ail.verify` and `ail.build` are dirty-aware: after any write tool, the
+next verify/build re-pipelines from the in-memory graph rather than
+re-parsing from disk. Edits live in-memory within a session;
+`SqliteGraph::save_from_graph()` is available for explicit disk persistence.
+
 ---
 
 ## CLI Reference
 
+**Core pipeline**
+
 ```bash
-ail init <name>          # scaffold a new project
-ail build                # full pipeline → generated Python
-ail build --watch        # rebuild on file change
-ail verify [file]        # run verification without emitting
-ail test                 # build + run pytest
-ail status               # show pipeline stage and graph stats
-ail serve                # start MCP server over stdio
+ail init <name>                          # scaffold a new project
+ail build [--target python|typescript]   # full pipeline → generated source
+ail build --watch                        # rebuild on file change
+ail build --contracts on|comments|off    # contract emission mode
+ail build --source-map                   # write functions.ailmap.json
+ail build --from-db <path>               # build from a specific .ail.db
+ail verify [file] [--from-db <path>]     # run pipeline without emitting
+ail test                                 # build + run pytest
+ail status                               # pipeline stage + graph stats
 ```
 
-Build flags:
+**Migration**
 
 ```bash
-ail build --contracts on       # emit assert statements (default)
-ail build --contracts comments # emit contracts as comments only
-ail build --contracts off      # omit contracts from output
-ail build --source-map         # generate functions.ailmap.json
+ail migrate --from <src/> --to <db> [--verify]   # filesystem → SQLite
+ail export --from <db> --to <dir>                 # SQLite → export.ail
+```
+
+**Search**
+
+```bash
+ail search <query>                       # BM25 (requires SQLite)
+ail search <query> --semantic            # hybrid RRF (requires embeddings feature)
+ail search <query> --bm25-only           # force BM25 even if --semantic given
+ail search --setup                       # check ONNX model files
+ail search <query> --budget <n>          # cap result count
+ail reindex                              # clear embedding vectors
+ail reindex --embeddings                 # rebuild embedding index
+```
+
+**CIC context**
+
+```bash
+ail context --task "<text>" [--from-db <path>]   # BM25-pick a Do node, print packet
+ail context --node <name>   [--from-db <path>]   # target a node by name
+```
+
+**MCP server**
+
+```bash
+ail serve                                # start MCP server over stdio
 ```
 
 ---
 
 ## Next Steps
 
+- Read [MIGRATION.md](MIGRATION.md) for the v1.0 → v2.0 upgrade guide.
+- Read [docs/config-reference.md](docs/config-reference.md) for the full
+  `ail.config.toml` field status table.
+- Browse the canonical end-to-end example in
+  [examples/wallet_service/](examples/wallet_service/).
 - Read [docs/plan/v1.0/reference/AIL-Rules-v1.0.md](docs/plan/v1.0/reference/AIL-Rules-v1.0.md) for the full syntax reference (17 patterns).
 - Read [docs/plan/v1.0/reference/AIL-Spec-v1.0.md](docs/plan/v1.0/reference/AIL-Spec-v1.0.md) for the crate API, error catalog, and JSON format.
-- Browse the complete `wallet_service` example in
-  [crates/ail-graph/tests/fixtures/wallet_service/](crates/ail-graph/tests/fixtures/wallet_service/).
 - Install the Python runtime helpers:
   ```bash
   pip install -e crates/ail-runtime-py

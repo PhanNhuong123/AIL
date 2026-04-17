@@ -22,25 +22,35 @@ wallet_service/
 
 ## v2.0 Pipeline
 
+All commands run from inside the example directory.
+
 ```bash
-# 1. Migrate the filesystem source to SQLite
-ail migrate --from examples/wallet_service/src/ --to examples/wallet_service/project.ail.db --verify
+cd examples/wallet_service
 
-# 2. Verify (auto-detects .ail.db when present)
-ail verify --project examples/wallet_service/
+# 1. Migrate the filesystem source to SQLite (roundtrip-verified)
+ail migrate --from src/ --to project.ail.db --verify
 
-# 3. Build Python from SQLite (byte-identical to filesystem build)
-ail build --target python --project examples/wallet_service/
+# 2. Verify (auto-detects project.ail.db via [database] backend = "auto")
+ail verify
 
-# 4. Run the generated tests
-pytest examples/wallet_service/dist/tests/ -v
+# 3. Build Python from SQLite
+ail build --target python
+pytest dist/tests/ -v
+
+# 4. Build TypeScript from SQLite
+ail build --target typescript
+cd dist-ts
+npm install
+npx tsc --noEmit
+npx vitest run
+cd ..
 
 # 5. Search via BM25 (FTS5) from SQLite
-ail search "balance transfer" --project examples/wallet_service/
+ail search "balance transfer"
 
-# 6. Check CIC context-packet cache hits after warmup
-ail context --task "add rate limiting" --project examples/wallet_service/
-ail context --task "add rate limiting" --project examples/wallet_service/  # cache hit
+# 6. Print a CIC context packet; second call hits cic_cache
+ail context --task "add rate limiting"
+ail context --task "add rate limiting"   # cache hit (cache_hit=true)
 ```
 
 See `docs/plan/v2.0/plan/phases/12-integration-release.md` for the phase plan.
