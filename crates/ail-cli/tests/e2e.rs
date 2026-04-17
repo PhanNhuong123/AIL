@@ -66,6 +66,7 @@ fn default_args() -> BuildArgs<'static> {
         check_breaking: false,
         check_migration: false,
         target: None,
+        from_db: None,
     }
 }
 

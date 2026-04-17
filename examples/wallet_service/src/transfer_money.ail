@@ -1,0 +1,9 @@
+do transfer money
+  from sender_balance:WalletBalance, amount:PositiveAmount
+  -> WalletBalance
+
+  promise before: sender_balance >= amount
+  promise before: amount > 0
+  promise after: sender_balance >= 0
+
+  let new_balance:WalletBalance = sender_balance - amount

@@ -14,6 +14,7 @@ use clap::{Parser, Subcommand};
 
 pub use commands::{
     build::{run_build, BuildArgs},
+    context::run_context,
     init::run_init,
     migrate::{
         migrate_graph, run_export, run_migrate, run_verify_graph, MigrationReport, VerifyResult,
@@ -43,6 +44,7 @@ pub fn run() -> Result<(), CliError> {
             check_breaking,
             check_migration,
             target,
+            from_db,
         } => {
             let args = BuildArgs {
                 contracts: contracts.as_deref(),
@@ -51,14 +53,21 @@ pub fn run() -> Result<(), CliError> {
                 check_breaking,
                 check_migration,
                 target: target.as_deref(),
+                from_db: from_db.as_deref(),
             };
             run_build(&cwd, &args)
         }
 
-        Command::Verify { file } => {
+        Command::Verify { file, from_db } => {
             let file_path = file.as_deref();
-            run_verify(&cwd, file_path)
+            run_verify(&cwd, file_path, from_db.as_deref())
         }
+
+        Command::Context {
+            task,
+            node,
+            from_db,
+        } => run_context(&cwd, task.as_deref(), node.as_deref(), from_db.as_deref()),
 
         Command::Test => run_test(&cwd),
 
@@ -126,12 +135,37 @@ pub enum Command {
         /// Emission target language: python (default) or typescript.
         #[arg(long)]
         target: Option<String>,
+
+        /// Load the project from this `.ail.db` database instead of auto-detecting.
+        #[arg(long, value_name = "PATH")]
+        from_db: Option<PathBuf>,
     },
 
     /// Verify the project pipeline without emitting output.
     Verify {
         /// Path hint — v0.1 always verifies the whole project.
         file: Option<PathBuf>,
+
+        /// Load the project from this `.ail.db` database instead of auto-detecting.
+        #[arg(long, value_name = "PATH")]
+        from_db: Option<PathBuf>,
+    },
+
+    /// Print a CIC context packet for a task or named node.
+    ///
+    /// Second and later calls for the same node hit the SQLite CIC cache.
+    Context {
+        /// Natural-language task description. Selects the most relevant `Do` node by BM25.
+        #[arg(long, value_name = "TEXT")]
+        task: Option<String>,
+
+        /// Target a named node directly (e.g. `transfer_money`). Takes precedence over `--task`.
+        #[arg(long, value_name = "NAME")]
+        node: Option<String>,
+
+        /// Load the project from this `.ail.db` database instead of auto-detecting.
+        #[arg(long, value_name = "PATH")]
+        from_db: Option<PathBuf>,
     },
 
     /// Build the project and run generated pytest contract tests.

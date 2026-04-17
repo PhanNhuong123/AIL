@@ -265,7 +265,7 @@ fn mcp_context_intent_chain_preserved() {
     // With only 2 nodes, the child is the second result or both are primary.
     // At minimum both nodes should be in primary (2 * 70% = 1.4, ceil = 2).
     assert!(
-        has_chain || primary.len() >= 1,
+        has_chain || !primary.is_empty(),
         "expected intent_chain with 2+ entries for nested node"
     );
 }

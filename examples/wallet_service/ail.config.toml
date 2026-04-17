@@ -1,0 +1,12 @@
+[project]
+name = "wallet_service"
+version = "0.2.0"
+
+[build]
+target = "python"
+contracts = "on"
+source_map = false
+
+[database]
+backend = "auto"                 # auto | sqlite | filesystem
+# auto: use sqlite when project.ail.db exists next to ail.config.toml, else filesystem

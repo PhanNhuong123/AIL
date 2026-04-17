@@ -58,8 +58,7 @@ fn t072_sqlite_open_existing_database() {
     let (_guard, path) = tmp_path();
     let node_id = {
         let mut db = SqliteGraph::open_or_create(&path).unwrap();
-        let id = GraphBackend::add_node(&mut db, make_do("persist me")).unwrap();
-        id
+        GraphBackend::add_node(&mut db, make_do("persist me")).unwrap()
     };
     // Re-open the same file and verify the node is still there.
     let db2 = SqliteGraph::open(&path).unwrap();
@@ -1702,4 +1701,125 @@ fn t103_check_embedding_metadata_rejects_missing_keys() {
         }
         other => panic!("expected Changed for missing provider, got {:?}", other),
     }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Task 12.1 — save_from_graph: bulk replace SqliteGraph from AilGraph
+// ═══════════════════════════════════════════════════════════════════════════
+
+use ail_graph::AilGraph;
+
+/// Build a three-node graph: root Do → two Do children (in order `a`, `b`).
+/// Returns (graph, root_id, a_id, b_id).
+fn three_node_graph() -> (AilGraph, NodeId, NodeId, NodeId) {
+    let mut g = AilGraph::new();
+    let root = GraphBackend::add_node(&mut g, make_do("root")).unwrap();
+    let a = GraphBackend::add_node(&mut g, make_do("a")).unwrap();
+    let b = GraphBackend::add_node(&mut g, make_do("b")).unwrap();
+    GraphBackend::add_edge(&mut g, root, a, EdgeKind::Ev).unwrap();
+    GraphBackend::add_edge(&mut g, root, b, EdgeKind::Ev).unwrap();
+    g.set_root(root).unwrap();
+    (g, root, a, b)
+}
+
+#[test]
+fn t121_save_from_graph_overwrites_existing_project() {
+    let (_guard, mut db) = fresh_db();
+
+    // Seed the DB with an unrelated initial node.
+    let stale = GraphBackend::add_node(&mut db, make_do("stale node")).unwrap();
+    assert_eq!(db.node_count(), 1);
+    assert!(GraphBackend::get_node(&db, stale).unwrap().is_some());
+
+    // Overwrite with a fresh AilGraph.
+    let (graph, root, a, b) = three_node_graph();
+    db.save_from_graph(&graph).unwrap();
+
+    assert_eq!(db.node_count(), 3, "only graph nodes should remain");
+    assert!(
+        GraphBackend::get_node(&db, stale).unwrap().is_none(),
+        "stale node must be cleared"
+    );
+    assert!(GraphBackend::get_node(&db, root).unwrap().is_some());
+    assert!(GraphBackend::get_node(&db, a).unwrap().is_some());
+    assert!(GraphBackend::get_node(&db, b).unwrap().is_some());
+}
+
+#[test]
+fn t121_save_from_graph_preserves_contracts_and_edges() {
+    let (_guard, mut db) = fresh_db();
+
+    let mut g = AilGraph::new();
+    let mut root = make_do("root");
+    root.contracts.push(Contract {
+        kind: ContractKind::Before,
+        expression: Expression("balance >= 0".into()),
+    });
+    let root_id = GraphBackend::add_node(&mut g, root).unwrap();
+
+    let child = make_do("child");
+    let child_id = GraphBackend::add_node(&mut g, child).unwrap();
+
+    // Sibling for Eh chain and Ed target.
+    let sibling = make_do("sibling");
+    let sibling_id = GraphBackend::add_node(&mut g, sibling).unwrap();
+
+    GraphBackend::add_edge(&mut g, root_id, child_id, EdgeKind::Ev).unwrap();
+    GraphBackend::add_edge(&mut g, root_id, sibling_id, EdgeKind::Ev).unwrap();
+    GraphBackend::add_edge(&mut g, child_id, sibling_id, EdgeKind::Ed).unwrap();
+    g.set_root(root_id).unwrap();
+
+    db.save_from_graph(&g).unwrap();
+
+    // Contracts survive.
+    let fetched_root = GraphBackend::get_node(&db, root_id).unwrap().unwrap();
+    assert_eq!(fetched_root.contracts.len(), 1);
+    assert_eq!(
+        fetched_root.contracts[0].expression.0, "balance >= 0",
+        "contract expression must roundtrip"
+    );
+
+    // Ev edges: children in the saved DB must match children in the source.
+    let source_kids = GraphBackend::children(&g, root_id).unwrap();
+    let db_kids = GraphBackend::children(&db, root_id).unwrap();
+    assert_eq!(db_kids, source_kids, "children order must round-trip");
+    assert_eq!(db_kids.len(), 2);
+    assert!(db_kids.contains(&child_id));
+    assert!(db_kids.contains(&sibling_id));
+
+    // Ed edge: child → sibling is a diagonal reference.
+    let diag = GraphBackend::diagonal_refs(&db, child_id).unwrap();
+    assert!(
+        diag.iter()
+            .any(|(id, k)| *id == sibling_id && *k == EdgeKind::Ed),
+        "Ed edge must survive save_from_graph"
+    );
+}
+
+#[test]
+fn t121_save_from_graph_clears_cic_cache() {
+    let (_guard, mut db) = fresh_db();
+
+    // Build and seed a graph; populate the CIC cache for one node.
+    let (graph, root, _a, _b) = three_node_graph();
+    db.save_from_graph(&graph).unwrap();
+    let _ = db.get_context_packet(root).unwrap();
+    assert_eq!(
+        db.cic_cache_valid(root),
+        Some(true),
+        "cache must be populated after lookup"
+    );
+
+    // Overwrite with a different graph — old cache entries must be cleared.
+    let mut replacement = AilGraph::new();
+    let only = GraphBackend::add_node(&mut replacement, make_do("only")).unwrap();
+    replacement.set_root(only).unwrap();
+    db.save_from_graph(&replacement).unwrap();
+
+    assert_eq!(
+        db.cic_cache_valid(root),
+        None,
+        "old cache row must be gone after save_from_graph"
+    );
+    assert_eq!(db.table_row_count("cic_cache").unwrap(), 0);
 }

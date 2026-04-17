@@ -1,0 +1,2 @@
+describe TransferResult as
+  sender:User, receiver:User, amount:PositiveAmount

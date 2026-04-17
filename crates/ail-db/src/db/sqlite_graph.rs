@@ -6,11 +6,13 @@ use std::{
 use ail_graph::{
     compute_context_packet_for_backend,
     errors::GraphError,
+    graph::GraphBackend,
     search::SearchResult,
     types::{Contract, EdgeKind, Expression, Node, NodeId},
-    ContextPacket,
+    AilGraph, ContextPacket,
 };
 use rusqlite::Connection;
+use std::collections::VecDeque;
 use uuid::Uuid;
 
 use crate::errors::DbError;
@@ -166,6 +168,108 @@ impl SqliteGraph {
         let id_str = node_id.to_string();
         let db = self.db();
         cic_cache::compute_and_invalidate(&db, &id_str).map_err(|e| DbError::Other(e.to_string()))
+    }
+
+    // ─── Bulk replace from AilGraph ──────────────────────────────────────────
+
+    /// Replace the current database contents with the state of `graph`.
+    ///
+    /// Clears the `nodes`, `contracts`, `edges`, `cic_cache`, and `embeddings`
+    /// tables, then re-inserts every node and edge in migration order:
+    /// nodes first, Ev child edges in BFS order (`node.children`), Eh
+    /// next-sibling edges, then Ed diagonal references. The embedding index is
+    /// always cleared — callers that need embeddings must re-run `ail reindex`.
+    ///
+    /// Used by MCP / batch workflows that edit an in-memory `AilGraph` and must
+    /// flush the result back to `.ail.db`. Drop-and-reinsert is chosen over
+    /// row-level diff for simplicity; write volume is bounded by project size.
+    pub fn save_from_graph(&mut self, graph: &AilGraph) -> Result<(), DbError> {
+        // Step 1 — clear in FK-safe order inside a single transaction.
+        {
+            let mut db = self.db();
+            let tx = db.transaction()?;
+            // `edges`, `contracts`, `cic_cache`, `embeddings` all FK → nodes.id
+            // with ON DELETE CASCADE, but deleting them explicitly keeps the
+            // behavior independent of trigger configuration.
+            tx.execute("DELETE FROM edges", [])?;
+            tx.execute("DELETE FROM contracts", [])?;
+            tx.execute("DELETE FROM cic_cache", [])?;
+            tx.execute("DELETE FROM embeddings", [])?;
+            tx.execute("DELETE FROM nodes", [])?;
+            tx.commit()?;
+        }
+
+        // Step 2 — insert all nodes (parent_id NULL, position 0, depth 0).
+        for node in graph.all_nodes() {
+            self.add_node(node.clone())
+                .map_err(|e| DbError::Other(format!("save_from_graph add_node: {e}")))?;
+        }
+
+        // Step 3 — Ev edges in BFS order. Use `GraphBackend::children` so this
+        // works for graphs built via `add_edge` (where `node.children` is
+        // `None`) as well as parser-built graphs (where it is `Some`).
+        // Inserting children in list order guarantees positions 0, 1, 2 …
+        // because `add_edge(Ev)` assigns `position = max_child_position + 1`.
+        if let Some(root_id) = graph.root_id() {
+            let mut queue: VecDeque<NodeId> = VecDeque::new();
+            queue.push_back(root_id);
+            while let Some(node_id) = queue.pop_front() {
+                let children = GraphBackend::children(graph, node_id).map_err(|e| {
+                    DbError::Other(format!("save_from_graph children {node_id}: {e}"))
+                })?;
+                for child_id in children {
+                    self.add_edge(node_id, child_id, EdgeKind::Ev)
+                        .map_err(|e| {
+                            DbError::Other(format!(
+                                "save_from_graph add_edge Ev {node_id}->{child_id}: {e}"
+                            ))
+                        })?;
+                    queue.push_back(child_id);
+                }
+            }
+        }
+
+        // Step 4 — Eh next-sibling edges (one directed edge per pair).
+        for node in graph.all_nodes() {
+            match graph.next_sibling_of(node.id) {
+                Ok(Some(next_id)) => {
+                    self.add_edge(node.id, next_id, EdgeKind::Eh).map_err(|e| {
+                        DbError::Other(format!(
+                            "save_from_graph add_edge Eh {}->{next_id}: {e}",
+                            node.id
+                        ))
+                    })?;
+                }
+                Ok(None) => {}
+                Err(e) => {
+                    return Err(DbError::Other(format!(
+                        "save_from_graph next_sibling_of {}: {e}",
+                        node.id
+                    )))
+                }
+            }
+        }
+
+        // Step 5 — Ed diagonal edges (outgoing, each directed edge once).
+        for node in graph.all_nodes() {
+            let targets = graph.outgoing_diagonal_refs_of(node.id).map_err(|e| {
+                DbError::Other(format!(
+                    "save_from_graph outgoing_diagonal_refs_of {}: {e}",
+                    node.id
+                ))
+            })?;
+            for target_id in targets {
+                self.add_edge(node.id, target_id, EdgeKind::Ed)
+                    .map_err(|e| {
+                        DbError::Other(format!(
+                            "save_from_graph add_edge Ed {}->{target_id}: {e}",
+                            node.id
+                        ))
+                    })?;
+            }
+        }
+
+        Ok(())
     }
 
     // ─── FTS5 search ─────────────────────────────────────────────────────────

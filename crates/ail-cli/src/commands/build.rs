@@ -21,9 +21,9 @@ use ail_emit::{
     emit_type_definitions, ContractMode, EmitConfig, FileOwnership,
 };
 use ail_graph::validation::validate_graph;
-use ail_text::parse_directory;
 use ail_types::type_check;
 
+use crate::commands::project::{load_graph, resolve_backend};
 use crate::error::CliError;
 
 /// Arguments for `ail build`, forwarded from the clap subcommand.
@@ -35,6 +35,8 @@ pub struct BuildArgs<'a> {
     pub check_migration: bool,
     /// Emission target: `"python"` (default when `None`), `"typescript"`.
     pub target: Option<&'a str>,
+    /// Force-load the graph from this `.ail.db` path instead of auto-detecting.
+    pub from_db: Option<&'a Path>,
 }
 
 /// Entry point for `ail build`.
@@ -61,17 +63,17 @@ pub fn run_build(root: &Path, args: &BuildArgs<'_>) -> Result<(), CliError> {
     match args.target {
         None | Some("python") => {
             if args.watch {
-                run_watch(root, &config, args.source_map)
+                run_watch(root, &config, args.source_map, args.from_db)
             } else {
-                build_once(root, &config, args.source_map)
+                build_once(root, &config, args.source_map, args.from_db)
             }
         }
         Some("typescript") => {
             if args.watch {
                 // Watch mode for TypeScript uses the same mtime-polling loop.
-                run_watch_typescript(root, &config, args.source_map)
+                run_watch_typescript(root, &config, args.source_map, args.from_db)
             } else {
-                build_typescript_once(root, &config, args.source_map)
+                build_typescript_once(root, &config, args.source_map, args.from_db)
             }
         }
         Some(other) => Err(CliError::InvalidTarget {
@@ -82,8 +84,13 @@ pub fn run_build(root: &Path, args: &BuildArgs<'_>) -> Result<(), CliError> {
 
 // ── Core build ────────────────────────────────────────────────────────────────
 
-fn build_once(root: &Path, config: &EmitConfig, print_source_map: bool) -> Result<(), CliError> {
-    let verified = run_pipeline(root)?;
+fn build_once(
+    root: &Path,
+    config: &EmitConfig,
+    print_source_map: bool,
+    from_db: Option<&Path>,
+) -> Result<(), CliError> {
+    let verified = run_pipeline(root, from_db)?;
 
     let type_out = emit_type_definitions(&verified).map_err(|errs| CliError::Emit {
         errors: format_emit_errors(&errs),
@@ -123,13 +130,14 @@ fn build_typescript_once(
     root: &Path,
     config: &EmitConfig,
     print_source_map: bool,
+    from_db: Option<&Path>,
 ) -> Result<(), CliError> {
     if print_source_map {
         // TS source maps are not yet implemented in v2.0.
         println!("[info] source maps not yet implemented for TypeScript target");
     }
 
-    let verified = run_pipeline(root)?;
+    let verified = run_pipeline(root, from_db)?;
 
     let type_out = emit_ts_type_definitions(&verified).map_err(|errs| CliError::Emit {
         errors: format_emit_errors(&errs),
@@ -161,12 +169,13 @@ fn run_watch_typescript(
     root: &Path,
     config: &EmitConfig,
     print_source_map: bool,
+    from_db: Option<&Path>,
 ) -> Result<(), CliError> {
     println!("[watching] Ctrl-C to stop.");
 
     let mut last_mtimes = snapshot_ail_mtimes(root);
 
-    if let Err(e) = build_typescript_once(root, config, print_source_map) {
+    if let Err(e) = build_typescript_once(root, config, print_source_map, from_db) {
         eprintln!("[watch] build failed: {e}");
     }
 
@@ -177,7 +186,7 @@ fn run_watch_typescript(
         if current != last_mtimes {
             last_mtimes = current;
             println!("[watch] change detected, rebuilding…");
-            if let Err(e) = build_typescript_once(root, config, print_source_map) {
+            if let Err(e) = build_typescript_once(root, config, print_source_map, from_db) {
                 eprintln!("[watch] build failed: {e}");
             }
         }
@@ -186,10 +195,12 @@ fn run_watch_typescript(
 
 // ── Pipeline ──────────────────────────────────────────────────────────────────
 
-pub(crate) fn run_pipeline(root: &Path) -> Result<ail_contract::VerifiedGraph, CliError> {
-    let graph = parse_directory(root).map_err(|e| CliError::Pipeline {
-        errors: e.to_string(),
-    })?;
+pub(crate) fn run_pipeline(
+    root: &Path,
+    from_db: Option<&Path>,
+) -> Result<ail_contract::VerifiedGraph, CliError> {
+    let backend = resolve_backend(root, from_db)?;
+    let graph = load_graph(&backend)?;
 
     let valid = validate_graph(graph).map_err(|errs| CliError::Pipeline {
         errors: errs
@@ -247,7 +258,12 @@ fn write_files(root: &Path, files: &[ail_emit::EmittedFile]) -> Result<(), CliEr
 
 // ── Watch mode (mtime polling) ────────────────────────────────────────────────
 
-fn run_watch(root: &Path, config: &EmitConfig, print_source_map: bool) -> Result<(), CliError> {
+fn run_watch(
+    root: &Path,
+    config: &EmitConfig,
+    print_source_map: bool,
+    from_db: Option<&Path>,
+) -> Result<(), CliError> {
     // v0.1 uses mtime polling; migrate to the `notify` crate in v0.2 for
     // event-driven watching with fewer race conditions and less CPU overhead.
     println!("[watching] Ctrl-C to stop.");
@@ -255,7 +271,7 @@ fn run_watch(root: &Path, config: &EmitConfig, print_source_map: bool) -> Result
     let mut last_mtimes = snapshot_ail_mtimes(root);
 
     // Initial build.
-    if let Err(e) = build_once(root, config, print_source_map) {
+    if let Err(e) = build_once(root, config, print_source_map, from_db) {
         eprintln!("[watch] build failed: {e}");
     }
 
@@ -266,7 +282,7 @@ fn run_watch(root: &Path, config: &EmitConfig, print_source_map: bool) -> Result
         if current != last_mtimes {
             last_mtimes = current;
             println!("[watch] change detected, rebuilding…");
-            if let Err(e) = build_once(root, config, print_source_map) {
+            if let Err(e) = build_once(root, config, print_source_map, from_db) {
                 eprintln!("[watch] build failed: {e}");
             }
         }

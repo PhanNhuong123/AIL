@@ -3,6 +3,7 @@ target
 .claude
 .serena
 .codex
+.z3-trace
 
 # Python cache
 __pycache__/
@@ -16,3 +17,10 @@ CLAUDE.md
 /AIL-Language-Rules-v0.1.md
 /AIL-Technical-Spec-v0.1.md
 .agents
+
+# Example-project generated artifacts
+/examples/**/project.ail.db
+/examples/**/project.ail.db-wal
+/examples/**/project.ail.db-shm
+/examples/**/dist/
+/examples/**/dist-ts/

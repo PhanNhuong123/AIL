@@ -21,7 +21,7 @@ pub fn run_serve(root: &Path) -> Result<(), CliError> {
 
 /// Try to parse and verify the project; fall back to an empty raw context.
 fn load_context(root: &Path) -> ProjectContext {
-    match crate::commands::build::run_pipeline(root) {
+    match crate::commands::build::run_pipeline(root, None) {
         Ok(verified) => ProjectContext::Verified(verified),
         Err(_) => {
             eprintln!(

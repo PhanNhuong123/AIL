@@ -16,6 +16,7 @@ pub fn run_test(root: &Path) -> Result<(), CliError> {
         check_breaking: false,
         check_migration: false,
         target: None,
+        from_db: None,
     };
     crate::commands::build::run_build(root, &args)?;
 

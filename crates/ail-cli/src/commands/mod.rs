@@ -1,6 +1,8 @@
 pub mod build;
+pub mod context;
 pub mod init;
 pub mod migrate;
+pub mod project;
 pub mod reindex;
 pub mod run_cmd;
 pub mod search;

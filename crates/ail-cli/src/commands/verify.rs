@@ -1,24 +1,33 @@
 //! `ail verify [file]` — run the full pipeline and report success or errors.
 //!
-//! v0.1: always verifies the entire project, regardless of the optional `file`
-//! argument. The argument is accepted for UX alignment with the spec; incremental
-//! per-file verification is planned for v0.2.
+//! v2.0 behavior:
+//! - By default auto-detects the backend via `ail.config.toml [database] backend`
+//!   (see [`project::resolve_backend`]). A `project.ail.db` next to the config
+//!   selects SQLite; otherwise the filesystem `src/` tree is used.
+//! - `--from-db <path>` forces SQLite regardless of config.
+//! - The optional `file` argument is accepted for spec alignment but ignored;
+//!   incremental per-file verify is v0.2 work.
 
 use std::path::Path;
 
 use ail_graph::validation::validate_graph;
-use ail_text::parse_directory;
 use ail_types::type_check;
 
+use crate::commands::project::{load_graph, resolve_backend};
 use crate::error::CliError;
 
 /// Entry point for `ail verify`.
 ///
-/// `file` is accepted but ignored in v0.1 — the full project is always verified.
-pub fn run_verify(root: &Path, _file: Option<&Path>) -> Result<(), CliError> {
-    let graph = parse_directory(root).map_err(|e| CliError::Pipeline {
-        errors: e.to_string(),
-    })?;
+/// `file` is accepted but ignored in v2.0 — the full project is always verified.
+/// `from_db` forces the SQLite backend; without it, the backend is auto-detected
+/// from the project configuration.
+pub fn run_verify(
+    root: &Path,
+    _file: Option<&Path>,
+    from_db: Option<&Path>,
+) -> Result<(), CliError> {
+    let backend = resolve_backend(root, from_db)?;
+    let graph = load_graph(&backend)?;
 
     let node_count = graph.node_count();
     let edge_count = graph.edge_count();

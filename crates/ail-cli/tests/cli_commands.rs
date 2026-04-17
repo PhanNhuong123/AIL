@@ -66,6 +66,7 @@ fn build_writes_generated_files() {
         check_breaking: false,
         check_migration: false,
         target: None,
+        from_db: None,
     };
     run_build(tmp.path(), &args).expect("build should succeed on wallet fixture");
 
@@ -93,6 +94,7 @@ fn build_scaffolded_files_not_overwritten() {
         check_breaking: false,
         check_migration: false,
         target: None,
+        from_db: None,
     };
 
     // First build — scaffolded files are created.
@@ -120,7 +122,7 @@ fn build_scaffolded_files_not_overwritten() {
 #[test]
 fn verify_ok_on_valid_project() {
     let fixture = wallet_fixture_path();
-    let result = run_verify(&fixture, None);
+    let result = run_verify(&fixture, None, None);
     assert!(
         result.is_ok(),
         "verify failed on wallet fixture: {result:?}"
