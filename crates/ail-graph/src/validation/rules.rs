@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet, VecDeque};
 
 use crate::constants::BUILTIN_TYPE_NAMES;
 use crate::errors::ValidationError;
-use crate::graph::AilGraph;
+use crate::graph::{AilGraph, GraphBackend};
 use crate::types::{ContractKind, NodeId, Pattern};
 
 /// Run all validation rules against `graph` and return every error found.
@@ -267,18 +267,24 @@ fn check_following_template_phases(graph: &AilGraph, errors: &mut Vec<Validation
         if node.pattern != Pattern::Do {
             continue;
         }
-        // using-Do nodes reference a shared pattern via Ed but do NOT implement
-        // template phases — skip them so v008 doesn't fire for using references.
+        // using-Do nodes point at a shared pattern and do not implement template
+        // phases themselves.
         if node.metadata.using_pattern_name.is_some() {
             continue;
         }
-        let template_refs = graph.outgoing_diagonal_refs_of(node.id).unwrap_or_default();
-
-        if template_refs.is_empty() {
+        // Navigate by metadata: the `following <name>` clause authoritatively
+        // identifies the template. Ed edges from a Do can also represent type,
+        // error, or call references (see MCP auto-edge detection), so they
+        // cannot be used as the template set.
+        let template_name = match &node.metadata.following_template_name {
+            Some(name) => name,
+            None => continue,
+        };
+        let template_ids = graph.find_by_name(template_name).unwrap_or_default();
+        if template_ids.is_empty() {
             continue;
         }
 
-        // Collect the names of this Do node's children (the phases it implements).
         let implemented_phases: HashSet<String> = graph
             .children_of(node.id)
             .unwrap_or_default()
@@ -291,7 +297,7 @@ fn check_following_template_phases(graph: &AilGraph, errors: &mut Vec<Validation
             })
             .collect();
 
-        for template_id in template_refs {
+        for template_id in template_ids {
             let required_phases: Vec<String> = graph
                 .children_of(template_id)
                 .unwrap_or_default()

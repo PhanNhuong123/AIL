@@ -479,3 +479,93 @@ fn ai_workflow_context_before_verify_returns_empty_primary() {
         "context before verify must return empty primary (no nodes in graph)"
     );
 }
+
+/// Regression: `ail.write` then `ail.verify` must preserve the in-memory edit
+/// instead of discarding it by re-parsing disk. After verify, the new node
+/// must still be in the graph and discoverable via `ail.search`.
+#[test]
+fn t_write_survives_verify() {
+    let tmp = copy_fixture_to_temp(&wallet_full_dir());
+    let server = fresh_server(tmp.path());
+
+    server.handle(tool_call("ail.verify", json!({}))).unwrap();
+
+    let search = server
+        .handle(tool_call("ail.search", json!({"query": "wallet"})))
+        .unwrap()
+        .result
+        .unwrap();
+    let parent_id = search["results"]
+        .as_array()
+        .and_then(|r| r.first())
+        .and_then(|r| r["node_id"].as_str())
+        .expect("wallet_full must have at least one search hit")
+        .to_owned();
+
+    let unique_intent = "verify-survival sentinel node for phase-11 regression";
+    let write_resp = server
+        .handle(tool_call(
+            "ail.write",
+            json!({
+                "parent_id": parent_id,
+                "pattern": "describe",
+                "intent": unique_intent
+            }),
+        ))
+        .unwrap()
+        .result
+        .unwrap();
+    let new_id = write_resp["node_id"].as_str().unwrap().to_owned();
+
+    // The write demoted context to Raw and set dirty=true.
+    let status_after_write = server
+        .handle(tool_call("ail.status", json!({})))
+        .unwrap()
+        .result
+        .unwrap();
+    assert_eq!(status_after_write["pipeline_stage"].as_str(), Some("raw"));
+
+    // Verify must promote to Verified WITHOUT re-parsing disk (which would
+    // erase the new node). Bug repro: pre-fix, this promoted to Verified via
+    // disk re-parse, silently dropping the sentinel node.
+    let verify_resp = server
+        .handle(tool_call("ail.verify", json!({})))
+        .unwrap()
+        .result
+        .unwrap();
+    assert!(
+        verify_resp["ok"].as_bool().unwrap_or(false),
+        "verify should succeed after in-memory write; errors: {:?}",
+        verify_resp["errors"]
+    );
+
+    let status_after_verify = server
+        .handle(tool_call("ail.status", json!({})))
+        .unwrap()
+        .result
+        .unwrap();
+    assert_eq!(
+        status_after_verify["pipeline_stage"].as_str(),
+        Some("verified")
+    );
+
+    // Proof of survival: search for the sentinel intent.
+    let search_after = server
+        .handle(tool_call(
+            "ail.search",
+            json!({"query": "verify-survival sentinel"}),
+        ))
+        .unwrap()
+        .result
+        .unwrap();
+    let found = search_after["results"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|r| r["node_id"].as_str() == Some(&new_id));
+    assert!(
+        found,
+        "search must find the in-memory written node after verify; got: {:?}",
+        search_after["results"]
+    );
+}

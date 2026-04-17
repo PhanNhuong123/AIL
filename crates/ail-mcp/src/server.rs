@@ -4,7 +4,7 @@
 //! handlers (five read + five write). The server is single-threaded;
 //! mutability is tracked via `RefCell`.
 
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::path::PathBuf;
 
 use serde_json::{json, Value};
@@ -37,6 +37,10 @@ pub struct McpServer {
     /// `embeddings` feature is active and model files are present. Always `None`
     /// without the feature or when the DB has no compatible vectors.
     embedding_cache: RefCell<Option<EmbeddingIndex>>,
+    /// `true` after any write tool mutates the in-memory graph. Verify and
+    /// build use this to decide between `refresh_from_graph` (preserve edits)
+    /// and `refresh_from_path` (re-parse disk). Cleared on successful refresh.
+    dirty: Cell<bool>,
 }
 
 impl McpServer {
@@ -47,6 +51,7 @@ impl McpServer {
             context: RefCell::new(initial),
             search_cache: RefCell::new(None),
             embedding_cache: RefCell::new(None),
+            dirty: Cell::new(false),
         }
     }
 
@@ -130,6 +135,7 @@ impl McpServer {
                     &self.context,
                     &self.search_cache,
                     &self.embedding_cache,
+                    &self.dirty,
                     &input,
                 );
                 serde_json::to_value(out)
@@ -144,6 +150,7 @@ impl McpServer {
                     &self.context,
                     &self.search_cache,
                     &self.embedding_cache,
+                    &self.dirty,
                     &input,
                 );
                 serde_json::to_value(out)
@@ -165,6 +172,7 @@ impl McpServer {
                     let graph = ctx.graph_mut();
                     write::run_write(graph, &input)
                 };
+                self.dirty.set(true);
                 // Clear search caches — the graph was mutated.
                 *self.search_cache.borrow_mut() = None;
                 *self.embedding_cache.borrow_mut() = None;
@@ -183,6 +191,7 @@ impl McpServer {
                     let graph = ctx.graph_mut();
                     write::run_patch(graph, &input)
                 };
+                self.dirty.set(true);
                 *self.search_cache.borrow_mut() = None;
                 *self.embedding_cache.borrow_mut() = None;
                 match out {
@@ -200,6 +209,7 @@ impl McpServer {
                     let graph = ctx.graph_mut();
                     structure::run_move(graph, &input)
                 };
+                self.dirty.set(true);
                 *self.search_cache.borrow_mut() = None;
                 *self.embedding_cache.borrow_mut() = None;
                 match out {
@@ -224,6 +234,7 @@ impl McpServer {
                     structure::run_delete(graph, &input)
                 };
                 if !is_dry_run {
+                    self.dirty.set(true);
                     *self.search_cache.borrow_mut() = None;
                     *self.embedding_cache.borrow_mut() = None;
                 }
@@ -246,6 +257,7 @@ impl McpServer {
                 // failure, but the pipeline has already been demoted to Raw
                 // by `graph_mut()` and the search caches must be cleared to
                 // reflect either the successful batch or the restored state.
+                self.dirty.set(true);
                 *self.search_cache.borrow_mut() = None;
                 *self.embedding_cache.borrow_mut() = None;
                 serde_json::to_value(output)
@@ -355,6 +367,10 @@ impl McpServer {
                                     },
                                     "required": ["kind", "expression"]
                                 }
+                            },
+                            "metadata": {
+                                "type": "object",
+                                "description": "Partial NodeMetadata (name, params, return_type, fields, carries, following_template_name, using_pattern_name, ...). Shallow-merged into the default."
                             }
                         },
                         "required": ["parent_id", "pattern", "intent"]

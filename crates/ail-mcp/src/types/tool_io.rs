@@ -174,6 +174,10 @@ pub struct WriteInput {
     pub position: Option<usize>,
     /// Contracts to attach to the new node.
     pub contracts: Option<Vec<ContractInput>>,
+    /// Optional partial `NodeMetadata` — shallow-merged into the default; enables
+    /// creating named nodes (`Define`/`Describe`/`Error`/`Do`), params,
+    /// `return_type`, and `following_template_name` in a single write.
+    pub metadata: Option<serde_json::Value>,
 }
 
 /// A contract supplied through the MCP write/patch interface.
@@ -204,7 +208,8 @@ pub struct AutoEdgeOutput {
     pub kind: String,
     /// Node ID of the referenced target.
     pub target: String,
-    /// Relationship label: `"uses_type"`, `"raises"`, or `"calls"`.
+    /// Relationship label: `"uses_type"`, `"raises"`, `"calls"`, or
+    /// `"follows_template"`.
     pub label: String,
 }
 

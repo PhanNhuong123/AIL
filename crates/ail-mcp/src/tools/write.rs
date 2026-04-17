@@ -93,46 +93,139 @@ fn extract_pascal_case_words(text: &str) -> Vec<String> {
     words
 }
 
-/// Scan a node's expression for PascalCase type/error/function references and
-/// return the Ed edges that should be created.
+/// Extract tokens that follow a bare keyword like `do` or `raise`.
+///
+/// Matches only when the keyword appears as a whole word (preceded by start of
+/// text, whitespace, or punctuation). The returned tokens are the next
+/// identifier-like sequence of alphanumerics/underscore.
+fn extract_tokens_after_keyword(text: &str, keyword: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    let bytes = text.as_bytes();
+    let mut i = 0;
+    while i + keyword.len() <= bytes.len() {
+        let prev_is_boundary = i == 0 || !is_ident_char(bytes[i - 1]);
+        let window = &bytes[i..i + keyword.len()];
+        let next_is_boundary =
+            i + keyword.len() == bytes.len() || !is_ident_char(bytes[i + keyword.len()]);
+        if prev_is_boundary && next_is_boundary && window.eq_ignore_ascii_case(keyword.as_bytes()) {
+            let mut j = i + keyword.len();
+            while j < bytes.len() && (bytes[j] == b' ' || bytes[j] == b'\t') {
+                j += 1;
+            }
+            let start = j;
+            while j < bytes.len() && is_ident_char(bytes[j]) {
+                j += 1;
+            }
+            if j > start {
+                if let Ok(tok) = std::str::from_utf8(&bytes[start..j]) {
+                    out.push(tok.to_string());
+                }
+            }
+            i = j.max(i + keyword.len());
+        } else {
+            i += 1;
+        }
+    }
+    out
+}
+
+fn is_ident_char(b: u8) -> bool {
+    b.is_ascii_alphanumeric() || b == b'_'
+}
+
+/// Scan a node's expression and intent for references and return the Ed edges
+/// that should be created. Handles PascalCase type/error/function refs,
+/// snake_case `do <name>` function calls, `raise <Name>` / `otherwise raise
+/// <Name>` keywords, and `follows_template` from `metadata.following_template_name`.
 pub(crate) fn detect_auto_edges(graph: &AilGraph, node_id: NodeId) -> Vec<AutoEdgeOutput> {
     let node = match graph.get_node(node_id) {
         Ok(n) => n,
         Err(_) => return vec![],
     };
 
-    let expr_text = match &node.expression {
-        Some(expr) => expr.0.as_str(),
-        None => return vec![],
-    };
+    let mut edges: Vec<AutoEdgeOutput> = Vec::new();
+    let mut seen: std::collections::HashSet<(NodeId, &'static str)> =
+        std::collections::HashSet::new();
 
-    let names = extract_pascal_case_words(expr_text);
-    let mut edges = Vec::new();
-    let mut seen_targets = std::collections::HashSet::new();
+    let push_edge =
+        |target_id: NodeId,
+         label: &'static str,
+         edges: &mut Vec<AutoEdgeOutput>,
+         seen: &mut std::collections::HashSet<(NodeId, &'static str)>| {
+            if target_id == node_id {
+                return;
+            }
+            if !seen.insert((target_id, label)) {
+                return;
+            }
+            edges.push(AutoEdgeOutput {
+                kind: "ed".into(),
+                target: target_id.to_string(),
+                label: label.into(),
+            });
+        };
 
-    for name in &names {
-        if let Ok(targets) = GraphBackend::find_by_name(graph, name) {
+    // 1. `follows_template` from metadata — authoritative template reference.
+    if let Some(template_name) = &node.metadata.following_template_name {
+        if let Ok(targets) = GraphBackend::find_by_name(graph, template_name) {
             for target_id in targets {
-                // Don't create self-referencing edges or duplicates.
-                if target_id == node_id || !seen_targets.insert(target_id) {
-                    continue;
+                push_edge(target_id, "follows_template", &mut edges, &mut seen);
+            }
+        }
+    }
+
+    // 2. Collect source texts: expression + intent.
+    let mut sources: Vec<&str> = Vec::with_capacity(2);
+    if let Some(expr) = &node.expression {
+        sources.push(expr.0.as_str());
+    }
+    sources.push(node.intent.as_str());
+
+    for text in &sources {
+        // 2a. PascalCase references — classify by target pattern.
+        for name in extract_pascal_case_words(text) {
+            if let Ok(targets) = GraphBackend::find_by_name(graph, &name) {
+                for target_id in targets {
+                    if let Ok(Some(target_node)) = GraphBackend::get_node(graph, target_id) {
+                        let label: &'static str = match target_node.pattern {
+                            Pattern::Define | Pattern::Describe => "uses_type",
+                            Pattern::Error => "raises",
+                            Pattern::Do => "calls",
+                            _ => continue,
+                        };
+                        push_edge(target_id, label, &mut edges, &mut seen);
+                    }
                 }
-                if let Ok(Some(target_node)) = GraphBackend::get_node(graph, target_id) {
-                    let label = match target_node.pattern {
-                        Pattern::Define | Pattern::Describe => "uses_type",
-                        Pattern::Error => "raises",
-                        Pattern::Do => "calls",
-                        _ => continue,
-                    };
-                    edges.push(AutoEdgeOutput {
-                        kind: "ed".into(),
-                        target: target_id.to_string(),
-                        label: label.into(),
-                    });
+            }
+        }
+
+        // 2b. Snake_case `do <name>` function subcalls.
+        for name in extract_tokens_after_keyword(text, "do") {
+            if let Ok(targets) = GraphBackend::find_by_name(graph, &name) {
+                for target_id in targets {
+                    if let Ok(Some(target_node)) = GraphBackend::get_node(graph, target_id) {
+                        if target_node.pattern == Pattern::Do {
+                            push_edge(target_id, "calls", &mut edges, &mut seen);
+                        }
+                    }
+                }
+            }
+        }
+
+        // 2c. `raise <Name>` / `otherwise raise <Name>` — Error references.
+        for name in extract_tokens_after_keyword(text, "raise") {
+            if let Ok(targets) = GraphBackend::find_by_name(graph, &name) {
+                for target_id in targets {
+                    if let Ok(Some(target_node)) = GraphBackend::get_node(graph, target_id) {
+                        if target_node.pattern == Pattern::Error {
+                            push_edge(target_id, "raises", &mut edges, &mut seen);
+                        }
+                    }
                 }
             }
         }
     }
+
     edges
 }
 
@@ -236,6 +329,25 @@ pub(crate) fn run_write(graph: &mut AilGraph, input: &WriteInput) -> Result<Writ
     // 4. Parse and attach contracts.
     if let Some(contract_inputs) = &input.contracts {
         node.contracts = parse_contracts(contract_inputs)?;
+    }
+
+    // 4b. Parse and attach metadata (shallow-merge into default).
+    if let Some(meta_value) = &input.metadata {
+        if let Some(obj) = meta_value.as_object() {
+            let mut current = serde_json::to_value(&node.metadata)
+                .unwrap_or(serde_json::Value::Object(serde_json::Map::new()));
+            if let Some(current_obj) = current.as_object_mut() {
+                for (k, v) in obj {
+                    current_obj.insert(k.clone(), v.clone());
+                }
+            }
+            match serde_json::from_value::<NodeMetadata>(current) {
+                Ok(merged) => node.metadata = merged,
+                Err(_) => {
+                    warnings.push("metadata merge failed: incompatible fields ignored".into())
+                }
+            }
+        }
     }
 
     // 5. Insert node and Ev edge.

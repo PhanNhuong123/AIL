@@ -540,6 +540,7 @@ fn v008_rejects_do_missing_template_phase() {
 
     // Do node following the template, but missing the "return_result" phase.
     let mut root = make_named_node("transfer money", Pattern::Do, "transfer_money");
+    root.metadata.following_template_name = Some("command_flow".to_owned());
     root.contracts.push(before_contract());
     root.contracts.push(after_contract());
     root.children = Some(vec![]);
@@ -605,6 +606,7 @@ fn v008_accepts_do_covering_all_template_phases() {
 
     // Do node that implements all template phases.
     let mut root = make_named_node("process order", Pattern::Do, "process_order");
+    root.metadata.following_template_name = Some("simple_flow".to_owned());
     root.contracts.push(before_contract());
     root.contracts.push(after_contract());
     root.children = Some(vec![]);
@@ -634,6 +636,67 @@ fn v008_accepts_do_covering_all_template_phases() {
         "all template phases covered should be valid, got: {:?}",
         result.unwrap_err()
     );
+}
+
+#[test]
+fn v008_ignores_ed_edges_when_no_following_template_name() {
+    // Regression: Ed edges from a Do node may carry auto-edge labels other than
+    // `follows_template` (e.g. `uses_type`, `calls`, `raises`). Without a
+    // `metadata.following_template_name`, v008 must NOT treat those Ed targets
+    // as templates and emit MissingTemplatePhase for their named children.
+    let mut graph = AilGraph::new();
+
+    // Structured Describe with named fields — would be a tempting false template.
+    let mut user_type = make_named_node("user type", Pattern::Describe, "User");
+    user_type.metadata.fields.push(ail_graph::Field {
+        name: "id".to_owned(),
+        type_ref: "string".to_owned(),
+    });
+    user_type.metadata.fields.push(ail_graph::Field {
+        name: "balance".to_owned(),
+        type_ref: "number".to_owned(),
+    });
+    // Describe with children so v004 doesn't flag expression presence.
+    user_type.children = Some(vec![]);
+    let user_id = graph.add_node(user_type).unwrap();
+
+    let id_child = make_named_node("id field", Pattern::Let, "id");
+    let id_child_id = graph.add_node(id_child).unwrap();
+    graph.add_edge(user_id, id_child_id, EdgeKind::Ev).unwrap();
+
+    let balance_child = make_named_node("balance field", Pattern::Let, "balance");
+    let balance_child_id = graph.add_node(balance_child).unwrap();
+    graph
+        .add_edge(user_id, balance_child_id, EdgeKind::Ev)
+        .unwrap();
+    graph
+        .add_edge(id_child_id, balance_child_id, EdgeKind::Eh)
+        .unwrap();
+    graph.get_node_mut(user_id).unwrap().children = Some(vec![id_child_id, balance_child_id]);
+
+    // Do node with an Ed edge to User (typed auto-edge `uses_type`), but
+    // no `following_template_name`.
+    let mut root = make_named_node("transfer money", Pattern::Do, "transfer_money");
+    root.contracts.push(before_contract());
+    root.contracts.push(after_contract());
+    root.expression = Some(Expression("from sender:User -> TransferResult".to_owned()));
+    let root_id = graph.add_node(root).unwrap();
+    graph.set_root(root_id).unwrap();
+
+    // Reachability + typed-use Ed edge.
+    graph.add_edge(root_id, user_id, EdgeKind::Ev).unwrap();
+    graph.add_edge(root_id, user_id, EdgeKind::Ed).unwrap();
+
+    // Any error list is tolerated except MissingTemplatePhase.
+    let result = validate_graph(graph);
+    if let Err(errors) = result {
+        assert!(
+            !errors
+                .iter()
+                .any(|e| matches!(e, ValidationError::MissingTemplatePhase { .. })),
+            "Ed edge to a type with named children must not trip v008; got: {errors:?}"
+        );
+    }
 }
 
 // ─── Integration: error accumulation ─────────────────────────────────────────

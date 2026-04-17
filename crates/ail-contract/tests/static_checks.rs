@@ -171,6 +171,7 @@ fn following_graph(template_phase_names: &[&str], impl_phase_names: &[&str]) -> 
     let mut impl_do = Node::new(NodeId::new(), "implementing function", Pattern::Do);
     impl_do.metadata.name = Some("ImplFunc".to_owned());
     impl_do.metadata.return_type = Some("number".to_owned());
+    impl_do.metadata.following_template_name = Some("TemplateFunc".to_owned());
     impl_do.contracts = vec![
         contract(ContractKind::Before, "true == true"),
         contract(ContractKind::After, "result >= 0"),

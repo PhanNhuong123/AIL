@@ -1533,3 +1533,150 @@ fn t113_batch_rejects_dry_run_delete() {
         "rollback error must explain dry_run rejection: {err}"
     );
 }
+
+#[test]
+fn t111_write_accepts_metadata() {
+    // ail.write must be able to populate NodeMetadata in a single call — required
+    // for batch scenarios where a later op references an earlier-created symbol.
+    // Observable proof: after the first write creates a named Define, a second
+    // write whose expression references that name must produce a `uses_type`
+    // auto-edge pointing at the new node.
+    let (graph, _root, _user, _err, ops) = batch_test_graph();
+    let server = memory_server(graph);
+
+    let write_named = tools_call(
+        "ail.write",
+        json!({
+            "parent_id": ops.to_string(),
+            "pattern": "define",
+            "intent": "account balance type",
+            "metadata": {"name": "AccountBalance"}
+        }),
+    );
+    let named_resp = server.handle(write_named).unwrap().result.unwrap();
+    let named_id = named_resp["node_id"].as_str().unwrap().to_owned();
+
+    let referencing = tools_call(
+        "ail.write",
+        json!({
+            "parent_id": ops.to_string(),
+            "pattern": "do",
+            "intent": "query balance",
+            "expression": "from x:string -> AccountBalance",
+            "contracts": [
+                {"kind": "before", "expression": "x != null"},
+                {"kind": "after",  "expression": "result != null"}
+            ]
+        }),
+    );
+    let ref_resp = server.handle(referencing).unwrap().result.unwrap();
+    let edges = ref_resp["auto_edges"].as_array().unwrap();
+    let uses_type = edges.iter().find(|e| {
+        e["label"].as_str() == Some("uses_type") && e["target"].as_str() == Some(&named_id)
+    });
+    assert!(
+        uses_type.is_some(),
+        "metadata.name must be stored so name resolution works for later writes; got {edges:?}"
+    );
+}
+
+#[test]
+fn t113_auto_edge_detects_template_reference() {
+    // Writing a Do with metadata.following_template_name must emit a
+    // follows_template edge to the named template.
+    let (mut graph, _root, _user, _err, ops) = batch_test_graph();
+    let mut template = Node::new(NodeId::new(), "command flow template", Pattern::Do);
+    template.metadata.name = Some("command_flow".into());
+    let template_id = graph.add_node(template).unwrap();
+    graph.add_edge(ops, template_id, EdgeKind::Ev).unwrap();
+    let server = memory_server(graph);
+
+    let req = tools_call(
+        "ail.write",
+        json!({
+            "parent_id": ops.to_string(),
+            "pattern": "do",
+            "intent": "implement command flow",
+            "metadata": {"name": "DoCommand", "following_template_name": "command_flow"},
+            "contracts": [
+                {"kind": "before", "expression": "true == true"},
+                {"kind": "after",  "expression": "result != null"}
+            ]
+        }),
+    );
+    let resp = server.handle(req).unwrap();
+    let result = resp.result.unwrap();
+    let edges = result["auto_edges"].as_array().unwrap();
+    let template_edge = edges
+        .iter()
+        .find(|e| e["label"].as_str() == Some("follows_template"));
+    assert!(
+        template_edge.is_some(),
+        "expected follows_template edge; got {edges:?}"
+    );
+    assert_eq!(
+        template_edge.unwrap()["target"].as_str(),
+        Some(template_id.to_string().as_str())
+    );
+}
+
+#[test]
+fn t113_auto_edge_detects_function_call_snake_case() {
+    // `do validate_sender` in the expression must resolve to a Do node named
+    // "validate_sender" as a calls edge.
+    let (mut graph, _root, _user, _err, ops) = batch_test_graph();
+    let mut validate = Node::new(NodeId::new(), "validate sender", Pattern::Do);
+    validate.metadata.name = Some("validate_sender".into());
+    let validate_id = graph.add_node(validate).unwrap();
+    graph.add_edge(ops, validate_id, EdgeKind::Ev).unwrap();
+    let server = memory_server(graph);
+
+    let req = tools_call(
+        "ail.write",
+        json!({
+            "parent_id": ops.to_string(),
+            "pattern": "do",
+            "intent": "outer flow",
+            "expression": "do validate_sender then continue"
+        }),
+    );
+    let resp = server.handle(req).unwrap();
+    let result = resp.result.unwrap();
+    let edges = result["auto_edges"].as_array().unwrap();
+    let call_edge = edges.iter().find(|e| {
+        e["label"].as_str() == Some("calls")
+            && e["target"].as_str() == Some(validate_id.to_string().as_str())
+    });
+    assert!(
+        call_edge.is_some(),
+        "expected calls edge for `do validate_sender`; got {edges:?}"
+    );
+}
+
+#[test]
+fn t113_auto_edge_scans_intent() {
+    // With no expression, the detector must still pick up PascalCase type
+    // references from the intent text (e.g. `User` in "validate sender is User").
+    let (graph, _root, user_id, _err, ops) = batch_test_graph();
+    let server = memory_server(graph);
+
+    let req = tools_call(
+        "ail.write",
+        json!({
+            "parent_id": ops.to_string(),
+            "pattern": "describe",
+            "intent": "validate sender is User"
+        }),
+    );
+    let resp = server.handle(req).unwrap();
+    let result = resp.result.unwrap();
+    let edges = result["auto_edges"].as_array().unwrap();
+    let type_edge = edges.iter().find(|e| {
+        e["label"].as_str() == Some("uses_type")
+            && e["target"].as_str() == Some(user_id.to_string().as_str())
+    });
+    assert!(
+        type_edge.is_some(),
+        "expected uses_type edge inferred from intent; got {edges:?}"
+    );
+}

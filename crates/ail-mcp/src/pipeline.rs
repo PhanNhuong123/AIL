@@ -6,7 +6,7 @@
 use std::path::Path;
 
 use ail_contract::verify;
-use ail_graph::validation::validate_graph;
+use ail_graph::{validation::validate_graph, AilGraph};
 use ail_text::parse_directory;
 use ail_types::type_check;
 
@@ -30,6 +30,25 @@ pub(crate) fn refresh_from_path(root: &Path) -> Result<ProjectContext, Vec<Strin
         .map_err(|errs| errs.iter().map(|e| e.to_string()).collect::<Vec<_>>())?;
 
     // ── 4. Contract verification ──────────────────────────────────────────────
+    let verified =
+        verify(typed).map_err(|errs| errs.iter().map(|e| e.to_string()).collect::<Vec<_>>())?;
+
+    Ok(ProjectContext::Verified(verified))
+}
+
+/// Re-run the full pipeline (`validate → type_check → verify`) against an
+/// in-memory `AilGraph` rather than re-parsing disk.
+///
+/// Used by `ail.verify` and `ail.build` when the context is dirty from MCP
+/// write tools so that in-memory edits are promoted through the pipeline
+/// instead of being discarded by a disk re-parse.
+pub(crate) fn refresh_from_graph(graph: AilGraph) -> Result<ProjectContext, Vec<String>> {
+    let valid = validate_graph(graph)
+        .map_err(|errs| errs.iter().map(|e| e.to_string()).collect::<Vec<_>>())?;
+
+    let typed = type_check(valid, &[])
+        .map_err(|errs| errs.iter().map(|e| e.to_string()).collect::<Vec<_>>())?;
+
     let verified =
         verify(typed).map_err(|errs| errs.iter().map(|e| e.to_string()).collect::<Vec<_>>())?;
 

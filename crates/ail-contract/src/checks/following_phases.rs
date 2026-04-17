@@ -1,17 +1,17 @@
 use std::collections::HashSet;
 
 use ail_graph::graph::GraphBackend;
-use ail_graph::types::{Node, NodeId, Pattern};
+use ail_graph::types::{Node, NodeId};
 
 use crate::errors::ContractError;
 
 /// Check that a `Do` node implementing a template provides all required phases.
 ///
-/// **Template vs function call distinction**: Ed edges FROM a `Do` node itself
-/// (not its children) identify template following. Ed edges from child action
-/// nodes (Let, Fetch, etc.) to another `Do` identify function calls made
-/// within the body. Using `outgoing_diagonal_refs_of(do_node.id)` here
-/// correctly isolates template references from in-body function calls.
+/// Templates are identified by `metadata.following_template_name` — set by the
+/// parser from the `following <name>` clause. Ed edges are not used here
+/// because a `Do` may also emit Ed edges for type references, raised errors,
+/// and function calls (see MCP auto-edge labels `uses_type`/`raises`/`calls`),
+/// which would falsely trip this check if interpreted as template refs.
 ///
 /// A template's required phases are the named children of the template `Do`
 /// node. The implementing `Do` must have a named child for each one.
@@ -26,39 +26,19 @@ pub(crate) fn check_following_template_phases(
         return;
     }
 
-    let template_refs: Vec<NodeId> = graph
-        .outgoing_diagonal_refs(node.id)
-        .unwrap_or_default()
-        .into_iter()
-        .filter(|&target_id| {
-            // AilGraph: never errors; SqliteGraph: degrade gracefully on missing node.
-            graph
-                .get_node(target_id)
-                .ok()
-                .flatten()
-                .map(|t| t.pattern == Pattern::Do)
-                .unwrap_or(false)
-        })
-        .collect();
+    let template_name = match &node.metadata.following_template_name {
+        Some(name) => name,
+        None => return,
+    };
 
-    if template_refs.is_empty() {
+    let template_ids: Vec<NodeId> = graph.find_by_name(template_name).unwrap_or_default();
+    if template_ids.is_empty() {
         return;
     }
 
     let implemented_phases: HashSet<String> = collect_named_children(graph, node.id);
 
-    for template_id in template_refs {
-        // AilGraph: never errors; SqliteGraph: degrade gracefully on missing node.
-        let Some(template_node) = graph.get_node(template_id).ok().flatten() else {
-            continue;
-        };
-
-        let template_name = template_node
-            .metadata
-            .name
-            .clone()
-            .unwrap_or_else(|| template_id.to_string());
-
+    for template_id in template_ids {
         let required_phases = collect_named_children(graph, template_id);
 
         for phase in required_phases {

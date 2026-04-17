@@ -3,7 +3,7 @@
 //! Uses the already-verified context when available; otherwise runs a full
 //! pipeline refresh from disk first.
 
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::path::Path;
 
 use ail_emit::{emit_function_definitions, emit_type_definitions, ContractMode, EmitConfig};
@@ -11,25 +11,34 @@ use ail_graph::Bm25Index;
 use ail_search::EmbeddingIndex;
 
 use crate::context::ProjectContext;
-use crate::pipeline::refresh_from_path;
+use crate::pipeline::{refresh_from_graph, refresh_from_path};
 use crate::types::tool_io::{BuildFile, BuildInput, BuildOutput};
 
 /// Emit Python files for the project.
 ///
-/// If the context is already `Verified`, emission runs immediately. Otherwise
-/// the full pipeline is refreshed from `project_root` first.
+/// If the context is already `Verified`, emission runs immediately. Otherwise,
+/// the pipeline is refreshed: if `dirty`, against the in-memory graph so MCP
+/// edits survive; otherwise against `project_root` on disk.
 pub(crate) fn run_build(
     project_root: &Path,
     context: &RefCell<ProjectContext>,
     search_cache: &RefCell<Option<Bm25Index>>,
     embedding_cache: &RefCell<Option<EmbeddingIndex>>,
+    dirty: &Cell<bool>,
     input: &BuildInput,
 ) -> BuildOutput {
     // Ensure the context is Verified (refresh if needed).
     if context.borrow().as_verified().is_none() {
-        match refresh_from_path(project_root) {
+        let result = if dirty.get() {
+            let graph = context.borrow().graph().clone();
+            refresh_from_graph(graph)
+        } else {
+            refresh_from_path(project_root)
+        };
+        match result {
             Ok(new_ctx) => {
                 *context.borrow_mut() = new_ctx;
+                dirty.set(false);
                 *search_cache.borrow_mut() = None;
                 *embedding_cache.borrow_mut() = None;
             }
