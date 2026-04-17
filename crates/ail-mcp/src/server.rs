@@ -1,8 +1,8 @@
 //! [`McpServer`] — the MCP server core.
 //!
-//! Holds project state and routes JSON-RPC 2.0 requests to the seven tool
-//! handlers (five read + two write). The server is single-threaded; mutability
-//! is tracked via `RefCell`.
+//! Holds project state and routes JSON-RPC 2.0 requests to the ten tool
+//! handlers (five read + five write). The server is single-threaded;
+//! mutability is tracked via `RefCell`.
 
 use std::cell::RefCell;
 use std::path::PathBuf;
@@ -13,13 +13,13 @@ use ail_graph::Bm25Index;
 use ail_search::EmbeddingIndex;
 
 use crate::context::ProjectContext;
-use crate::tools::{build, context, search, status, structure, verify, write};
+use crate::tools::{batch, build, context, search, status, structure, verify, write};
 use crate::types::protocol::{
     JsonRpcError, JsonRpcRequest, JsonRpcResponse, INTERNAL_ERROR, INVALID_PARAMS, METHOD_NOT_FOUND,
 };
 use crate::types::tool_io::{
-    BuildInput, ContextInput, DeleteInput, MoveInput, PatchInput, SearchInput, VerifyInput,
-    WriteInput,
+    BatchInput, BuildInput, ContextInput, DeleteInput, MoveInput, PatchInput, SearchInput,
+    VerifyInput, WriteInput,
 };
 
 /// The MCP server.
@@ -234,6 +234,24 @@ impl McpServer {
                 }
             }
 
+            "ail.batch" => {
+                let input: BatchInput = serde_json::from_value(args)
+                    .map_err(|e| JsonRpcError::new(INVALID_PARAMS, e.to_string()))?;
+                let output = {
+                    let mut ctx = self.context.borrow_mut();
+                    let graph = ctx.graph_mut();
+                    batch::run_batch(graph, &input)
+                };
+                // The in-memory snapshot rollback restores the graph on
+                // failure, but the pipeline has already been demoted to Raw
+                // by `graph_mut()` and the search caches must be cleared to
+                // reflect either the successful batch or the restored state.
+                *self.search_cache.borrow_mut() = None;
+                *self.embedding_cache.borrow_mut() = None;
+                serde_json::to_value(output)
+                    .map_err(|e| JsonRpcError::new(INTERNAL_ERROR, e.to_string()))
+            }
+
             _ => Err(JsonRpcError::new(
                 METHOD_NOT_FOUND,
                 format!("Unknown tool: {name}"),
@@ -257,7 +275,7 @@ impl McpServer {
         })
     }
 
-    /// MCP `tools/list` response — full JSON Schema for all seven tools.
+    /// MCP `tools/list` response — full JSON Schema for all ten tools.
     fn tools_list() -> Value {
         json!({
             "tools": [
@@ -398,6 +416,28 @@ impl McpServer {
                             "strategy": { "type": "string", "description": "cascade (default), orphan, or dry_run" }
                         },
                         "required": ["node_id"]
+                    }
+                },
+                {
+                    "name": "ail.batch",
+                    "description": "Run ordered graph mutations atomically with post-batch auto-edge refresh",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "operations": {
+                                "type": "array",
+                                "description": "Ordered list of write/patch/move/delete ops (executed in order; rolled back on first failure)",
+                                "items": {
+                                    "type": "object",
+                                    "description": "One batch operation. The `op` field selects the tool; remaining fields match that tool's input schema.",
+                                    "properties": {
+                                        "op": { "type": "string", "description": "write, patch, move, or delete" }
+                                    },
+                                    "required": ["op"]
+                                }
+                            }
+                        },
+                        "required": ["operations"]
                     }
                 }
             ]

@@ -305,6 +305,67 @@ pub struct DeleteOutput {
     pub warnings: Vec<String>,
 }
 
+// ── ail.batch ───────────────────────────────────────────────────────────────
+
+/// Input for the `ail.batch` MCP tool — execute a sequence of ordered graph
+/// mutations atomically.
+///
+/// The entire batch runs inside a single in-memory transaction: if any
+/// operation fails, the graph is restored to its pre-batch state and the
+/// failure is reported. After all operations succeed, auto-edge detection is
+/// re-run across every affected node so references added or removed by earlier
+/// operations are reflected in the final graph state.
+#[derive(Debug, Deserialize)]
+pub struct BatchInput {
+    /// Operations to apply in order.
+    pub operations: Vec<BatchOperation>,
+}
+
+/// A single entry in a batch. The `op` discriminator selects which tool the
+/// body is deserialized as.
+#[derive(Debug, Deserialize)]
+#[serde(tag = "op", rename_all = "snake_case")]
+pub enum BatchOperation {
+    Write(WriteInput),
+    Patch(PatchInput),
+    Move(MoveInput),
+    Delete(DeleteInput),
+}
+
+/// Output from `ail.batch`.
+#[derive(Debug, Serialize)]
+pub struct BatchOutput {
+    /// `"completed"` when every operation succeeded, `"rolled_back"` when the
+    /// batch failed and the graph was restored.
+    pub status: String,
+    /// Per-operation results in the same order as the input. Each entry is a
+    /// JSON value matching the corresponding tool's output shape on success,
+    /// or an error description for operations that ran before rollback.
+    pub results: Vec<BatchOperationResult>,
+    /// Total number of Ed (diagonal) edges created or removed by the
+    /// post-batch auto-edge refresh pass.
+    pub auto_edges_refreshed: usize,
+    /// Aggregate CIC cache invalidation count. Always 0 for the in-memory
+    /// `AilGraph` backend; reserved for SQLite-backed callers.
+    pub total_cic_invalidated: usize,
+    /// `None` when the batch completed; contains the failing operation index
+    /// and message when the batch was rolled back.
+    pub error: Option<String>,
+}
+
+/// A single per-operation result inside a [`BatchOutput::results`] list.
+#[derive(Debug, Serialize)]
+pub struct BatchOperationResult {
+    /// The operation discriminator: `"write"`, `"patch"`, `"move"`, or `"delete"`.
+    pub op: String,
+    /// `"ok"` when the operation succeeded, `"error"` otherwise.
+    pub status: String,
+    /// Full tool response as JSON when `status == "ok"`; `None` on error.
+    pub output: Option<serde_json::Value>,
+    /// Error message when `status == "error"`; `None` otherwise.
+    pub error: Option<String>,
+}
+
 // ── ail.status ───────────────────────────────────────────────────────────────
 
 /// Output from `ail.status`.

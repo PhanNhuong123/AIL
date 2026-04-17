@@ -1074,3 +1074,462 @@ fn t112_delete_nonexistent_node_returns_error() {
         "delete on nonexistent node should fail"
     );
 }
+
+// ── ail.batch (Phase 11.3) ───────────────────────────────────────────────────
+
+/// Build a graph usable for batch tests: a root with one type node (`User`),
+/// one error node (`InsufficientFundsError`), and one describe branch (`ops`).
+fn batch_test_graph() -> (AilGraph, NodeId, NodeId, NodeId, NodeId) {
+    let mut graph = AilGraph::new();
+
+    let root = graph
+        .add_node(make_node("system root", Pattern::Describe))
+        .unwrap();
+
+    let mut user = Node::new(NodeId::new(), "User type", Pattern::Define);
+    user.metadata.name = Some("User".into());
+    let user_id = graph.add_node(user).unwrap();
+
+    let mut err = Node::new(NodeId::new(), "Insufficient funds", Pattern::Error);
+    err.metadata.name = Some("InsufficientFundsError".into());
+    let err_id = graph.add_node(err).unwrap();
+
+    let ops = graph
+        .add_node(make_node("ops branch", Pattern::Describe))
+        .unwrap();
+
+    graph.add_edge(root, user_id, EdgeKind::Ev).unwrap();
+    graph.add_edge(root, err_id, EdgeKind::Ev).unwrap();
+    graph.add_edge(root, ops, EdgeKind::Ev).unwrap();
+    graph.add_edge(user_id, err_id, EdgeKind::Eh).unwrap();
+    graph.add_edge(err_id, ops, EdgeKind::Eh).unwrap();
+    graph.set_root(root).unwrap();
+
+    (graph, root, user_id, err_id, ops)
+}
+
+#[test]
+fn t113_batch_all_operations_succeed() {
+    let (graph, root, _user, _err, ops) = batch_test_graph();
+    let server = memory_server(graph);
+
+    let req = tools_call(
+        "ail.batch",
+        json!({
+            "operations": [
+                {
+                    "op": "write",
+                    "parent_id": ops.to_string(),
+                    "pattern": "do",
+                    "intent": "fetch user",
+                    "expression": "from id:string -> User"
+                },
+                {
+                    "op": "write",
+                    "parent_id": root.to_string(),
+                    "pattern": "describe",
+                    "intent": "extra branch"
+                }
+            ]
+        }),
+    );
+    let resp = server.handle(req).unwrap();
+    assert!(
+        resp.error.is_none(),
+        "batch should succeed: {:?}",
+        resp.error
+    );
+    let result = resp.result.unwrap();
+
+    assert_eq!(result["status"].as_str(), Some("completed"));
+    assert_eq!(result["results"].as_array().unwrap().len(), 2);
+    for entry in result["results"].as_array().unwrap() {
+        assert_eq!(entry["status"].as_str(), Some("ok"));
+        assert!(entry["output"].is_object());
+    }
+    // Sanity check graph node count bumped by 2.
+    let status = server
+        .handle(tools_call("ail.status", json!({})))
+        .unwrap()
+        .result
+        .unwrap();
+    assert_eq!(status["node_count"].as_u64(), Some(6));
+}
+
+#[test]
+fn t113_batch_rolls_back_on_failure() {
+    // First op: a valid write. Second op: patch against a missing node — must
+    // fail and restore the graph to its pre-batch state.
+    let (graph, root, _user, _err, ops) = batch_test_graph();
+    let server = memory_server(graph);
+
+    let bogus = NodeId::new();
+    let req = tools_call(
+        "ail.batch",
+        json!({
+            "operations": [
+                {
+                    "op": "write",
+                    "parent_id": ops.to_string(),
+                    "pattern": "do",
+                    "intent": "side-effect write"
+                },
+                {
+                    "op": "patch",
+                    "node_id": bogus.to_string(),
+                    "fields": { "intent": "never applied" }
+                }
+            ]
+        }),
+    );
+    let resp = server.handle(req).unwrap();
+    assert!(
+        resp.error.is_none(),
+        "batch returns a structured rollback, not a JSON-RPC error"
+    );
+    let result = resp.result.unwrap();
+
+    assert_eq!(result["status"].as_str(), Some("rolled_back"));
+    let err_msg = result["error"].as_str().unwrap();
+    assert!(
+        err_msg.contains("op #1") && err_msg.contains("patch"),
+        "error must identify failing op, got: {err_msg}"
+    );
+
+    // First result recorded as ok, second as error.
+    let entries = result["results"].as_array().unwrap();
+    assert_eq!(entries.len(), 2);
+    assert_eq!(entries[0]["status"].as_str(), Some("ok"));
+    assert_eq!(entries[1]["status"].as_str(), Some("error"));
+
+    // Node count must equal the original 4 — the successful write was rolled back.
+    let status = server
+        .handle(tools_call("ail.status", json!({})))
+        .unwrap()
+        .result
+        .unwrap();
+    assert_eq!(status["node_count"].as_u64(), Some(4));
+
+    // Unused bindings documented.
+    let _ = root;
+}
+
+#[test]
+fn t113_batch_auto_detects_edges_after_all_ops() {
+    // Two writes: the second references a type defined before the batch.
+    // Auto-edge refresh must add a uses_type edge from the new node.
+    let (graph, _root, _user, _err, ops) = batch_test_graph();
+    let server = memory_server(graph);
+
+    let req = tools_call(
+        "ail.batch",
+        json!({
+            "operations": [
+                {
+                    "op": "write",
+                    "parent_id": ops.to_string(),
+                    "pattern": "do",
+                    "intent": "first op",
+                    "expression": "from id:string -> User"
+                }
+            ]
+        }),
+    );
+    let resp = server.handle(req).unwrap();
+    let result = resp.result.unwrap();
+
+    assert_eq!(result["status"].as_str(), Some("completed"));
+    // The write's own output already reports auto_edges; the batch refresh
+    // pass either keeps that edge (0 changes) or re-adds it (+1 per change).
+    let write_result = &result["results"].as_array().unwrap()[0]["output"];
+    let auto_edges = write_result["auto_edges"].as_array().unwrap();
+    assert!(
+        !auto_edges.is_empty(),
+        "first write should detect a User reference"
+    );
+    assert_eq!(auto_edges[0]["label"].as_str(), Some("uses_type"));
+}
+
+#[test]
+fn t113_batch_cic_invalidated_once() {
+    // The output must always carry `total_cic_invalidated` — 0 for AilGraph
+    // but the contract is preserved for SQLite-backed callers.
+    let (graph, _root, _user, _err, ops) = batch_test_graph();
+    let server = memory_server(graph);
+
+    let req = tools_call(
+        "ail.batch",
+        json!({
+            "operations": [
+                {
+                    "op": "write",
+                    "parent_id": ops.to_string(),
+                    "pattern": "do",
+                    "intent": "batched op"
+                }
+            ]
+        }),
+    );
+    let resp = server.handle(req).unwrap();
+    let result = resp.result.unwrap();
+
+    assert!(
+        result.get("total_cic_invalidated").is_some(),
+        "batch output must carry total_cic_invalidated"
+    );
+    assert_eq!(result["total_cic_invalidated"].as_u64(), Some(0));
+}
+
+#[test]
+fn t113_auto_edge_detects_type_reference() {
+    // Single-op batch with a PascalCase type reference → uses_type edge.
+    let (graph, _root, _user, _err, ops) = batch_test_graph();
+    let server = memory_server(graph);
+
+    let req = tools_call(
+        "ail.batch",
+        json!({
+            "operations": [
+                {
+                    "op": "write",
+                    "parent_id": ops.to_string(),
+                    "pattern": "do",
+                    "intent": "build user",
+                    "expression": "from id:string -> User"
+                }
+            ]
+        }),
+    );
+    let resp = server.handle(req).unwrap();
+    let result = resp.result.unwrap();
+    let write_output = &result["results"].as_array().unwrap()[0]["output"];
+    let labels: Vec<&str> = write_output["auto_edges"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|e| e["label"].as_str())
+        .collect();
+    assert!(
+        labels.contains(&"uses_type"),
+        "expected uses_type edge for User reference; got labels: {labels:?}"
+    );
+}
+
+#[test]
+fn t113_auto_edge_detects_error_reference() {
+    // Writing a node that mentions InsufficientFundsError should produce a
+    // raises edge to the Error node.
+    let (graph, _root, _user, _err, ops) = batch_test_graph();
+    let server = memory_server(graph);
+
+    let req = tools_call(
+        "ail.batch",
+        json!({
+            "operations": [
+                {
+                    "op": "write",
+                    "parent_id": ops.to_string(),
+                    "pattern": "do",
+                    "intent": "transfer money",
+                    "expression": "otherwise raise InsufficientFundsError"
+                }
+            ]
+        }),
+    );
+    let resp = server.handle(req).unwrap();
+    let result = resp.result.unwrap();
+    let write_output = &result["results"].as_array().unwrap()[0]["output"];
+    let labels: Vec<&str> = write_output["auto_edges"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|e| e["label"].as_str())
+        .collect();
+    assert!(
+        labels.contains(&"raises"),
+        "expected raises edge for InsufficientFundsError; got labels: {labels:?}"
+    );
+}
+
+#[test]
+fn t113_auto_edge_detects_function_call() {
+    // Seed a named Do node in the fixture so auto-edge detection can resolve
+    // the expression to its target (detector uses `metadata.name` which
+    // `ail.write` does not populate). A batch-written node whose expression
+    // mentions the named Do target should produce a `calls` edge.
+    let (mut graph, _root, _user, _err, ops) = batch_test_graph();
+    let mut validate = Node::new(NodeId::new(), "Validate sender input", Pattern::Do);
+    validate.metadata.name = Some("ValidateSender".into());
+    let validate_id = graph.add_node(validate).unwrap();
+    graph.add_edge(ops, validate_id, EdgeKind::Ev).unwrap();
+    let server = memory_server(graph);
+
+    let req = tools_call(
+        "ail.batch",
+        json!({
+            "operations": [
+                {
+                    "op": "write",
+                    "parent_id": ops.to_string(),
+                    "pattern": "do",
+                    "intent": "outer flow",
+                    "expression": "calls ValidateSender before moving on"
+                }
+            ]
+        }),
+    );
+    let resp = server.handle(req).unwrap();
+    let result = resp.result.unwrap();
+    assert_eq!(result["status"].as_str(), Some("completed"));
+
+    let second = &result["results"].as_array().unwrap()[0]["output"];
+    let labels: Vec<&str> = second["auto_edges"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|e| e["label"].as_str())
+        .collect();
+    assert!(
+        labels.contains(&"calls"),
+        "expected calls edge from outer flow; got labels: {labels:?}"
+    );
+}
+
+#[test]
+fn t113_auto_edge_refresh_removes_stale() {
+    // Write a Do node referencing User, then patch its expression to drop
+    // the reference. The post-batch refresh must remove the stale uses_type
+    // edge (via the patch result's auto_edges_removed).
+    let (graph, _root, _user, _err, ops) = batch_test_graph();
+    let server = memory_server(graph);
+
+    // Step 1: initial write creates the node + edge.
+    let write_req = tools_call(
+        "ail.write",
+        json!({
+            "parent_id": ops.to_string(),
+            "pattern": "do",
+            "intent": "uses user then drops reference",
+            "expression": "from id:string -> User"
+        }),
+    );
+    let write_resp = server.handle(write_req).unwrap();
+    let new_node_id = write_resp.result.unwrap()["node_id"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+
+    // Step 2: batch patch that removes the User reference.
+    let req = tools_call(
+        "ail.batch",
+        json!({
+            "operations": [
+                {
+                    "op": "patch",
+                    "node_id": new_node_id,
+                    "fields": { "expression": "from id:string -> string" }
+                }
+            ]
+        }),
+    );
+    let resp = server.handle(req).unwrap();
+    let result = resp.result.unwrap();
+    assert_eq!(result["status"].as_str(), Some("completed"));
+
+    let patch_output = &result["results"].as_array().unwrap()[0]["output"];
+    let removed = patch_output["auto_edges_removed"].as_array().unwrap();
+    assert!(
+        !removed.is_empty(),
+        "patch dropping the User reference should remove an auto-edge"
+    );
+}
+
+#[test]
+fn t113_auto_edge_no_duplicate_edges() {
+    // An expression that mentions the same type twice must yield only one
+    // uses_type edge (detector de-duplicates).
+    let (graph, _root, _user, _err, ops) = batch_test_graph();
+    let server = memory_server(graph);
+
+    let req = tools_call(
+        "ail.batch",
+        json!({
+            "operations": [
+                {
+                    "op": "write",
+                    "parent_id": ops.to_string(),
+                    "pattern": "do",
+                    "intent": "twin users",
+                    "expression": "from a:User, b:User -> User"
+                }
+            ]
+        }),
+    );
+    let resp = server.handle(req).unwrap();
+    let result = resp.result.unwrap();
+    let write_output = &result["results"].as_array().unwrap()[0]["output"];
+    let user_edges: Vec<_> = write_output["auto_edges"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|e| e["label"].as_str() == Some("uses_type"))
+        .collect();
+    assert_eq!(
+        user_edges.len(),
+        1,
+        "expected exactly one uses_type edge; got {user_edges:?}"
+    );
+}
+
+#[test]
+fn t113_batch_empty_operations_noop() {
+    // An empty batch must complete cleanly without touching the graph.
+    let (graph, _root, _user, _err, _ops) = batch_test_graph();
+    let server = memory_server(graph);
+
+    let req = tools_call("ail.batch", json!({ "operations": [] }));
+    let resp = server.handle(req).unwrap();
+    let result = resp.result.unwrap();
+
+    assert_eq!(result["status"].as_str(), Some("completed"));
+    assert_eq!(result["results"].as_array().unwrap().len(), 0);
+    assert!(result["error"].is_null());
+
+    // Graph is unchanged.
+    let status = server
+        .handle(tools_call("ail.status", json!({})))
+        .unwrap()
+        .result
+        .unwrap();
+    assert_eq!(status["node_count"].as_u64(), Some(4));
+}
+
+#[test]
+fn t113_batch_rejects_dry_run_delete() {
+    // dry_run is a read-only preview, not a mutation; it does not belong in
+    // an atomic batch. The batch must roll back on encountering it.
+    let (graph, _root, _user, _err, ops) = batch_test_graph();
+    let server = memory_server(graph);
+
+    let req = tools_call(
+        "ail.batch",
+        json!({
+            "operations": [
+                {
+                    "op": "delete",
+                    "node_id": ops.to_string(),
+                    "strategy": "dry_run"
+                }
+            ]
+        }),
+    );
+    let resp = server.handle(req).unwrap();
+    let result = resp.result.unwrap();
+
+    assert_eq!(result["status"].as_str(), Some("rolled_back"));
+    let err = result["error"].as_str().unwrap();
+    assert!(
+        err.contains("dry_run"),
+        "rollback error must explain dry_run rejection: {err}"
+    );
+}

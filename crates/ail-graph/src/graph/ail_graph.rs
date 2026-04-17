@@ -11,6 +11,10 @@ use crate::types::{EdgeId, EdgeKind, Node, NodeId};
 /// Wraps a `petgraph::StableDiGraph` keyed by [`NodeId`] (UUID). Maintains an
 /// internal index map so callers always use stable [`NodeId`]s rather than raw
 /// petgraph indices.
+///
+/// `Clone` is derived so in-memory callers (e.g. the MCP `ail.batch` handler)
+/// can snapshot the graph before a batch of mutations and restore on failure.
+#[derive(Clone)]
 pub struct AilGraph {
     inner: StableDiGraph<Node, EdgeKind>,
     node_index_map: HashMap<NodeId, NodeIndex>,

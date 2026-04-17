@@ -17,6 +17,7 @@
 //! | `ail.patch` | Update fields on an existing node |
 //! | `ail.move` | Move a node under a new parent and sibling position |
 //! | `ail.delete` | Delete a node with cascade, orphan, or dry_run strategy |
+//! | `ail.batch` | Run ordered graph mutations atomically with auto-edge refresh |
 //!
 //! ## Entry points
 //!

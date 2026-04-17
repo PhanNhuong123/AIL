@@ -1,3 +1,4 @@
+pub(crate) mod batch;
 pub(crate) mod build;
 pub(crate) mod context;
 pub(crate) mod search;
