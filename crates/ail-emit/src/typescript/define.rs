@@ -33,12 +33,25 @@ pub(crate) fn emit_define_node(
     let ts_base = resolve_ts_type(base_type);
     let is_integer = base_type.trim() == "integer";
 
-    // Collect Always contracts.
-    let always_contracts: Vec<_> = node
+    // Collect constraint sources for this define node. Parser stores the
+    // `where <expr>` clause in `node.expression` (see
+    // crates/ail-text/src/parser/walker.rs), not in `node.contracts`, so the
+    // Always contract list may be empty even when a constraint is present.
+    // Prefer contracts when available; fall back to `node.expression`.
+    let mut constraint_sources: Vec<String> = node
         .contracts
         .iter()
         .filter(|c| c.kind == ContractKind::Always)
+        .map(|c| c.expression.0.clone())
         .collect();
+    if constraint_sources.is_empty() {
+        if let Some(expr) = node.expression.as_ref() {
+            let trimmed = expr.0.trim();
+            if !trimmed.is_empty() {
+                constraint_sources.push(trimmed.to_owned());
+            }
+        }
+    }
 
     // Register user-defined types referenced in the base type.
     for user_type in collect_user_types(base_type) {
@@ -53,8 +66,7 @@ pub(crate) fn emit_define_node(
         checks.push(("Number.isInteger(value)".to_owned(), "integer".to_owned()));
     }
 
-    for contract in &always_contracts {
-        let raw = &contract.expression.0;
+    for raw in &constraint_sources {
         let parsed = parse_constraint_expr(raw).map_err(|e| EmitError::TsConstraintParseError {
             node_id: node.id,
             expression: raw.clone(),
@@ -65,16 +77,12 @@ pub(crate) fn emit_define_node(
     }
 
     // Docstring from metadata.
-    let docstring = if always_contracts.is_empty() {
+    let docstring = if constraint_sources.is_empty() {
         format!("{name} — define {name}:{base_type}")
     } else {
-        let constraint_text: Vec<_> = always_contracts
-            .iter()
-            .map(|c| c.expression.0.as_str())
-            .collect();
         format!(
             "{name} — define {name}:{base_type} where {}",
-            constraint_text.join(" and ")
+            constraint_sources.join(" and ")
         )
     };
 

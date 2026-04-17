@@ -332,7 +332,7 @@ fn emit_empty_graph_no_functions() {
     let output = emit_function_definitions(&verified, &config).expect("emit should succeed");
     // functions.py is always present; test_contracts.py and ailmap.json are also
     // emitted because build_verified_fn_graph attaches Before + After contracts.
-    assert!(output.files.len() >= 1);
+    assert!(!output.files.is_empty());
     assert!(output
         .files
         .iter()

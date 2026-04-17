@@ -39,6 +39,7 @@ fn emit_tsconfig() -> EmittedFile {
     "strict": true,
     "noUncheckedIndexedAccess": true,
     "esModuleInterop": true,
+    "skipLibCheck": true,
     "outDir": "./dist",
     "rootDir": "./",
     "declaration": true,

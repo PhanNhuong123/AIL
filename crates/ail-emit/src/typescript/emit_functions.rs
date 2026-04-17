@@ -106,6 +106,7 @@ pub fn emit_ts_function_definitions(
             config,
             &mut tracker,
             &mut helpers,
+            true,
         ) {
             Ok(fn_code) => {
                 let all_code = if helpers.is_empty() {

@@ -8,7 +8,7 @@ use crate::types::EmitConfig;
 use crate::typescript::contract_inject::{
     collect_old_refs_ts, render_after_contract_lines_ts, render_before_contract_lines_ts,
 };
-use crate::typescript::fn_name::{detect_is_async, to_camel_case_fn};
+use crate::typescript::fn_name::{detect_is_async, to_camel_case_fn, to_camel_case_var};
 use crate::typescript::import_tracker::{ImportTracker, TypeKind};
 use crate::typescript::ts_blocks::{emit_foreach_ts, emit_retry_ts, emit_together_ts};
 use crate::typescript::ts_statement::{
@@ -31,6 +31,7 @@ pub(crate) fn emit_ts_do_function(
     config: &EmitConfig,
     tracker: &mut ImportTracker,
     helpers: &mut Vec<String>,
+    is_public: bool,
 ) -> Result<String, Vec<EmitError>> {
     let raw_name = node
         .metadata
@@ -58,6 +59,7 @@ pub(crate) fn emit_ts_do_function(
         &node.metadata.params,
         node.metadata.return_type.as_deref(),
         is_async,
+        is_public,
     );
 
     // ── Contract injection (spec ordering) ────────────────────────────────────
@@ -117,9 +119,64 @@ pub(crate) fn emit_ts_do_function(
     } else {
         lines.extend(body);
     }
+
+    // ── Synthetic trailing return ────────────────────────────────────────────
+    // AIL allows a `do` body to end with a `let <var>:<T>` binding and no
+    // explicit `return`, when `<T>` matches the function's return type.
+    // TypeScript requires an explicit return, so synthesize one. after_lines
+    // (post + keep re-check) must land immediately before the synthetic return
+    // to match the invariant enforced for real Pattern::Return children.
+    if let Some(synth_var) = synth_return_var(graph, node) {
+        for contract_line in &after_lines {
+            let trimmed = contract_line.trim_start();
+            lines.push(format!("  {trimmed}"));
+        }
+        lines.push(format!("  return {};", to_camel_case_var(&synth_var)));
+    }
+
     lines.push("}".to_owned());
 
     Ok(lines.join("\n"))
+}
+
+/// If the function's return type is non-void, no direct child is
+/// `Pattern::Return`, and the last direct child is a `Pattern::Let` whose
+/// `metadata.return_type` matches the primary return type, return the Let
+/// binding name (snake_case) so the caller can synthesize a trailing return.
+fn synth_return_var(graph: &dyn GraphBackend, node: &Node) -> Option<String> {
+    let primary_ret = {
+        let rt = node.metadata.return_type.as_deref()?;
+        let p = rt.split(" or ").next().unwrap_or(rt).trim();
+        if p.is_empty() || p == "void" {
+            return None;
+        }
+        p.to_owned()
+    };
+
+    let children = node.children.as_deref()?;
+    if children.is_empty() {
+        return None;
+    }
+
+    let mut last_child: Option<Node> = None;
+    for &child_id in children {
+        let child = graph.get_node(child_id).ok().flatten()?;
+        if child.pattern == Pattern::Return {
+            return None;
+        }
+        last_child = Some(child);
+    }
+
+    let last = last_child?;
+    if last.pattern != Pattern::Let {
+        return None;
+    }
+    let let_ty = last.metadata.return_type.as_deref()?;
+    let let_primary = let_ty.split(" or ").next().unwrap_or(let_ty).trim();
+    if let_primary != primary_ret {
+        return None;
+    }
+    last.metadata.name.clone()
 }
 
 // ── Function header ────────────────────────────────────────────────────────────
@@ -130,6 +187,7 @@ fn emit_function_header(
     params: &[Param],
     return_type_raw: Option<&str>,
     is_async: bool,
+    is_public: bool,
 ) -> Vec<String> {
     let ts_ret = match return_type_raw {
         Some(rt) => ts_primary_return_type(rt),
@@ -146,19 +204,22 @@ fn emit_function_header(
     };
 
     let akw = if is_async { "async " } else { "" };
+    let export_kw = if is_public { "export " } else { "" };
     let mut lines = vec![format!("// [AIL] {fn_name}: {intent}")];
 
     if params.is_empty() {
-        lines.push(format!("{akw}function {fn_name}(): {wrapped} {{"));
+        lines.push(format!(
+            "{export_kw}{akw}function {fn_name}(): {wrapped} {{"
+        ));
     } else if params.len() == 1 {
         let p = &params[0];
         let ts_t = resolve_ts_type(&p.type_ref);
         lines.push(format!(
-            "{akw}function {fn_name}({}: {ts_t}): {wrapped} {{",
+            "{export_kw}{akw}function {fn_name}({}: {ts_t}): {wrapped} {{",
             p.name
         ));
     } else {
-        lines.push(format!("{akw}function {fn_name}("));
+        lines.push(format!("{export_kw}{akw}function {fn_name}("));
         for p in params {
             let ts_t = resolve_ts_type(&p.type_ref);
             lines.push(format!("  {}: {ts_t},", p.name));
@@ -262,6 +323,7 @@ pub(crate) fn emit_ts_do_body(
                         &child_config,
                         &mut h_tracker,
                         &mut h_helpers,
+                        false,
                     ) {
                         Ok(helper_fn) => {
                             // Rename function to underscore-prefixed private helper.
