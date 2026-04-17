@@ -6,6 +6,8 @@
 
 use std::cell::{Cell, RefCell};
 use std::path::PathBuf;
+#[cfg(feature = "embeddings")]
+use std::sync::Arc;
 
 use serde_json::{json, Value};
 
@@ -13,13 +15,13 @@ use ail_graph::Bm25Index;
 use ail_search::EmbeddingIndex;
 
 use crate::context::ProjectContext;
-use crate::tools::{batch, build, context, search, status, structure, verify, write};
+use crate::tools::{batch, build, context, review, search, status, structure, verify, write};
 use crate::types::protocol::{
     JsonRpcError, JsonRpcRequest, JsonRpcResponse, INTERNAL_ERROR, INVALID_PARAMS, METHOD_NOT_FOUND,
 };
 use crate::types::tool_io::{
-    BatchInput, BuildInput, ContextInput, DeleteInput, MoveInput, PatchInput, SearchInput,
-    VerifyInput, WriteInput,
+    BatchInput, BuildInput, ContextInput, DeleteInput, MoveInput, PatchInput, ReviewInput,
+    SearchInput, VerifyInput, WriteInput,
 };
 
 /// The MCP server.
@@ -37,6 +39,11 @@ pub struct McpServer {
     /// `embeddings` feature is active and model files are present. Always `None`
     /// without the feature or when the DB has no compatible vectors.
     embedding_cache: RefCell<Option<EmbeddingIndex>>,
+    /// Cached ONNX embedding provider for `ail.review`.  Built at most once per
+    /// server session and reused across calls.  Always `None` without the
+    /// `embeddings` feature or when model files are absent.
+    #[cfg(feature = "embeddings")]
+    review_provider_cache: RefCell<Option<Arc<ail_search::OnnxEmbeddingProvider>>>,
     /// `true` after any write tool mutates the in-memory graph. Verify and
     /// build use this to decide between `refresh_from_graph` (preserve edits)
     /// and `refresh_from_path` (re-parse disk). Cleared on successful refresh.
@@ -51,6 +58,8 @@ impl McpServer {
             context: RefCell::new(initial),
             search_cache: RefCell::new(None),
             embedding_cache: RefCell::new(None),
+            #[cfg(feature = "embeddings")]
+            review_provider_cache: RefCell::new(None),
             dirty: Cell::new(false),
         }
     }
@@ -114,6 +123,34 @@ impl McpServer {
                 let emb = self.embedding_cache.borrow();
                 let out =
                     search::run_search(borrow.graph(), &self.search_cache, emb.as_ref(), &input);
+                serde_json::to_value(out)
+                    .map_err(|e| JsonRpcError::new(INTERNAL_ERROR, e.to_string()))
+            }
+
+            "ail.review" => {
+                // Lazily build and cache the ONNX provider so subsequent calls
+                // skip the expensive model-load path.
+                #[cfg(feature = "embeddings")]
+                {
+                    let mut cache = self.review_provider_cache.borrow_mut();
+                    if cache.is_none() {
+                        *cache = review::try_build_provider();
+                    }
+                }
+
+                let input: ReviewInput = serde_json::from_value(args)
+                    .map_err(|e| JsonRpcError::new(INVALID_PARAMS, e.to_string()))?;
+                let borrow = self.context.borrow();
+                #[cfg(feature = "embeddings")]
+                let provider_borrow = self.review_provider_cache.borrow();
+                #[cfg(feature = "embeddings")]
+                let out = review::handle_review(
+                    borrow.graph(),
+                    input,
+                    provider_borrow.as_ref().map(Arc::as_ref),
+                );
+                #[cfg(not(feature = "embeddings"))]
+                let out = review::handle_review(borrow.graph(), input);
                 serde_json::to_value(out)
                     .map_err(|e| JsonRpcError::new(INTERNAL_ERROR, e.to_string()))
             }
@@ -301,6 +338,17 @@ impl McpServer {
                             "budget": { "type": "integer", "description": "Max results (default 10)" }
                         },
                         "required": ["query"]
+                    }
+                },
+                {
+                    "name": "ail.review",
+                    "description": "Review semantic coverage for a graph node; returns score, child contributions, missing aspects, and an action suggestion.",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "node": { "type": "string", "description": "Node ID or name to review." }
+                        },
+                        "required": ["node"]
                     }
                 },
                 {

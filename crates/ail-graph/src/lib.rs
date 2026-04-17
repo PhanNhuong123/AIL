@@ -29,7 +29,8 @@ pub mod types;
 pub mod validation;
 
 pub use cic::{
-    check_promotion_affected_nodes, compute_context_packet_for_backend, ContextPacket, FactOrigin,
+    check_promotion_affected_nodes, compute_context_packet_for_backend, ChildContributionInfo,
+    ContextPacket, CoverageConfig, CoverageInfo, CoverageStatus, FactOrigin, MissingAspectInfo,
     PacketConstraint, PromotedFact, ScopeVariable, ScopeVariableKind,
 };
 pub use errors::{GraphError, ValidationError};

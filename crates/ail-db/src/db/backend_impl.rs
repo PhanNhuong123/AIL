@@ -5,6 +5,7 @@ use ail_graph::{
 };
 
 use super::cic_cache;
+use super::coverage;
 use super::node_serde::{node_id_from_sql, node_to_row, pattern_to_sql};
 use super::sqlite_graph::SqliteGraph;
 use super::sqlite_graph::{
@@ -86,6 +87,13 @@ impl GraphBackend for SqliteGraph {
         // Invalidate: this node + descendants + ancestors + next-siblings.
         cic_cache::compute_and_invalidate(&db, &id_str)?;
 
+        // Coverage invalidation: ancestors (including self) may have stale scores.
+        // Best-effort — swallow errors so coverage failures never block graph writes.
+        let ancestors_plus_self = collect_ancestors_plus_self(&db, &id_str);
+        if let Ok(ref ids) = ancestors_plus_self {
+            let _ = coverage::invalidate_coverage_for_ancestors(&db, ids);
+        }
+
         Ok(())
     }
 
@@ -100,6 +108,14 @@ impl GraphBackend for SqliteGraph {
         // Invalidate BEFORE delete — the CTE must walk the graph while it still
         // exists. CASCADE will remove the cic_cache row for this node itself.
         cic_cache::compute_and_invalidate(&db, &id_str)?;
+
+        // Coverage invalidation: collect ancestors BEFORE delete so the parent chain
+        // is still visible. Best-effort — swallow errors so coverage failures never
+        // block graph writes.
+        let ancestors_plus_self = collect_ancestors_plus_self(&db, &id_str);
+        if let Ok(ref ids) = ancestors_plus_self {
+            let _ = coverage::invalidate_coverage_for_ancestors(&db, ids);
+        }
 
         // CASCADE handles children nodes, contracts, edges, and cic_cache rows.
         db.execute("DELETE FROM nodes WHERE id = ?", rusqlite::params![id_str])
@@ -160,6 +176,11 @@ impl GraphBackend for SqliteGraph {
                 // Invalidate: new child's ancestor chain (incl. `from`) goes stale
                 // via Rule 2 UP. The child itself has no cache entry yet.
                 cic_cache::compute_and_invalidate(&db, &to_str)?;
+
+                // Coverage: parent `from` and its ancestors gain a new child.
+                if let Ok(ids) = collect_ancestors_plus_self(&db, &from_str) {
+                    let _ = coverage::invalidate_coverage_for_ancestors(&db, &ids);
+                }
             }
             EdgeKind::Eh => {
                 db.execute(
@@ -170,6 +191,11 @@ impl GraphBackend for SqliteGraph {
 
                 // Invalidate: `from`'s next-siblings (including `to`) via Rule 3 ACROSS.
                 cic_cache::compute_and_invalidate(&db, &from_str)?;
+
+                // Coverage: sibling structure change — invalidate ancestors of `from`.
+                if let Ok(ids) = collect_ancestors_plus_self(&db, &from_str) {
+                    let _ = coverage::invalidate_coverage_for_ancestors(&db, &ids);
+                }
             }
             EdgeKind::Ed => {
                 db.execute(
@@ -182,6 +208,14 @@ impl GraphBackend for SqliteGraph {
                 // and `to` now has a new incoming diagonal reference.
                 cic_cache::compute_and_invalidate(&db, &from_str)?;
                 cic_cache::compute_and_invalidate(&db, &to_str)?;
+
+                // Coverage: invalidate ancestors of both endpoints.
+                if let Ok(ids) = collect_ancestors_plus_self(&db, &from_str) {
+                    let _ = coverage::invalidate_coverage_for_ancestors(&db, &ids);
+                }
+                if let Ok(ids) = collect_ancestors_plus_self(&db, &to_str) {
+                    let _ = coverage::invalidate_coverage_for_ancestors(&db, &ids);
+                }
             }
         }
 
@@ -203,6 +237,11 @@ impl GraphBackend for SqliteGraph {
                 // Invalidate BEFORE removing — CTE walks the current parent chain.
                 cic_cache::compute_and_invalidate(&db, &to_str)?;
 
+                // Coverage: parent `from` loses a child — invalidate its ancestors.
+                if let Ok(ids) = collect_ancestors_plus_self(&db, &from_str) {
+                    let _ = coverage::invalidate_coverage_for_ancestors(&db, &ids);
+                }
+
                 let rows_changed = db
                     .execute(
                         "UPDATE nodes SET parent_id=NULL, depth=0, position=0 \
@@ -219,6 +258,11 @@ impl GraphBackend for SqliteGraph {
                 // Invalidate BEFORE removing — `from`'s next-siblings include `to`.
                 cic_cache::compute_and_invalidate(&db, &from_str)?;
 
+                // Coverage: sibling structure change — invalidate ancestors of `from`.
+                if let Ok(ids) = collect_ancestors_plus_self(&db, &from_str) {
+                    let _ = coverage::invalidate_coverage_for_ancestors(&db, &ids);
+                }
+
                 let rows_changed = db
                     .execute(
                         "DELETE FROM edges WHERE source_id=? AND target_id=? AND kind=?",
@@ -234,6 +278,14 @@ impl GraphBackend for SqliteGraph {
                 // Invalidate both endpoints BEFORE removing.
                 cic_cache::compute_and_invalidate(&db, &from_str)?;
                 cic_cache::compute_and_invalidate(&db, &to_str)?;
+
+                // Coverage: invalidate ancestors of both endpoints.
+                if let Ok(ids) = collect_ancestors_plus_self(&db, &from_str) {
+                    let _ = coverage::invalidate_coverage_for_ancestors(&db, &ids);
+                }
+                if let Ok(ids) = collect_ancestors_plus_self(&db, &to_str) {
+                    let _ = coverage::invalidate_coverage_for_ancestors(&db, &ids);
+                }
 
                 let rows_changed = db
                     .execute(
@@ -596,4 +648,37 @@ impl GraphBackend for SqliteGraph {
             .execute_batch("ROLLBACK")
             .map_err(|e| GraphError::Storage(e.to_string()))
     }
+}
+
+// ─── Private helpers ──────────────────────────────────────────────────────────
+
+/// Walk the `parent_id` chain from `node_id` upward and return all ancestor
+/// IDs plus `node_id` itself as a `Vec<String>`.
+///
+/// Used by coverage invalidation hooks. The walk is done inline over the raw
+/// connection to avoid re-locking the `Mutex<Connection>` from within an
+/// existing lock scope.
+fn collect_ancestors_plus_self(
+    conn: &rusqlite::Connection,
+    node_id: &str,
+) -> Result<Vec<String>, rusqlite::Error> {
+    let mut result = vec![node_id.to_owned()];
+    let mut current = node_id.to_owned();
+
+    loop {
+        match conn.query_row(
+            "SELECT parent_id FROM nodes WHERE id = ?",
+            rusqlite::params![current],
+            |row| row.get::<_, Option<String>>(0),
+        ) {
+            Ok(Some(parent)) => {
+                result.push(parent.clone());
+                current = parent;
+            }
+            Ok(None) | Err(rusqlite::Error::QueryReturnedNoRows) => break,
+            Err(e) => return Err(e),
+        }
+    }
+
+    Ok(result)
 }

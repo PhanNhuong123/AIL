@@ -371,6 +371,53 @@ pub struct BatchOperationResult {
     pub error: Option<String>,
 }
 
+// ── ail.review ───────────────────────────────────────────────────────────────
+
+/// Input for the `ail.review` MCP tool.
+#[derive(Debug, Deserialize)]
+pub struct ReviewInput {
+    /// Node ID (UUID string) or node name to review.
+    pub node: String,
+}
+
+/// Output from `ail.review`.
+#[derive(Debug, Serialize)]
+pub struct ReviewOutput {
+    pub node_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub node_name: Option<String>,
+    /// Coverage score in `[0.0, 1.0]`, or `null` for leaf nodes.
+    pub coverage: Option<f32>,
+    /// Qualitative status: `"Full"`, `"Partial"`, `"Weak"`, `"N/A"`, or
+    /// `"Unavailable"`.
+    pub status: String,
+    pub children_coverage: Vec<ChildCoverageItem>,
+    pub missing: Vec<MissingItem>,
+    /// Human-readable action suggestion derived from status and missing aspects.
+    pub suggestion: String,
+    /// Surfaced only when `true` — parent embedding was near-zero (Guard A).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub empty_parent: Option<bool>,
+    /// Surfaced only when `true` — Gram-Schmidt basis degenerated (Guard C).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub degenerate_basis_fallback: Option<bool>,
+}
+
+/// Per-child contribution entry in a [`ReviewOutput`].
+#[derive(Debug, Serialize)]
+pub struct ChildCoverageItem {
+    pub node_id: String,
+    pub intent_preview: String,
+    pub contribution: f32,
+}
+
+/// A missing semantic aspect in a [`ReviewOutput`].
+#[derive(Debug, Serialize)]
+pub struct MissingItem {
+    pub concept: String,
+    pub similarity: f32,
+}
+
 // ── ail.status ───────────────────────────────────────────────────────────────
 
 /// Output from `ail.status`.

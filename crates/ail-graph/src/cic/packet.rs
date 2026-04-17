@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::types::NodeId;
 
-use super::{PacketConstraint, PromotedFact, ScopeVariable};
+use super::{coverage_info::CoverageInfo, PacketConstraint, PromotedFact, ScopeVariable};
 
 /// The cumulative inherited context available at a single node.
 ///
@@ -24,7 +24,7 @@ use super::{PacketConstraint, PromotedFact, ScopeVariable};
 /// (Rule 2 UP requires Phase 3 Z3 verification) and
 /// [`ContextPacket::template_constraints`] (the `Following`/`Using` pattern
 /// variants do not yet exist in the pattern enum).
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ContextPacket {
     /// The node the packet was computed for.
     pub node_id: NodeId,
@@ -65,6 +65,13 @@ pub struct ContextPacket {
     pub scope: Vec<ScopeVariable>,
     /// Return-type text from the nearest enclosing `Do`, if any.
     pub must_produce: Option<String>,
+    /// Semantic coverage result for this node, computed by `ail-coverage`.
+    ///
+    /// `None` until coverage is explicitly computed. `#[serde(default)]`
+    /// ensures packets serialised before coverage support deserialise without
+    /// error — they simply get `coverage: None`.
+    #[serde(default)]
+    pub coverage: Option<CoverageInfo>,
 }
 
 impl ContextPacket {
@@ -82,6 +89,7 @@ impl ContextPacket {
             promoted_facts: Vec::new(),
             scope: Vec::new(),
             must_produce: None,
+            coverage: None,
         }
     }
 }

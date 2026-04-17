@@ -1,5 +1,9 @@
 use serde::{Deserialize, Serialize};
+use std::time::{SystemTime, UNIX_EPOCH};
 
+use ail_graph::cic::{
+    ChildContributionInfo, CoverageConfig, CoverageInfo, CoverageStatus, MissingAspectInfo,
+};
 use ail_graph::NodeId;
 
 // ─── Preview constant ─────────────────────────────────────────────────────────
@@ -71,6 +75,52 @@ pub struct MissingAspect {
     pub concept: String,
     /// Cosine similarity between the residual direction and this concept's embedding.
     pub similarity: f32,
+}
+
+// ─── CoverageResult::into_info ────────────────────────────────────────────────
+
+impl CoverageResult {
+    /// Convert the raw algorithm output into a [`CoverageInfo`] carrying status,
+    /// timestamp, and the caller-supplied config hash.
+    ///
+    /// The `cfg` is used only to derive [`CoverageStatus`] from the numeric
+    /// score; the caller is responsible for pre-computing `config_hash` via
+    /// [`CoverageConfig::config_hash`] and passing it in so that the hash
+    /// stored in the `CoverageInfo` exactly matches the config used.
+    pub fn into_info(self, cfg: &CoverageConfig, config_hash: String) -> CoverageInfo {
+        let status = CoverageStatus::from_score(self.score, cfg);
+        let computed_at = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|d| d.as_secs() as i64)
+            .unwrap_or(0);
+        let child_contributions = self
+            .child_contributions
+            .into_iter()
+            .map(|c| ChildContributionInfo {
+                node_id: c.node_id.to_string(),
+                intent_preview: c.intent_preview,
+                projection_magnitude: c.projection_magnitude,
+            })
+            .collect();
+        let missing_aspects = self
+            .missing_aspects
+            .into_iter()
+            .map(|m| MissingAspectInfo {
+                concept: m.concept,
+                similarity: m.similarity,
+            })
+            .collect();
+        CoverageInfo {
+            score: self.score,
+            status,
+            child_contributions,
+            missing_aspects,
+            empty_parent: self.empty_parent,
+            degenerate_basis_fallback: self.degenerate_basis_fallback,
+            computed_at,
+            config_hash,
+        }
+    }
 }
 
 // ─── Unit tests ───────────────────────────────────────────────────────────────

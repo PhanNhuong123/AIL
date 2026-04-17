@@ -1,5 +1,6 @@
 pub mod build;
 pub mod context;
+pub mod coverage;
 pub mod init;
 pub mod migrate;
 pub mod project;

@@ -66,6 +66,22 @@ CREATE TABLE IF NOT EXISTS embeddings (
     model_name TEXT NOT NULL,
     updated_at TEXT DEFAULT (datetime('now'))
 );
+
+CREATE TABLE IF NOT EXISTS coverage_cache (
+    node_id                   TEXT PRIMARY KEY,
+    score                     REAL,
+    status                    TEXT NOT NULL,
+    child_contributions       TEXT NOT NULL,
+    missing_aspects           TEXT NOT NULL,
+    empty_parent              INTEGER NOT NULL DEFAULT 0,
+    degenerate_basis_fallback INTEGER NOT NULL DEFAULT 0,
+    computed_at               INTEGER NOT NULL,
+    config_hash               TEXT NOT NULL,
+    valid                     INTEGER NOT NULL DEFAULT 1,
+    FOREIGN KEY (node_id) REFERENCES nodes(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_coverage_cache_valid  ON coverage_cache(valid);
+CREATE INDEX IF NOT EXISTS idx_coverage_cache_status ON coverage_cache(status);
 ";
 
 // ─── FTS5 ─────────────────────────────────────────────────────────────────────

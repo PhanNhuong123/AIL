@@ -4,6 +4,7 @@ use std::{
 };
 
 use ail_graph::{
+    cic::CoverageInfo,
     compute_context_packet_for_backend,
     errors::GraphError,
     graph::GraphBackend,
@@ -18,6 +19,7 @@ use uuid::Uuid;
 use crate::errors::DbError;
 
 use super::cic_cache;
+use super::coverage;
 use super::fts_search;
 use super::node_serde::{
     contract_kind_from_sql, contract_kind_to_sql, node_id_from_sql, row_to_node,
@@ -110,12 +112,13 @@ impl SqliteGraph {
 
     /// Count all rows in a named table.
     ///
-    /// Allowed tables: `nodes`, `contracts`, `edges`, `project_meta`, `cic_cache`, `search_fts`.
+    /// Allowed tables: `nodes`, `contracts`, `edges`, `project_meta`, `cic_cache`,
+    /// `search_fts`, `embeddings`, `coverage_cache`.
     /// Used in tests to verify cascade deletions and cache state.
     pub fn table_row_count(&self, table: &str) -> Result<i64, DbError> {
         let table = match table {
             "nodes" | "contracts" | "edges" | "project_meta" | "cic_cache" | "search_fts"
-            | "embeddings" => table,
+            | "embeddings" | "coverage_cache" => table,
             other => return Err(DbError::Other(format!("unknown table: {other}"))),
         };
         let db = self.db();
@@ -305,6 +308,53 @@ impl SqliteGraph {
             Ok(v) => Some(v != 0),
             Err(_) => None,
         }
+    }
+
+    // ─── Coverage cache ──────────────────────────────────────────────────────
+
+    /// Persist (upsert) a coverage result for `node_id`.
+    pub fn save_coverage(&self, node_id: &str, info: &CoverageInfo) -> Result<(), DbError> {
+        let db = self.db();
+        coverage::save_coverage(&db, node_id, info)
+    }
+
+    /// Load a valid coverage result for `node_id` whose `config_hash` matches
+    /// `current_config_hash`. Returns `None` on cache miss or config mismatch.
+    pub fn load_coverage(
+        &self,
+        node_id: &str,
+        current_config_hash: &str,
+    ) -> Result<Option<CoverageInfo>, DbError> {
+        let db = self.db();
+        coverage::load_coverage(&db, node_id, current_config_hash)
+    }
+
+    /// Return all valid, config-matching coverage rows as `(node_id, CoverageInfo)` pairs.
+    pub fn load_all_valid_coverage(
+        &self,
+        current_config_hash: &str,
+    ) -> Result<Vec<(String, CoverageInfo)>, DbError> {
+        let db = self.db();
+        coverage::load_all_valid_coverage(&db, current_config_hash)
+    }
+
+    /// Mark coverage rows stale for a pre-computed ancestor list (including the
+    /// mutated node itself). Returns the number of rows updated.
+    pub fn invalidate_coverage_for_ancestors(&self, node_ids: &[String]) -> Result<usize, DbError> {
+        let db = self.db();
+        coverage::invalidate_coverage_for_ancestors(&db, node_ids)
+    }
+
+    /// Delete all rows from `coverage_cache`.
+    pub fn clear_coverage(&self) -> Result<(), DbError> {
+        let db = self.db();
+        coverage::clear_coverage(&db)
+    }
+
+    /// Return the total number of rows in `coverage_cache` (valid + stale).
+    pub fn coverage_count(&self) -> Result<usize, DbError> {
+        let db = self.db();
+        coverage::coverage_count(&db)
     }
 }
 

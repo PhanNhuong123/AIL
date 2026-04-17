@@ -193,6 +193,7 @@ fn packet_with_scope(node_id: NodeId, var_name: &str, type_ref: &str) -> Context
             kind: ScopeVariableKind::Parameter,
         }],
         must_produce: None,
+        coverage: None,
     }
 }
 
@@ -209,6 +210,7 @@ fn packet_with_must_produce(node_id: NodeId, must_produce: &str) -> ContextPacke
         promoted_facts: vec![],
         scope: vec![],
         must_produce: Some(must_produce.to_owned()),
+        coverage: None,
     }
 }
 
@@ -343,6 +345,7 @@ fn t031_all_seven_builtins_resolve_as_scope_var_types() {
         promoted_facts: vec![],
         scope,
         must_produce: None,
+        coverage: None,
     };
     assert!(type_check(valid, &[packet]).is_ok());
 }
@@ -650,6 +653,7 @@ fn t044_multiple_errors_are_all_collected_in_one_pass() {
         promoted_facts: vec![],
         scope,
         must_produce: None,
+        coverage: None,
     };
     let errors = type_check(valid, &[packet]).unwrap_err();
     assert!(

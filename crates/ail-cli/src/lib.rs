@@ -15,6 +15,7 @@ use clap::{Parser, Subcommand};
 pub use commands::{
     build::{run_build, BuildArgs},
     context::run_context,
+    coverage::{read_coverage_config, run_coverage},
     init::run_init,
     migrate::{
         migrate_graph, run_export, run_migrate, run_verify_graph, MigrationReport, VerifyResult,
@@ -90,6 +91,13 @@ pub fn run() -> Result<(), CliError> {
         Command::Migrate { from, to, verify } => run_migrate(&from, &to, verify),
 
         Command::Export { from, to } => run_export(&from, &to),
+
+        Command::Coverage {
+            node,
+            all,
+            warm_cache,
+            from_db,
+        } => run_coverage(&cwd, node, all, warm_cache, from_db),
     }
 }
 
@@ -235,5 +243,26 @@ pub enum Command {
         /// Destination directory for the exported `.ail` file.
         #[arg(long)]
         to: PathBuf,
+    },
+
+    /// Compute and display semantic coverage for project nodes.
+    ///
+    /// Requires the SQLite backend and (for computation) the `embeddings` feature.
+    Coverage {
+        /// Compute/display coverage for a single named node or node id.
+        #[arg(long, value_name = "NAME_OR_ID")]
+        node: Option<String>,
+
+        /// Summarise coverage across all non-leaf nodes.
+        #[arg(long, conflicts_with = "node")]
+        all: bool,
+
+        /// Recompute and persist coverage for all non-leaf nodes (warms the cache).
+        #[arg(long = "warm-cache", conflicts_with = "node", conflicts_with_all = ["all"])]
+        warm_cache: bool,
+
+        /// Override the SQLite database path.
+        #[arg(long, value_name = "PATH")]
+        from_db: Option<PathBuf>,
     },
 }

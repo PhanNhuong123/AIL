@@ -19,6 +19,7 @@
 mod compute;
 mod compute_backend;
 mod constraint;
+pub mod coverage_info;
 mod invalidation;
 mod packet;
 mod promotion;
@@ -26,6 +27,9 @@ mod scope;
 
 pub use compute_backend::compute_context_packet_for_backend;
 pub use constraint::PacketConstraint;
+pub use coverage_info::{
+    ChildContributionInfo, CoverageConfig, CoverageInfo, CoverageStatus, MissingAspectInfo,
+};
 pub use invalidation::check_promotion_affected_nodes;
 pub use packet::ContextPacket;
 pub use promotion::{FactOrigin, PromotedFact};

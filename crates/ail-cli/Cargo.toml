@@ -24,6 +24,7 @@ ail-text     = { workspace = true }
 ail-emit     = { workspace = true }
 ail-mcp      = { workspace = true }
 ail-db       = { workspace = true }
+ail-coverage = { workspace = true }
 ail-search   = { workspace = true, optional = true }
 clap         = { workspace = true }
 thiserror    = { workspace = true }
