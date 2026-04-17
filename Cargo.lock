@@ -68,6 +68,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "ail-coverage"
+version = "0.1.0"
+dependencies = [
+ "ail-graph",
+ "ail-search",
+ "log",
+ "serde",
+ "serde_json",
+ "testing_logger",
+ "thiserror 2.0.18",
+]
+
+[[package]]
 name = "ail-db"
 version = "0.1.0"
 dependencies = [
@@ -1646,6 +1659,15 @@ checksum = "230a1b821ccbd75b185820a1f1ff7b14d21da1e442e22c0863ea5f08771a8874"
 dependencies = [
  "rustix",
  "windows-sys",
+]
+
+[[package]]
+name = "testing_logger"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6d92b727cb45d33ae956f7f46b966b25f1bc712092aeef9dba5ac798fc89f720"
+dependencies = [
+ "log",
 ]
 
 [[package]]
