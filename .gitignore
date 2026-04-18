@@ -11,7 +11,6 @@ __pycache__/
 
 # Private/internal docs and agent instructions
 /docs/
-CLAUDE.md
 /AGENTS.md
 /AIL-Development-Plan-v0.1.md
 /AIL-Language-Rules-v0.1.md
