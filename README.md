@@ -6,6 +6,21 @@
 
 *The development environment AI deserves.*
 
+<p>
+  <a href="./LICENSE"><img alt="License: BUSL-1.1" src="https://img.shields.io/badge/license-BUSL--1.1-0f766e?style=for-the-badge"></a>
+  <a href="./crates/ail-runtime-py/LICENSE"><img alt="Runtime: MIT" src="https://img.shields.io/badge/runtime-MIT-16a34a?style=for-the-badge"></a>
+  <img alt="Status: active development" src="https://img.shields.io/badge/status-active%20development-f59e0b?style=for-the-badge">
+</p>
+
+<p>
+  <img alt="Rust core" src="https://img.shields.io/badge/Rust-core-b7410e?style=flat-square&logo=rust&logoColor=white">
+  <img alt="Z3 proofs" src="https://img.shields.io/badge/Z3-proofs-2563eb?style=flat-square">
+  <img alt="MCP integration" src="https://img.shields.io/badge/MCP-agent%20tools-7c3aed?style=flat-square">
+  <img alt="Python emitter" src="https://img.shields.io/badge/Python-emitter-3776ab?style=flat-square&logo=python&logoColor=white">
+  <img alt="TypeScript emitter" src="https://img.shields.io/badge/TypeScript-emitter-3178c6?style=flat-square&logo=typescript&logoColor=white">
+  <img alt="Phase 14" src="https://img.shields.io/badge/Phase%2014-agent%20foundation-111827?style=flat-square">
+</p>
+
 </div>
 
 > ⚠️ **Early development.** This repo is a work in progress — the pipeline is being built and tested incrementally. Nothing runs end-to-end yet. If you're here early, you're seeing the ideas before the product.
