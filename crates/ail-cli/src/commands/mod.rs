@@ -1,3 +1,4 @@
+pub mod agent;
 pub mod build;
 pub mod context;
 pub mod coverage;

@@ -19,5 +19,6 @@ pub(crate) fn run_status(context: &ProjectContext) -> StatusOutput {
         node_count: graph.node_count(),
         edge_count: graph.edge_count(),
         do_node_count,
+        root_id: graph.root_id().map(|id| id.to_string()),
     }
 }

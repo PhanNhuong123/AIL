@@ -1,20 +1,52 @@
-"""Verify stub for the AIL agent loop — real body lands in task 14.3."""
+"""Verify worker: lightweight sanity check via ail.status."""
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import Callable
 
-if TYPE_CHECKING:
-    from ail_agent.orchestrator import AILAgentState
+from ail_agent.errors import AgentError, MCPConnectionError
+from ail_agent.mcp_toolkit import MCPToolkit
+from ail_agent.orchestrator import AILAgentState
+from ail_agent.progress import VERIFY_OK_LINE
 
 
-def run_verify(state: "AILAgentState") -> "AILAgentState":
-    """Verify the generated output meets all AIL contracts.
+def run_verify(
+    state: AILAgentState,
+    *,
+    toolkit: MCPToolkit,
+    emit: Callable[[str], None] | None = None,
+) -> AILAgentState:
+    """Run a basic post-coding sanity check.
 
-    Called by ``_verify_node`` in orchestrator.  Responsibilities (task 14.3):
-    - Invoke the MCP ``ail.verify`` tool on the built graph.
-    - On success, set ``state["status"] = "done"``.
-    - On contract violations, set ``state["status"] = "plan"`` to re-plan, or
-      ``"error"`` if the iteration limit was already reached.
+    Calls ail.status to confirm the project still loads and has at least one node.
+    Emits VERIFY_OK_LINE via the injected `emit` callable (default: no-op).
+    Sets status="done" on success, status="error" on failure.
+
+    Does NOT call MCP ail.verify (that is expensive). The user is told via the
+    emitted line that they should run `ail verify` for the full Z3 check.
     """
-    raise NotImplementedError("run_verify: task 14.3")
+    # Step 1: call ail.status for a lightweight sanity check.
+    try:
+        result = toolkit.call("ail.status", {})
+    except (MCPConnectionError, AgentError) as exc:
+        new_state = dict(state)  # type: ignore[arg-type]
+        new_state["status"] = "error"
+        new_state["error"] = str(exc)
+        return new_state  # type: ignore[return-value]
+
+    # Step 2: defensive check — zero nodes means the graph is empty/broken.
+    if result.get("node_count", 0) == 0:
+        new_state = dict(state)  # type: ignore[arg-type]
+        new_state["status"] = "error"
+        new_state["error"] = "[AIL-G0140] post-verify status reports zero nodes"
+        return new_state  # type: ignore[return-value]
+
+    # Step 3: emit the canonical verification line if a callable was provided.
+    if emit is not None:
+        emit(VERIFY_OK_LINE)
+
+    # Step 4: shallow-copy state, mark done.
+    new_state = dict(state)  # type: ignore[arg-type]
+    new_state["status"] = "done"
+    new_state["error"] = ""
+    return new_state  # type: ignore[return-value]

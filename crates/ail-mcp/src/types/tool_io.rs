@@ -429,4 +429,8 @@ pub struct StatusOutput {
     pub edge_count: usize,
     /// Number of `Do` pattern nodes (each must have contracts).
     pub do_node_count: usize,
+    /// UUID string of the graph's root node, or absent when the graph has no
+    /// root set (e.g. a freshly-initialised empty project).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub root_id: Option<String>,
 }

@@ -1,10 +1,10 @@
-"""AILAgentState, routing, iteration guard, and LangGraph workflow scaffold."""
+"""AILAgentState, routing, iteration guard, workflow context, and LangGraph workflow."""
 
 from __future__ import annotations
 
 import json
 import logging
-from typing import Optional
+from typing import Callable, Optional
 
 from langgraph.graph import END, START, StateGraph
 from typing_extensions import TypedDict
@@ -80,6 +80,62 @@ def initial_state(
 
 
 # ---------------------------------------------------------------------------
+# Workflow context
+# ---------------------------------------------------------------------------
+
+class WorkflowContext(TypedDict, total=False):
+    """Dependencies injected by the CLI before invoking the workflow.
+
+    Single-agent-per-process model (documented). Tests should call
+    ``clear_workflow_context()`` in teardown to avoid test pollution.
+    """
+
+    provider: object  # LLMProvider at runtime — object avoids circular import
+    model: str
+    toolkit: object  # MCPToolkit at runtime — avoid circular import
+    emit: Callable[[str], None]
+
+
+_WORKFLOW_CONTEXT: WorkflowContext = {}
+
+
+def set_workflow_context(
+    *,
+    provider: object | None = None,
+    model: str | None = None,
+    toolkit: object | None = None,
+    emit: Callable[[str], None] | None = None,
+) -> None:
+    """Inject CLI-resolved dependencies for the next workflow run.
+
+    Single-agent-per-process model (documented). Tests should call
+    clear_workflow_context() in teardown.
+    """
+    global _WORKFLOW_CONTEXT
+    new_ctx: WorkflowContext = {**_WORKFLOW_CONTEXT}
+    if provider is not None:
+        new_ctx["provider"] = provider
+    if model is not None:
+        new_ctx["model"] = model
+    if toolkit is not None:
+        new_ctx["toolkit"] = toolkit
+    if emit is not None:
+        new_ctx["emit"] = emit
+    _WORKFLOW_CONTEXT = new_ctx
+
+
+def get_workflow_context() -> WorkflowContext:
+    """Return the current workflow context (a shallow copy)."""
+    return {**_WORKFLOW_CONTEXT}
+
+
+def clear_workflow_context() -> None:
+    """Reset workflow context — required between test runs."""
+    global _WORKFLOW_CONTEXT
+    _WORKFLOW_CONTEXT = {}
+
+
+# ---------------------------------------------------------------------------
 # Routing
 # ---------------------------------------------------------------------------
 
@@ -120,31 +176,52 @@ def _enforce_iteration_limit(state: AILAgentState) -> AILAgentState:
 
 
 # ---------------------------------------------------------------------------
-# Node stubs
+# Node implementations
 # ---------------------------------------------------------------------------
 
 def _planner_node(state: AILAgentState) -> AILAgentState:
-    """Stub planner node — real body lands in task 14.3."""
+    """Planner node: delegates to run_planner with context-injected provider/model."""
+    from ail_agent.planner import run_planner  # lazy: avoid circular import
     state = _enforce_iteration_limit(state)
-    if state.get("status") == "error":
+    if state["status"] == "error":
         return state
-    raise NotImplementedError("_planner_node: task 14.3")
+    ctx = _WORKFLOW_CONTEXT
+    if "provider" not in ctx or "model" not in ctx:
+        new_state: AILAgentState = {**state}  # type: ignore[misc]
+        new_state["status"] = "error"
+        new_state["error"] = "[AIL-G0140] planner missing provider/model in workflow context"
+        return new_state
+    return run_planner(state, provider=ctx["provider"], model=ctx["model"])  # type: ignore[arg-type]
 
 
 def _coder_node(state: AILAgentState) -> AILAgentState:
-    """Stub coder node — real body lands in task 14.3."""
+    """Coder node: delegates to run_coder with context-injected toolkit."""
+    from ail_agent.coder import run_coder  # lazy: avoid circular import
     state = _enforce_iteration_limit(state)
-    if state.get("status") == "error":
+    if state["status"] == "error":
         return state
-    raise NotImplementedError("_coder_node: task 14.3")
+    ctx = _WORKFLOW_CONTEXT
+    if "toolkit" not in ctx:
+        new_state: AILAgentState = {**state}  # type: ignore[misc]
+        new_state["status"] = "error"
+        new_state["error"] = "[AIL-G0140] coder missing toolkit in workflow context"
+        return new_state
+    return run_coder(state, toolkit=ctx["toolkit"])  # type: ignore[arg-type]
 
 
 def _verify_node(state: AILAgentState) -> AILAgentState:
-    """Stub verify node — real body lands in task 14.3."""
+    """Verify node: delegates to run_verify with context-injected toolkit and emit."""
+    from ail_agent.verify import run_verify  # lazy: avoid circular import
     state = _enforce_iteration_limit(state)
-    if state.get("status") == "error":
+    if state["status"] == "error":
         return state
-    raise NotImplementedError("_verify_node: task 14.3")
+    ctx = _WORKFLOW_CONTEXT
+    if "toolkit" not in ctx:
+        new_state: AILAgentState = {**state}  # type: ignore[misc]
+        new_state["status"] = "error"
+        new_state["error"] = "[AIL-G0140] verify missing toolkit in workflow context"
+        return new_state
+    return run_verify(state, toolkit=ctx["toolkit"], emit=ctx.get("emit"))  # type: ignore[arg-type]
 
 
 def _done_node(state: AILAgentState) -> AILAgentState:

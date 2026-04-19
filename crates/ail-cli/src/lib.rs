@@ -13,6 +13,7 @@ use std::path::PathBuf;
 use clap::{Parser, Subcommand};
 
 pub use commands::{
+    agent::{run_agent, AgentArgs},
     build::{run_build, BuildArgs},
     context::run_context,
     coverage::{read_coverage_config, run_coverage},
@@ -98,6 +99,23 @@ pub fn run() -> Result<(), CliError> {
             warm_cache,
             from_db,
         } => run_coverage(&cwd, node, all, warm_cache, from_db),
+
+        Command::Agent {
+            task,
+            model,
+            mcp_port,
+            max_iterations,
+            steps_per_plan,
+        } => {
+            let args = commands::agent::AgentArgs {
+                task,
+                model,
+                mcp_port,
+                max_iterations,
+                steps_per_plan,
+            };
+            commands::agent::run_agent(&cwd, &args)
+        }
     }
 }
 
@@ -264,5 +282,27 @@ pub enum Command {
         /// Override the SQLite database path.
         #[arg(long, value_name = "PATH")]
         from_db: Option<PathBuf>,
+    },
+
+    /// Run the LangGraph agent against a natural-language task.
+    Agent {
+        /// Natural-language task to perform.
+        task: String,
+
+        /// Provider:model spec (e.g., "anthropic:claude-sonnet-4-5", "openai:gpt-5").
+        #[arg(long)]
+        model: Option<String>,
+
+        /// MCP server port (reserved; current implementation uses stdio).
+        #[arg(long, default_value_t = 7777)]
+        mcp_port: u16,
+
+        /// Hard cap on total node visits before failing.
+        #[arg(long)]
+        max_iterations: Option<usize>,
+
+        /// Cap on steps the coder may execute per plan.
+        #[arg(long)]
+        steps_per_plan: Option<usize>,
     },
 }

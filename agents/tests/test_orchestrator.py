@@ -1,9 +1,10 @@
-"""23 pytest tests for ail_agent.orchestrator (task 14.1 scaffold)."""
+"""pytest tests for ail_agent.orchestrator (tasks 14.1 + 14.3 wiring)."""
 
 from __future__ import annotations
 
 import json
 import logging
+from unittest.mock import Mock, patch
 
 import pytest
 from langgraph.graph import END, START, StateGraph
@@ -21,8 +22,11 @@ from ail_agent.orchestrator import (
     _planner_node,
     _verify_node,
     build_workflow,
+    clear_workflow_context,
+    get_workflow_context,
     initial_state,
     route_to_agent,
+    set_workflow_context,
 )
 from ail_agent.providers.base import LLMProvider
 
@@ -347,21 +351,7 @@ def test_valid_statuses_matches_routing_strings() -> None:
 
 
 # ---------------------------------------------------------------------------
-# 21. Stub nodes raise NotImplementedError mentioning 14.3
-# ---------------------------------------------------------------------------
-
-def test_orchestrator_stub_nodes_raise_not_implemented() -> None:
-    for stub in (_planner_node, _coder_node, _verify_node):
-        fresh = initial_state("x")
-        with pytest.raises(NotImplementedError) as exc_info:
-            stub(fresh)
-        assert "14.3" in str(exc_info.value), (
-            f"{stub.__name__} must mention task 14.3 in NotImplementedError"
-        )
-
-
-# ---------------------------------------------------------------------------
-# 22. LLMProvider is importable and runtime-checkable
+# 21. LLMProvider is importable and runtime-checkable
 # ---------------------------------------------------------------------------
 
 def test_provider_protocol_importable() -> None:
@@ -379,3 +369,193 @@ def test_provider_protocol_importable() -> None:
 
     assert isinstance(FakeProvider(), LLMProvider)
     assert not isinstance(42, LLMProvider)
+
+
+# ---------------------------------------------------------------------------
+# 22–27. Workflow context and node delegation (task 14.3 wiring)
+# ---------------------------------------------------------------------------
+
+@pytest.fixture(autouse=True)
+def _reset_workflow_context():
+    """Ensure workflow context is clean before and after every test."""
+    clear_workflow_context()
+    yield
+    clear_workflow_context()
+
+
+def _make_state(**overrides) -> AILAgentState:
+    """Return an initial state with optional field overrides."""
+    state = initial_state("test task")
+    state.update(overrides)  # type: ignore[typeddict-item]
+    return state
+
+
+class TestWorkflowContext:
+    """Tests for set_workflow_context / get_workflow_context / clear_workflow_context."""
+
+    def test_set_workflow_context_persists_across_calls(self) -> None:
+        """Successive set calls merge into the context without overwriting earlier keys."""
+        p1 = Mock()
+        set_workflow_context(provider=p1)
+        set_workflow_context(model="m1")
+        ctx = get_workflow_context()
+        assert ctx["provider"] is p1
+        assert ctx["model"] == "m1"
+        clear_workflow_context()
+        assert get_workflow_context() == {}
+
+    def test_set_workflow_context_none_values_ignored(self) -> None:
+        """Passing None for a key must not overwrite an existing value."""
+        p1 = Mock()
+        set_workflow_context(provider=p1)
+        set_workflow_context(provider=None)  # should be a no-op
+        assert get_workflow_context()["provider"] is p1
+
+    def test_get_workflow_context_returns_shallow_copy(self) -> None:
+        """Mutating the returned dict must not affect the module-level context."""
+        set_workflow_context(model="v1")
+        ctx = get_workflow_context()
+        ctx["model"] = "mutated"
+        assert get_workflow_context()["model"] == "v1"
+
+
+class TestPlannerNodeDelegation:
+    """Tests for _planner_node delegation and error paths."""
+
+    def test_planner_node_delegates_to_run_planner(self) -> None:
+        """_planner_node must call run_planner with the injected provider and model."""
+        provider = Mock()
+        sentinel_state = _make_state(status="code")
+
+        with patch("ail_agent.planner.run_planner", return_value=sentinel_state) as mock_planner:
+            set_workflow_context(provider=provider, model="test-model")
+            state = _make_state()
+            result = _planner_node(state)
+
+        mock_planner.assert_called_once()
+        call_args = mock_planner.call_args
+        # First positional arg is the state (with iteration already incremented by guard).
+        assert call_args.kwargs["provider"] is provider
+        assert call_args.kwargs["model"] == "test-model"
+        assert result is sentinel_state
+
+    def test_planner_node_errors_when_provider_missing(self) -> None:
+        """_planner_node must return an error state when provider is absent from context."""
+        set_workflow_context(model="some-model")  # provider intentionally omitted
+        state = _make_state()
+        result = _planner_node(state)
+        assert result["status"] == "error"
+        assert result["error"] is not None
+        assert "provider" in result["error"]
+
+    def test_planner_node_errors_when_model_missing(self) -> None:
+        """_planner_node must return an error state when model is absent from context."""
+        set_workflow_context(provider=Mock())  # model intentionally omitted
+        state = _make_state()
+        result = _planner_node(state)
+        assert result["status"] == "error"
+        assert result["error"] is not None
+
+    def test_planner_node_skips_delegation_when_iteration_limit_hit(self) -> None:
+        """After the iteration guard trips, run_planner must NOT be called."""
+        set_workflow_context(provider=Mock(), model="x")
+        state = _make_state(max_iterations=0, iteration=0)  # guard will trip on first call
+
+        with patch("ail_agent.planner.run_planner") as mock_planner:
+            result = _planner_node(state)
+
+        mock_planner.assert_not_called()
+        assert result["status"] == "error"
+        assert "max_iterations" in result["error"]
+
+
+class TestCoderNodeDelegation:
+    """Tests for _coder_node delegation and error paths."""
+
+    def test_coder_node_delegates_to_run_coder(self) -> None:
+        """_coder_node must call run_coder with the injected toolkit."""
+        toolkit = Mock()
+        sentinel_state = _make_state(status="code")
+
+        with patch("ail_agent.coder.run_coder", return_value=sentinel_state) as mock_coder:
+            set_workflow_context(toolkit=toolkit)
+            state = _make_state()
+            result = _coder_node(state)
+
+        mock_coder.assert_called_once()
+        call_args = mock_coder.call_args
+        assert call_args.kwargs["toolkit"] is toolkit
+        assert result is sentinel_state
+
+    def test_coder_node_errors_when_toolkit_missing(self) -> None:
+        """_coder_node must return an error state when toolkit is absent from context."""
+        # context is empty (autouse fixture clears it)
+        state = _make_state()
+        result = _coder_node(state)
+        assert result["status"] == "error"
+        assert result["error"] is not None
+        assert "toolkit" in result["error"]
+
+    def test_coder_node_skips_delegation_when_iteration_limit_hit(self) -> None:
+        """After the iteration guard trips, run_coder must NOT be called."""
+        set_workflow_context(toolkit=Mock())
+        state = _make_state(max_iterations=0, iteration=0)
+
+        with patch("ail_agent.coder.run_coder") as mock_coder:
+            result = _coder_node(state)
+
+        mock_coder.assert_not_called()
+        assert result["status"] == "error"
+
+
+class TestVerifyNodeDelegation:
+    """Tests for _verify_node delegation and error paths."""
+
+    def test_verify_node_delegates_to_run_verify(self) -> None:
+        """_verify_node must call run_verify with toolkit and emit from context."""
+        toolkit = Mock()
+        emit_fn = Mock()
+        sentinel_state = _make_state(status="done")
+
+        with patch("ail_agent.verify.run_verify", return_value=sentinel_state) as mock_verify:
+            set_workflow_context(toolkit=toolkit, emit=emit_fn)
+            state = _make_state()
+            result = _verify_node(state)
+
+        mock_verify.assert_called_once()
+        call_args = mock_verify.call_args
+        assert call_args.kwargs["toolkit"] is toolkit
+        assert call_args.kwargs["emit"] is emit_fn
+        assert result is sentinel_state
+
+    def test_verify_node_passes_none_emit_when_not_set(self) -> None:
+        """_verify_node must pass emit=None when the context has no emit callable."""
+        toolkit = Mock()
+        sentinel_state = _make_state(status="done")
+
+        with patch("ail_agent.verify.run_verify", return_value=sentinel_state) as mock_verify:
+            set_workflow_context(toolkit=toolkit)  # emit not set
+            state = _make_state()
+            _verify_node(state)
+
+        call_args = mock_verify.call_args
+        assert call_args.kwargs.get("emit") is None
+
+    def test_verify_node_errors_when_toolkit_missing(self) -> None:
+        """_verify_node must return an error state when toolkit is absent from context."""
+        state = _make_state()
+        result = _verify_node(state)
+        assert result["status"] == "error"
+        assert result["error"] is not None
+        assert "toolkit" in result["error"]
+
+    def test_verify_node_skips_delegation_when_iteration_limit_hit(self) -> None:
+        """After the iteration guard trips, run_verify must NOT be called."""
+        set_workflow_context(toolkit=Mock())
+        state = _make_state(max_iterations=0, iteration=0)
+
+        with patch("ail_agent.verify.run_verify") as mock_verify:
+            result = _verify_node(state)
+
+        mock_verify.assert_not_called()
+        assert result["status"] == "error"

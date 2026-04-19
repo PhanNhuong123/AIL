@@ -466,6 +466,55 @@ fn mcp_status_reports_stage_and_counts() {
     assert_eq!(result["do_node_count"].as_u64(), Some(0));
 }
 
+#[test]
+fn status_returns_root_id_when_graph_has_root() {
+    // wallet_concept_graph() calls set_root(), so root_id must be present.
+    let (graph, root, _) = wallet_concept_graph();
+    let server = memory_server(graph);
+
+    let req = tools_call("ail.status", json!({}));
+    let resp = server.handle(req).unwrap();
+    let result = resp.result.unwrap();
+
+    let root_id_val = result
+        .get("root_id")
+        .expect("root_id must be present when a root is set");
+    let root_id_str = root_id_val.as_str().expect("root_id must be a string");
+
+    // Must round-trip as the UUID we set.
+    assert_eq!(
+        root_id_str,
+        root.to_string().as_str(),
+        "root_id must match the node passed to set_root"
+    );
+
+    // Must be a valid UUID (36 chars, hyphens in the right places).
+    assert_eq!(root_id_str.len(), 36, "UUID string must be 36 characters");
+    assert_eq!(
+        root_id_str.chars().filter(|&c| c == '-').count(),
+        4,
+        "UUID must contain 4 hyphens"
+    );
+}
+
+#[test]
+fn status_omits_root_id_when_graph_is_empty() {
+    // An AilGraph::new() has no root set — root_id must not appear in output.
+    let server = McpServer::new(
+        std::path::PathBuf::from("."),
+        ProjectContext::Raw(AilGraph::new()),
+    );
+
+    let req = tools_call("ail.status", json!({}));
+    let resp = server.handle(req).unwrap();
+    let result = resp.result.unwrap();
+
+    assert!(
+        result.get("root_id").is_none(),
+        "root_id must be absent (skip_serializing_if) when no root is set; got: {result}"
+    );
+}
+
 // ── ail.write ────────────────────────────────────────────────────────────────
 
 /// Graph with type nodes for auto-edge detection: root Describe, one Define

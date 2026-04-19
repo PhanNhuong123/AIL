@@ -391,6 +391,16 @@ impl McpServer {
                     "inputSchema": {
                         "type": "object",
                         "properties": {}
+                    },
+                    "outputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "pipeline_stage": { "type": "string" },
+                            "node_count":     { "type": "integer" },
+                            "edge_count":     { "type": "integer" },
+                            "do_node_count":  { "type": "integer" },
+                            "root_id":        { "type": ["string", "null"], "description": "UUID of the graph root node; absent when no root is set" }
+                        }
                     }
                 },
                 {

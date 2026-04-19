@@ -213,3 +213,85 @@ fn t111_cli_parses_reindex_embeddings() {
     };
     assert!(embeddings, "--embeddings flag must be true");
 }
+
+// ── Phase 14 task 14.3: agent parse tests ────────────────────────────────────
+
+/// Minimal `ail agent "Add validation"` — only required positional arg.
+#[test]
+fn command_agent_minimal() {
+    let cmd = parse(&["ail", "agent", "Add validation"]);
+    let Command::Agent {
+        task,
+        model,
+        mcp_port,
+        max_iterations,
+        steps_per_plan,
+    } = cmd
+    else {
+        panic!("expected Agent");
+    };
+    assert_eq!(task, "Add validation");
+    assert!(model.is_none(), "model must default to None");
+    assert_eq!(mcp_port, 7777, "mcp_port must default to 7777");
+    assert!(
+        max_iterations.is_none(),
+        "max_iterations must default to None"
+    );
+    assert!(
+        steps_per_plan.is_none(),
+        "steps_per_plan must default to None"
+    );
+}
+
+/// All flags populated: `ail agent "X" --model ... --mcp-port ... --max-iterations ... --steps-per-plan ...`
+#[test]
+fn command_agent_all_flags() {
+    let cmd = parse(&[
+        "ail",
+        "agent",
+        "X",
+        "--model",
+        "anthropic:m",
+        "--mcp-port",
+        "9999",
+        "--max-iterations",
+        "100",
+        "--steps-per-plan",
+        "30",
+    ]);
+    let Command::Agent {
+        task,
+        model,
+        mcp_port,
+        max_iterations,
+        steps_per_plan,
+    } = cmd
+    else {
+        panic!("expected Agent");
+    };
+    assert_eq!(task, "X");
+    assert_eq!(model.as_deref(), Some("anthropic:m"));
+    assert_eq!(mcp_port, 9999);
+    assert_eq!(max_iterations, Some(100));
+    assert_eq!(steps_per_plan, Some(30));
+}
+
+/// Default mcp_port is always 7777 — locked default, must not change.
+#[test]
+fn command_agent_default_mcp_port() {
+    let cmd = parse(&["ail", "agent", "some task"]);
+    let Command::Agent { mcp_port, .. } = cmd else {
+        panic!("expected Agent");
+    };
+    assert_eq!(mcp_port, 7777, "default mcp_port must be exactly 7777");
+}
+
+/// `ail agent` with no positional task arg must fail to parse.
+#[test]
+fn command_agent_missing_task_fails() {
+    let result = Cli::try_parse_from(["ail", "agent"]);
+    assert!(
+        result.is_err(),
+        "parsing `ail agent` with no task should fail"
+    );
+}

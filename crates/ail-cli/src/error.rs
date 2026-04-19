@@ -48,4 +48,20 @@ pub enum CliError {
     #[error("Unknown target `{value}`. Supported: python, typescript")]
     #[diagnostic(help("Use --target python (default) or --target typescript"))]
     InvalidTarget { value: String },
+
+    /// The LangGraph agent subprocess exited with a non-zero code.
+    #[error("agent process failed (exit code {code})")]
+    #[diagnostic(
+        code(ail::cli::agent_failed),
+        help("run with --max-iterations or --steps-per-plan to adjust limits, or check the task wording")
+    )]
+    AgentFailed { code: i32, message: String },
+
+    /// The `python -m ail_agent` module is not installed in this environment.
+    #[error("`python -m ail_agent` is not installed in this environment")]
+    #[diagnostic(
+        code(ail::cli::agent_not_installed),
+        help("install the agent: `pip install -e agents/[dev,all]` from the repo root, then re-run `ail agent`")
+    )]
+    AgentNotInstalled,
 }
