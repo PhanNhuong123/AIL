@@ -180,17 +180,24 @@ Your AI now has tools to navigate your system's structure — and every action i
 
 **v0.1 in active development.** Built in Rust. Verified by Z3. Designed to run under the AI tools you already use.
 
+**Currently:** v3.0 — Phase 14 Agent Foundation
+
 | Component | Status |
 |-----------|--------|
-| Graph + CIC engine | ✅ |
-| Type system | ✅ |
-| Z3 verification | ✅ |
-| PEG parser (17 patterns) | ✅ |
-| Python emitter | 🔄 in progress |
-| TypeScript emitter | 🔜 v0.2 |
-| SQLite backend | 🔜 v0.2 |
-| MCP write tools | 🔜 v0.2 |
-| AIL IDE (visual canvas) | 🔜 v1.0 |
+| Graph + CIC engine | ✅ v1.0 |
+| Type system | ✅ v1.0 |
+| Z3 verification | ✅ v1.0 |
+| PEG parser (17 patterns) | ✅ v1.0 |
+| Python emitter | ✅ v1.0 |
+| MCP read tools (5 tools) | ✅ v1.0 |
+| SQLite backend | ✅ v2.0 |
+| Path-sensitive CIC | ✅ v2.0 |
+| TypeScript emitter | ✅ v2.0 |
+| Embedding search | ✅ v2.0 |
+| MCP write tools (5 tools) | ✅ v2.0 |
+| Semantic coverage (SCFT) | ✅ v3.0 |
+| **Agent Foundation** | 🔄 **in progress** |
+| AIL IDE (visual canvas) | 🔜 v4.0 |
 
 ---
 
