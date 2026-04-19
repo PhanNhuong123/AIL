@@ -164,6 +164,96 @@ mod unix_subprocess_tests {
             other => panic!("expected AgentFailed {{code: 2}}, got: {other:?}"),
         }
     }
+
+    /// Write a fake `python`/`python3` that captures all argv into
+    /// ``capture_path`` (one arg per line) and exits 0. Used by the
+    /// `--model`-passthrough tests below.
+    fn write_fake_python_capturing_argv(dir: &TempDir, capture_path: &std::path::Path) {
+        let script = format!(
+            "#!/bin/sh\nprintf '%s\\n' \"$@\" > '{}'\nexit 0\n",
+            capture_path.display()
+        );
+        for name in ["python", "python3"] {
+            let p = dir.path().join(name);
+            fs::write(&p, &script).unwrap();
+            std::fs::set_permissions(&p, std::fs::Permissions::from_mode(0o755)).unwrap();
+        }
+    }
+
+    /// When `AgentArgs::model` is set, `run_agent` must forward
+    /// `--model <spec>` to the subprocess argv. Proves provider swap needs
+    /// only the CLI flag.
+    #[test]
+    fn agent_forwards_model_flag_to_subprocess_when_set() {
+        let _lock = PATH_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+
+        let capture_dir = tempfile::tempdir().unwrap();
+        let capture_path = capture_dir.path().join("argv.txt");
+
+        let fake_dir = tempfile::tempdir().unwrap();
+        write_fake_python_capturing_argv(&fake_dir, &capture_path);
+        let old_path = prepend_path(&fake_dir);
+        let (cwd_dir, cwd) = temp_cwd();
+
+        let mut args = minimal_args("swap via openai");
+        args.model = Some("openai:gpt-4o".to_string());
+        let result = run_agent(&cwd, &args);
+
+        restore_path(&old_path);
+
+        assert!(result.is_ok(), "expected Ok(()), got: {result:?}");
+
+        let argv = fs::read_to_string(&capture_path).unwrap();
+        drop(cwd_dir);
+        drop(capture_dir);
+
+        let lines: Vec<&str> = argv.lines().collect();
+        assert!(
+            lines.iter().any(|l| *l == "--model"),
+            "argv missing `--model`: {lines:?}"
+        );
+        assert!(
+            lines.iter().any(|l| *l == "openai:gpt-4o"),
+            "argv missing `openai:gpt-4o`: {lines:?}"
+        );
+    }
+
+    /// When `AgentArgs::model` is `None`, `run_agent` must NOT include the
+    /// `--model` flag — so the Python default `anthropic:claude-sonnet-4-5`
+    /// applies.
+    #[test]
+    fn agent_omits_model_flag_when_none() {
+        let _lock = PATH_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+
+        let capture_dir = tempfile::tempdir().unwrap();
+        let capture_path = capture_dir.path().join("argv.txt");
+
+        let fake_dir = tempfile::tempdir().unwrap();
+        write_fake_python_capturing_argv(&fake_dir, &capture_path);
+        let old_path = prepend_path(&fake_dir);
+        let (cwd_dir, cwd) = temp_cwd();
+
+        let args = minimal_args("no explicit model");
+        assert!(
+            args.model.is_none(),
+            "precondition: minimal_args has model: None"
+        );
+        let result = run_agent(&cwd, &args);
+
+        restore_path(&old_path);
+
+        assert!(result.is_ok(), "expected Ok(()), got: {result:?}");
+
+        let argv = fs::read_to_string(&capture_path).unwrap();
+        drop(cwd_dir);
+        drop(capture_dir);
+
+        let lines: Vec<&str> = argv.lines().collect();
+        assert!(
+            !lines.iter().any(|l| *l == "--model"),
+            "argv unexpectedly contains `--model`: {lines:?}"
+        );
+    }
 }
 
 // ─── Test 4: no python in PATH → AgentNotInstalled (all platforms) ───────────
