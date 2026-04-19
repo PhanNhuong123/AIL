@@ -231,6 +231,9 @@ Personal, academic, research, educational, evaluation, and non-commercial
 open-source production use is also permitted. Commercial production use of AIL
 core, hosted or managed AIL service use, or embedding AIL core into commercial
 products requires a commercial license from PhanNhuong123.
+Commercial licensing terms can start from the non-binding
+[commercial license template](./COMMERCIAL_LICENSE_TEMPLATE.md); no commercial
+license is granted until a separate agreement or order form is signed.
 
 AIL runtime packages and generated runtime helpers are MIT-licensed immediately
 for generated applications. Each BUSL-licensed core version converts to the MIT
