@@ -1,347 +1,229 @@
-# AIL — AI Language
+# AIL — AI Layer
 
-**Ngôn ngữ lập trình đầu tiên được thiết kế để AI viết code không thể sai.**
+<div align="center">
 
-```
-Ngôn ngữ truyền thống:  AI viết text code → hy vọng đúng → chạy → crash → sửa → lặp lại
-AIL:                     AI viết English có cấu trúc → hệ thống verify → đảm bảo đúng → build ra Python/TS/Rust
-```
+**"Vibe code fearlessly."**
 
----
+*The development environment AI deserves.*
 
-## Vấn Đề
+</div>
 
-AI (ChatGPT, Claude, Copilot) viết code ngày càng tốt. Nhưng có 1 vấn đề không ai giải được:
-
-**AI quên.**
-
-```
-Phút 1:   User nói "balance không được âm"
-Phút 5:   AI viết check balance >= amount ✓
-Phút 30:  AI thêm feature mới, quên constraint, tạo balance = -20 ✗
-```
-
-AI không ngu. AI bị **thiếu thông tin** tại thời điểm viết code. Constraint nằm ở 1 nơi, code nằm ở nơi khác. Khi context window đầy, constraint bị đẩy ra. Code tiếp tục sinh mà không biết constraint tồn tại.
-
-**Root cause:** Trong mọi ngôn ngữ hiện tại, documentation, logic, và constraint là 3 thứ TÁCH RỜI.
+> ⚠️ **Early development.** This repo is a work in progress — the pipeline is being built and tested incrementally. Nothing runs end-to-end yet. If you're here early, you're seeing the ideas before the product.
 
 ---
 
-## Giải Pháp: AIL
+## The problem nobody is talking about
 
-AIL giải quyết bằng 3 đột phá:
+You tell your AI "never let balance go negative."
 
-### 1. Code = Document = Constraint (cùng 1 thứ)
+It works. The feature ships. Everyone's happy.
 
-```ail
-transfer money safely
-  given sender is a User, receiver is a User, amount is a PositiveAmount
-  producing TransferResult or InsufficientBalanceError
+Three weeks later, you add a refund feature. Different conversation, different context window. The AI doesn't remember what you said three weeks ago. Neither does your codebase. A refund runs. Balance goes to `-$240`. You find out from a customer email.
 
-  requires that sender is active
-  requires that receiver is active
-  must always satisfy sender balance is non-negative
-  guarantees that sender balance decreases by exactly the amount
-```
-
-Đọc như requirement document. **Nhưng đây là code.** Parser hiểu. Compiler verify. Transpiler emit Python.
-
-Viết AIL = viết document. Document chạy được.
-
-### 2. Progressive Decomposition (vô hạn layers)
-
-Code truyền thống: 1 mức chi tiết duy nhất. 100 dòng function → AI phải nhớ hết.
-
-AIL: vô hạn layers. Mỗi layer chỉ có 3-5 concepts. AI chỉ nghĩ 1 layer tại 1 thời điểm.
-
-```
-Layer 0: "Transfer money safely"                              ← WHAT (PO đọc được)
-Layer 1: "Validate → Execute → Persist → Return"              ← WHAT phases (BA đọc được)
-Layer 2: "Check sender active, check balance sufficient"       ← HOW (Dev đọc được)
-Layer 3: "sender.status is 'active', otherwise raise error"    ← DETAIL (Code)
-Layer 4: "UPDATE users SET balance = $1 WHERE id = $2"         ← INFRA (DBA đọc được)
-```
-
-Mỗi layer trả lời câu hỏi tiếp theo. Decompose cho đến khi máy hiểu được. Depth không giới hạn — simple project 2 layers, enterprise project 10+ layers.
-
-### 3. CIC — Constraint Inheritance Chain (hệ thống nhớ thay AI)
-
-**Đừng dựa vào trí nhớ AI. Hệ thống phải nhớ thay.**
-
-```
-Depth 0:  promise always: balance >= 0        ← viết 1 lần
-Depth 1:  (hệ thống tự mang constraint xuống)
-Depth 2:  (hệ thống tự mang constraint xuống)
-Depth 5:  (hệ thống tự mang constraint xuống)  ← AI ở đây VẪN THẤY constraint
-```
-
-AI ở depth 5 không cần nhớ constraint từ depth 0. Hệ thống tính sẵn **Context Packet** — chứa TẤT CẢ constraints apply tại vị trí đó. Deterministic. Luôn đúng.
-
-```
-AI viết code vi phạm constraint?
-  → ail verify BẮT NGAY
-  → Trả error + counterexample + gợi ý sửa
-  → AI KHÔNG THỂ ship code sai
-
-Constraint quên = IMPOSSIBLE.
-```
+This isn't a hypothetical. This is Tuesday.
 
 ---
 
-## Cách Hoạt Động
+## What if constraints couldn't be forgotten?
 
-### Kiến trúc
+That's AIL.
 
-```
-.ail files → Parse → PSSD Graph → CIC Packets → Z3 Verify → Build → Python/TS + Tests
-                            ↓                                           ↑
-                      .ail.db (SQLite)                            dist/ or dist-ts/
-                    BM25 + embeddings
-```
+AIL sits **between your AI and your code** as an invisible layer. You describe what your system does — in plain English, in layers, the way you'd explain it on a whiteboard. AIL turns that into a graph. Every constraint you write propagates automatically to every node that needs it. When your AI generates code, AIL verifies the output with a mathematical proof before a single line reaches your codebase.
 
-### PSSD Graph — Code là đồ thị ngữ nghĩa
-
-AIL dựa trên thuật toán **PSSD (Progressive Semantic Slug Discovery)** — đồ thị có hướng với 3 loại cạnh:
+Not tests. **Proofs.**
 
 ```
-Ev (dọc):    Parent → Child       Decomposition (tổng quát → chi tiết)
-Eh (ngang):  Sibling → Sibling    Sequence (bước 1 → bước 2 → bước 3)
-Ed (chéo):   Node ↔ Node          Cross-reference (function ↔ type ↔ error)
+You write 5 constraints.
+AIL verifies 16.          ← the other 11 were inferred automatically
 ```
 
-Filesystem IS the graph:
+When something's wrong, you don't get "tests failed." You get:
 
 ```
-src/
-├── transfer_money.ail              ← Node depth 0: "Transfer money safely"
-├── transfer_money/                 ← Children (Layer 1)
-│   ├── validate.ail                ← Node: "Validate users"
-│   ├── validate/                   ← Children (Layer 2)
-│   │   ├── check_sender.ail       ← Leaf: sender must be active
-│   │   └── check_balance.ail      ← Leaf: balance must be sufficient
-│   ├── execute.ail                 ← Node: "Execute transfer"
-│   └── persist.ail                 ← Node: "Save to database"
-├── concepts/
-│   ├── user.ail                    ← Type definition
-│   └── wallet_balance.ail          ← Type: number >= 0
-└── ail.config.toml
+Counterexample found:
+  sender.balance = 100, amount = 120
+  → new_balance = -20
+  Rule violated: balance must stay ≥ 0
 ```
 
-### CIC — 4 Quy Tắc Lan Truyền
-
-```
-Rule 1 — DOWN:     Parent constraints → inherit cho TẤT CẢ children, mọi depth
-Rule 2 — UP:       Verified child → postcondition thành FACT cho parent
-Rule 3 — ACROSS:   Previous sibling output → available cho next sibling
-Rule 4 — DIAGONAL: Type constraints → auto-inject mọi nơi dùng type đó
-```
-
-### Auto-Inferred Constraints
-
-```
-Developer viết:
-  define WalletBalance:number where value >= 0       ← 1 dòng
-
-Hệ thống TỰ SUY RA ở MỌI NƠI dùng WalletBalance:
-  sender.balance >= 0           ← auto
-  receiver.balance >= 0         ← auto
-
-Developer viết 5 promises. Hệ thống verify 16 constraints. 69% auto-inferred.
-```
+The bug is caught **before the code exists.**
 
 ---
 
-## Ví Dụ
+## What makes this different
 
-### Input: transfer_money.ail
+Most tools try to make AI faster. AIL makes AI **correct**.
 
-```ail
-transfer money safely
-  given sender is a User, receiver is a User, amount is a PositiveAmount
-  producing TransferResult or InsufficientBalanceError or InvalidUserError
+The core idea: your system's constraints live in the graph structure itself — not in your AI's memory, not in a comment, not in a doc nobody reads. The system computes them deterministically. Every time. You can't forget a constraint because it's not stored where forgetting is possible.
 
-  requires that sender is active
-  requires that receiver is active
-  must always satisfy sender balance is non-negative
-  guarantees that sender balance decreases by exactly the amount
+We call this **CIC — Constraint Inheritance Chain**. Four propagation rules:
 
-  validate both users
-    given sender, receiver, amount
+- **DOWN** — constraints flow from parent to all children automatically
+- **UP** — verified child facts become available to the parent
+- **ACROSS** — what one step outputs, the next step knows about
+- **DIAGONAL** — type constraints inject everywhere that type is used
 
-    sender must be active,
-      otherwise reject with InvalidUserError for sender
-    sender balance must be at least the amount,
-      otherwise reject with InsufficientBalanceError
-      about current balance and requested amount
-
-  execute the transfer
-    given sender, receiver, amount
-
-    calculate new sender balance as sender balance minus amount
-    calculate new receiver balance as receiver balance plus amount
-
-    atomically
-      save sender new balance to database
-      save receiver new balance to database
-
-    respond with TransferResult containing updated sender and receiver
-```
-
-### Output: dist/transfer_money.py
-
-```python
-async def transfer_money_safely(
-    sender: User, receiver: User, amount: PositiveAmount,
-) -> TransferResult:
-    """Transfer money safely between two users."""
-    pre(sender.status == "active", "sender must be active")
-    pre(receiver.status == "active", "receiver must be active")
-    _old_sender_balance = sender.balance
-
-    # --- validate both users ---
-    if sender.status != "active":
-        raise InvalidUserError(user_id=sender.id)
-    if sender.balance < amount:
-        raise InsufficientBalanceError(
-            current_balance=sender.balance, requested_amount=amount)
-
-    # --- execute the transfer ---
-    new_sender_balance: WalletBalance = sender.balance - amount
-    new_receiver_balance: WalletBalance = receiver.balance + amount
-
-    async with db.transaction():
-        await user_repository.update(User, {"id": sender.id}, {"balance": new_sender_balance})
-        await user_repository.update(User, {"id": receiver.id}, {"balance": new_receiver_balance})
-
-    result = TransferResult(
-        sender=replace(sender, balance=new_sender_balance),
-        receiver=replace(receiver, balance=new_receiver_balance),
-        amount=amount)
-
-    post(result.sender.balance == _old_sender_balance - amount)
-    return result
-```
-
-**Cùng logic. AIL đọc như document. Python chạy production. Z3 đảm bảo đúng.**
+Write a constraint once on `User`. Every function that touches a `User` inherits it. Automatically. Forever.
 
 ---
 
-## Reuse — 4 Cấp Độ
+## Document ↔ Code — always in sync
 
-| Cấp               | Keyword                | Ví dụ                                                  |
-| ----------------- | ---------------------- | ------------------------------------------------------ |
-| **Function call** | `do X from params`     | `do deduct money from sender, amount`                  |
-| **Type sharing**  | `sender:User`          | Constraints auto-inject everywhere                     |
-| **Pattern reuse** | `using X where params` | `using save entity to database where entity is sender` |
-| **Template**      | `following X`          | `following command flow template` — enforce structure  |
+Here's the other thing AIL solves that nobody else does.
+
+Documentation lies. Not because people are lazy — because there's no structural link between what's written and what runs. You refactor the code. The doc doesn't know. Six months later a new engineer reads the doc and builds the wrong thing.
+
+AIL enforces a two-way contract:
+
+```
+Spec  →  Code:   .ail compiles to verified Python / TypeScript / Rust
+Code  →  Spec:   every generated line traces back to the exact node that produced it
+```
+
+The whiteboard **is** the system. The code is the output. They cannot diverge.
 
 ---
 
-## CLI
+## How it works
 
-**Core pipeline**
-
-```bash
-ail init <name>                          # scaffold a new project
-ail build [--target python|typescript]   # full pipeline → generated source
-ail build --watch                        # rebuild on file change
-ail build --contracts on|comments|off    # contract emission mode
-ail build --source-map                   # write functions.ailmap.json
-ail build --from-db <path>               # build from a specific .ail.db
-ail verify [file] [--from-db <path>]     # run pipeline without emitting
-ail test                                 # build + run pytest
-ail status                               # pipeline stage + graph stats
+```
+You describe your system in .ail
+         ↓
+   AIL parses it into a graph
+         ↓
+   CIC propagates all constraints
+         ↓
+   Z3 (mathematical solver) proves everything holds
+         ↓
+   AIL emits Python / TypeScript / Rust + tests
+         ↓
+   You review code you already understand
 ```
 
-**Migration**
+A real example. You write:
 
-```bash
-ail migrate --from <src/> --to <db> [--verify]   # filesystem → SQLite
-ail export --from <db> --to <dir>                 # SQLite → export.ail
+```
+transfer money from sender to receiver, amount
+  before: sender.balance >= amount
+  before: amount > 0
+  after:  sender.balance = old(sender.balance) - amount
+  after:  receiver.balance = old(receiver.balance) + amount
+
+  check sender and receiver are different users
+    otherwise raise SameAccountError
+
+  deduct amount from sender
+  add amount to receiver
+  save transaction record
 ```
 
-**Search**
+AIL generates verified Python — with runtime guards, type annotations, and tests already written. If the logic violates any constraint anywhere in your entire graph, you know before `git push`.
 
-```bash
-ail search <query>                       # BM25 full-text (requires SQLite)
-ail search <query> --semantic            # hybrid RRF (requires embeddings feature)
-ail search <query> --bm25-only           # force BM25 even if --semantic given
-ail search --setup                       # check ONNX model files
-ail search <query> --budget <n>          # cap result count
-ail reindex                              # clear embedding vectors
-ail reindex --embeddings                 # rebuild embedding index
+---
+
+## What AIL is not
+
+This matters because it's easy to get wrong:
+
+- **Not a language you need to learn.** AI writes `.ail`. You read Python.
+- **Not competing with Cursor or Copilot.** AIL runs underneath them as a correctness layer. Use both.
+- **Not a runtime.** AIL verifies and generates, then disappears. Your code runs natively.
+- **Not low-code.** AIL is for engineers building real systems — the constraint engine is Z3, not drag-and-drop.
+
+---
+
+## Architecture
+
+```
+ail/
+├── crates/
+│   ├── ail-graph/       PSSD graph + CIC engine + search + validation
+│   ├── ail-types/       Type system + constraint expressions + type checker
+│   ├── ail-contract/    Static checks + Z3 encoding + verification pipeline
+│   ├── ail-text/        PEG parser (17 syntax patterns + synonyms) + renderer
+│   ├── ail-emit/        Python / TypeScript / Rust generators + test gen
+│   ├── ail-mcp/         MCP server — connect Claude, Cursor, any AI agent
+│   ├── ail-cli/         CLI (verify, build, search, context)
+│   └── ail-runtime-py/  Python runtime (pre/post/keep validators)
 ```
 
-**CIC context**
+Pipeline enforced by Rust's type system:
 
-```bash
-ail context --task "<text>" [--from-db <path>]   # BM25-pick a Do node, print packet
-ail context --node <name>   [--from-db <path>]   # target a node by name
+```
+AilGraph → ValidGraph → TypedGraph → VerifiedGraph → Python / TS / Rust
 ```
 
-**MCP server**
+You cannot emit unverified code. The compiler won't let you.
 
-```bash
-ail serve                                # start the MCP server over stdio
-```
+---
 
-## MCP Integration
+## MCP integration
 
-AI tools (Claude, Cursor) connect via MCP:
+AIL speaks MCP. Drop it into your Claude or Cursor setup and your AI agent can read and write the graph directly.
 
 ```json
-{ "mcpServers": { "ail": { "command": "ail", "args": ["serve"] } } }
+{
+  "mcpServers": {
+    "ail": {
+      "command": "ail-mcp",
+      "args": ["--project", "."]
+    }
+  }
+}
 ```
 
-10 tools — 5 read: `ail.search`, `ail.context`, `ail.verify`, `ail.build`,
-`ail.status`. 5 write (v2.0): `ail.write`, `ail.patch`, `ail.move`,
-`ail.delete`, `ail.batch`.
+Your AI now has tools to navigate your system's structure — and every action it takes is constraint-aware.
 
 ---
-
-## So Sánh
-
-|                    | Code truyền thống     | Dafny                 | AIL                            |
-| ------------------ | --------------------- | --------------------- | ------------------------------ |
-| Tối ưu cho         | Developer             | Developer             | **AI**                         |
-| Đọc như            | Code                  | Code + specs          | **Document tiếng Anh**         |
-| Constraint nhớ bởi | Developer (quên được) | Developer (quên được) | **Hệ thống (impossible quên)** |
-| Code depth         | Fixed                 | Fixed                 | **Vô hạn layers**              |
-| Auto-inferred      | Không                 | Một phần              | **69% constraints tự suy ra**  |
-| Output             | Chính nó              | C#/Java/Python        | **Python/TS/Rust + tests**     |
-
----
-
-## Tech Stack
-
-**Rust** (compiler) · **petgraph** (PSSD graph) · **Z3** (formal verification) · **pest** (PEG parser) · **SQLite / rusqlite · ONNX / ort · ndarray**
 
 ## Status
 
-**v2.0.0.** All v1.0 and v2.0 phases complete:
+**v0.1 in active development.** Built in Rust. Verified by Z3. Designed to run under the AI tools you already use.
 
-| Phase | Deliverable | State |
-|-------|-------------|-------|
-| 1 | `ail-graph` — PSSD graph, CIC packets, BM25 search, validation | Done |
-| 2 | `ail-types` — constraint AST, type checker, `TypedGraph` | Done |
-| 3 | `ail-contract` — static checks, Z3 formal verification, `VerifiedGraph` | Done |
-| 4 | `ail-text` — pest parser, deterministic `.ail` renderer | Done |
-| 5a | `ail-emit` — Python emitter, pytest stubs, source maps | Done |
-| 5b | `ail-mcp` + `ail-cli` — MCP server, `clap` CLI | Done |
-| 6 | v1.0 polish & release — `wallet_service` fixture, docs, quality gates | Done |
-| 7 | `ail-db` — SQLite backend, `GraphBackend`, FTS5, CIC cache, `ail migrate`/`ail export` | Done |
-| 8 | Path-sensitive CIC — check promotion, `promoted_facts`, `ail context` | Done |
-| 9 | TypeScript emitter — `dist-ts/`, branded factories, Vitest stubs | Done |
-| 10 | `ail-search` — embedding provider, hybrid RRF, persisted vectors, `ail reindex` | Done |
-| 11 | MCP write tools — `write`, `patch`, `move`, `delete`, `batch` (atomic) | Done |
-| 12 | Integration release — `examples/wallet_service/`, e2e Python + TypeScript | Done |
-
-End-to-end verified: `ail build` on `wallet_service` generates Python + TypeScript, all tests pass. See `CHANGELOG.md` for the full v2.0 feature list.
-
-## License
-
-MIT
+| Component | Status |
+|-----------|--------|
+| Graph + CIC engine | ✅ |
+| Type system | ✅ |
+| Z3 verification | ✅ |
+| PEG parser (17 patterns) | ✅ |
+| Python emitter | 🔄 in progress |
+| TypeScript emitter | 🔜 v0.2 |
+| SQLite backend | 🔜 v0.2 |
+| MCP write tools | 🔜 v0.2 |
+| AIL IDE (visual canvas) | 🔜 v1.0 |
 
 ---
 
-_AIL — Viết document. Chạy code. Không thể sai._
+## Roadmap
+
+| Version | Direction |
+|---------|-----------|
+| **v0.1** | CLI · Python codegen · CIC · Z3 · MCP read |
+| **v0.2** | TypeScript · SQLite backend · semantic search · MCP write |
+| **v0.3** | Rust codegen · VSCode extension · live sync |
+| **v1.0** | AIL IDE — visual canvas where the whiteboard *is* the system |
+
+---
+
+## Tech stack
+
+Rust · Z3 · petgraph · pest · SQLite · MCP · Tauri (IDE, v1.0)
+
+---
+
+## License
+
+**Business Source License 1.1**
+
+Free for personal use and non-commercial research. Commercial use requires a license. Converts to MIT after 4 years.
+
+See [LICENSE](./LICENSE).
+
+---
+
+<div align="center">
+
+*If you've ever shipped a bug because your AI forgot something you told it —*
+*this is being built for you.*
+
+</div>
