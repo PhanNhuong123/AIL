@@ -25,7 +25,6 @@ from ail_agent.orchestrator import (
     route_to_agent,
 )
 from ail_agent.providers.base import LLMProvider
-from ail_agent.registry import get_provider
 
 
 # ---------------------------------------------------------------------------
@@ -375,15 +374,8 @@ def test_provider_protocol_importable() -> None:
         def complete(self, system: str, user: str, *, model: str) -> str:
             return ""
 
+        def complete_with_tools(self, system: str, user: str, *, model: str, tools, tool_choice=None):  # type: ignore[override]
+            return {"text": None, "tool_calls": []}
+
     assert isinstance(FakeProvider(), LLMProvider)
     assert not isinstance(42, LLMProvider)
-
-
-# ---------------------------------------------------------------------------
-# 23. get_provider raises NotImplementedError mentioning 14.2
-# ---------------------------------------------------------------------------
-
-def test_registry_get_provider_raises_not_implemented() -> None:
-    with pytest.raises(NotImplementedError) as exc_info:
-        get_provider("anthropic:claude-sonnet-4")
-    assert "14.2" in str(exc_info.value)

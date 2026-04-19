@@ -28,6 +28,16 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest>=7.0"]
+anthropic = ["anthropic==0.96.0"]
+openai = ["openai==2.32.0"]
+deepseek = ["openai==2.32.0"]
+alibaba = ["openai==2.32.0"]
+ollama = ["httpx==0.28.1"]
+all = [
+  "anthropic==0.96.0",
+  "openai==2.32.0",
+  "httpx==0.28.1",
+]
 
 [tool.hatch.build.targets.wheel]
 packages = ["ail_agent"]

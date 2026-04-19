@@ -1,4 +1,4 @@
-"""OpenAI provider using the official ``openai`` SDK."""
+"""Alibaba Qwen provider via OpenAI-compatible DashScope endpoint."""
 from __future__ import annotations
 
 import os
@@ -8,7 +8,7 @@ try:
     import openai
 except ImportError as e:  # pragma: no cover
     raise ImportError(
-        "The 'openai' extra is not installed. Install with: pip install ail-agent[openai]"
+        "The 'alibaba' extra is not installed. Install with: pip install ail-agent[alibaba]"
     ) from e
 
 from ail_agent.errors import ProviderConfigError
@@ -18,21 +18,22 @@ from ail_agent.providers._openai_compat import (
 )
 from ail_agent.providers.base import CompletionResult, LLMProvider, ToolSpec
 
-ENV_VAR: str = "OPENAI_API_KEY"
-NON_TOOL_MODELS: frozenset[str] = frozenset()
+ENV_VAR: str = "DASHSCOPE_API_KEY"
+BASE_URL: str = "https://dashscope-intl.aliyuncs.com/compatible-mode/v1"
+NON_TOOL_MODELS: frozenset[str] = frozenset({"qwen-turbo"})
 
 
-class OpenAIProvider:
-    name: str = "openai"
-    DEFAULT_MODEL: str = "gpt-4o"
+class AlibabaProvider:
+    name: str = "alibaba"
+    DEFAULT_MODEL: str = "qwen-max"
 
     def _client(self) -> "openai.OpenAI":
         api_key = os.environ.get(ENV_VAR)
         if not api_key:
             raise ProviderConfigError(
-                f"missing environment variable {ENV_VAR} for provider 'openai'"
+                f"missing environment variable {ENV_VAR} for provider 'alibaba'"
             )
-        return openai.OpenAI(api_key=api_key)
+        return openai.OpenAI(api_key=api_key, base_url=BASE_URL)
 
     def complete(self, system: str, user: str, *, model: str) -> str:
         return openai_compatible_complete(
@@ -60,4 +61,4 @@ class OpenAIProvider:
         )
 
 
-_: type[LLMProvider] = OpenAIProvider
+_: type[LLMProvider] = AlibabaProvider
