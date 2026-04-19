@@ -203,12 +203,16 @@ Your AI now has tools to navigate your system's structure — and every action i
 
 ## Roadmap
 
-| Version | Direction |
-|---------|-----------|
-| **v0.1** | CLI · Python codegen · CIC · Z3 · MCP read |
-| **v0.2** | TypeScript · SQLite backend · semantic search · MCP write |
-| **v0.3** | Rust codegen · VSCode extension · live sync |
-| **v1.0** | AIL IDE — visual canvas where the whiteboard *is* the system |
+| Version | Theme | Key Deliverables |
+|---------|-------|-----------------|
+| ~~**v1.0**~~ | ~~Core engine~~ | ~~Parse · Graph · CIC · Z3 · Python emit · MCP read~~ |
+| ~~**v2.0**~~ | ~~Foundation~~ | ~~SQLite · TypeScript emit · Embedding search · Path-sensitive CIC · MCP write~~ |
+| ~~**v3.0 / Phase 13**~~ | ~~Semantic intelligence~~ | ~~`ail coverage` · intent coverage scoring · SCFT Step 2~~ |
+| 🔄 **v3.0 / Phase 14** | Agent foundation | `ail agent "task"` · LangGraph · Planner + Coder workers · Provider layer |
+| **v4.0** | IDE & Full Agent | Tauri visual IDE · AI Chat on canvas · Agent runs on canvas · Sheaf consistency |
+| **v5.0** | Intelligence | Entropy analysis · Interactive debug · Advanced agent workflows |
+| **v6.0** | Runtime | Runtime tracing · `.ailmap` crash → node · Production monitoring |
+| **v7.0+** | Scale & Ecosystem | Rust emitter · Collaboration · SDK · Plugin system · Full launch |
 
 ---
 
