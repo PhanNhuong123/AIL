@@ -17,3 +17,7 @@ from ail_runtime import pre, post, keep, ContractViolation
 from ail_runtime import PositiveInteger, NonEmptyText
 from ail_runtime import AilRepository, AsyncAilRepository
 ```
+
+## License
+
+MIT
