@@ -242,17 +242,60 @@ fn expr_references_real_var(expr: &ValueExpr, ctx: &EncodeContext<'_>) -> bool {
     }
 }
 
-/// Encode a `Compare` constraint, choosing Int or Real based on expression sorts.
+/// Return `true` if `expr` contains a `Literal(Bool(_))` at the top level.
 ///
-/// Uses Real encoding when either operand contains a float literal OR references
-/// a variable registered with Real sort (e.g. a `number`-typed parameter).
-/// Integer literals are promoted to Real automatically in that case.
+/// Bool literals never appear inside arithmetic or sets, so a shallow check is
+/// sufficient.
+fn expr_has_bool_literal(expr: &ValueExpr) -> bool {
+    matches!(expr, ValueExpr::Literal(LiteralValue::Bool(_)))
+}
+
+/// Return `true` if `expr` is a `Ref` or `Old(Ref)` registered as a Bool-sort
+/// variable in `ctx`.
+///
+/// Used by [`encode_compare`] to route Bool equality checks (e.g.
+/// `result == true`) to [`encode_value_bool`] instead of the Int path.
+fn expr_references_bool_var(expr: &ValueExpr, ctx: &EncodeContext<'_>) -> bool {
+    match expr {
+        ValueExpr::Ref(path) => ctx.get_var(path).is_some_and(|v| v.as_bool().is_some()),
+        ValueExpr::Old(inner) => {
+            if let ValueExpr::Ref(path) = inner.as_ref() {
+                ctx.get_old_var(path).is_some_and(|v| v.as_bool().is_some())
+            } else {
+                false
+            }
+        }
+        _ => false,
+    }
+}
+
+/// Encode a `Compare` constraint, choosing Bool, Int, or Real based on operand sorts.
+///
+/// Bool is selected when either operand is a Bool literal or references a
+/// Bool-registered variable (e.g. a `boolean`-typed parameter or `result`).
+/// Only equality operators (`Eq`, `Is`, `Neq`, `IsNot`) are valid for Bool.
+///
+/// Otherwise Real is selected when either operand contains a float literal OR
+/// references a variable registered with Real sort (e.g. a `number`-typed
+/// parameter); integer literals are promoted to Real in that case. All remaining
+/// cases encode as Int.
 fn encode_compare<'ctx>(
     op: &CompareOp,
     left: &ValueExpr,
     right: &ValueExpr,
     ctx: &EncodeContext<'ctx>,
 ) -> Result<Bool<'ctx>, EncodeError> {
+    let use_bool = expr_has_bool_literal(left)
+        || expr_has_bool_literal(right)
+        || expr_references_bool_var(left, ctx)
+        || expr_references_bool_var(right, ctx);
+
+    if use_bool {
+        let l = encode_value_bool(left, ctx)?;
+        let r = encode_value_bool(right, ctx)?;
+        return apply_compare_bool(op, &l, &r);
+    }
+
     let use_real = expr_has_float(left)
         || expr_has_float(right)
         || expr_references_real_var(left, ctx)
@@ -283,6 +326,26 @@ fn apply_compare_int<'ctx>(
         CompareOp::Eq | CompareOp::Is => l._eq(r),
         CompareOp::Neq | CompareOp::IsNot => l._eq(r).not(),
     })
+}
+
+/// Apply a comparison operator to two Bool operands.
+///
+/// Only equality operators are defined on Bool; ordering operators produce
+/// [`EncodeError::UnsupportedConstraint`].
+fn apply_compare_bool<'ctx>(
+    op: &CompareOp,
+    l: &Bool<'ctx>,
+    r: &Bool<'ctx>,
+) -> Result<Bool<'ctx>, EncodeError> {
+    match op {
+        CompareOp::Eq | CompareOp::Is => Ok(l._eq(r)),
+        CompareOp::Neq | CompareOp::IsNot => Ok(l._eq(r).not()),
+        CompareOp::Gt | CompareOp::Gte | CompareOp::Lt | CompareOp::Lte => {
+            Err(EncodeError::UnsupportedConstraint {
+                variant: "Bool-ordering",
+            })
+        }
+    }
 }
 
 /// Apply a comparison operator to two Real operands.

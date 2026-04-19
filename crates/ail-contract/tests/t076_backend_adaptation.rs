@@ -85,7 +85,7 @@ fn build_wallet_graph() -> (AilGraph, usize) {
                 },
                 Contract {
                     kind: ContractKind::After,
-                    expression: Expression("result == true".to_owned()),
+                    expression: Expression("amount >= 0".to_owned()),
                 },
             ],
             metadata: NodeMetadata::default(),
