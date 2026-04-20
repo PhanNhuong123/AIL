@@ -1,7 +1,7 @@
 import { writable, type Writable } from 'svelte/store';
 import type { GraphJson } from './types';
 
-export type SelectionKind = 'module' | 'function' | 'step' | 'none';
+export type SelectionKind = 'project' | 'module' | 'function' | 'step' | 'type' | 'error' | 'none';
 export interface Selection      { kind: SelectionKind; id: string | null; }
 export interface Overlays       { verify: boolean; coverage: boolean; agent: boolean; }
 export interface NavHistory     { back: string[]; forward: string[]; }
@@ -16,3 +16,4 @@ export const history: Writable<NavHistory>      = writable({ back: [], forward: 
 export const paletteVisible: Writable<boolean>  = writable(false);
 export const theme: Writable<Theme>             = writable('dark');
 export const density: Writable<Density>         = writable('comfortable');
+export const tweaksPanelOpen: Writable<boolean> = writable(false);

@@ -9,6 +9,7 @@ import {
   paletteVisible,
   theme,
   density,
+  tweaksPanelOpen,
 } from './stores';
 
 describe('stores initial values', () => {
@@ -42,5 +43,9 @@ describe('stores initial values', () => {
 
   it('density starts comfortable', () => {
     expect(get(density)).toBe('comfortable');
+  });
+
+  it('tweaksPanelOpen starts closed', () => {
+    expect(get(tweaksPanelOpen)).toBe(false);
   });
 });

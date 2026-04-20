@@ -1,0 +1,15 @@
+export type IconName =
+  | 'project'
+  | 'module'
+  | 'function'
+  | 'step'
+  | 'type'
+  | 'error'
+  | 'sequence'
+  | 'async'
+  | 'rule'
+  | 'check'
+  | 'warn'
+  | 'tweaks'
+  | 'chevron-right'
+  | 'chevron-down';
