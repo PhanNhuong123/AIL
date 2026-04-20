@@ -84,5 +84,10 @@
     <rect x="9" y="2" width="5" height="5" rx="1"/>
     <rect x="2" y="9" width="5" height="5" rx="1"/>
     <rect x="9" y="9" width="5" height="5" rx="1"/>
+  {:else if name === 'plus-circle'}
+    <circle cx="8" cy="8" r="6"/>
+    <path d="M8 5v6M5 8h6"/>
+  {:else if name === 'folder'}
+    <path d="M2 5a1 1 0 011-1h3l1.5 1.5H13a1 1 0 011 1V12a1 1 0 01-1 1H3a1 1 0 01-1-1V5z"/>
   {/if}
 </svg>

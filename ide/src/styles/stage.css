@@ -2,3 +2,553 @@
   display: flex; align-items: center; justify-content: center;
   height: 100%; color: var(--ink-3);
 }
+
+/* ============================================================
+ * Stage root + tab strip (task 16.5)
+ * ============================================================ */
+
+.stage-root {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  background: var(--surface);
+}
+
+.stage-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+.stage-tabstrip {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 28px;
+  padding: 0 8px;
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--line);
+  flex-shrink: 0;
+}
+
+.stage-tab {
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  padding: 0 10px;
+  background: transparent;
+  border: none;
+  color: var(--ink-2);
+  cursor: pointer;
+  font-size: 12px;
+  border-top-left-radius: var(--radius-sm);
+  border-top-right-radius: var(--radius-sm);
+}
+
+.stage-tab.active {
+  background: var(--surface);
+  color: var(--ink);
+  border-bottom: 2px solid var(--accent);
+}
+
+.stage-tab-add {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  margin-left: 4px;
+  background: transparent;
+  border: none;
+  color: var(--ink-3);
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+}
+
+.stage-tab-add:hover {
+  background: var(--surface-3);
+  color: var(--ink);
+}
+
+/* ============================================================
+ * System view header + modes
+ * ============================================================ */
+
+.system-view {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 16px;
+  gap: 12px;
+}
+
+.system-header {
+  display: flex;
+  gap: 4px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--line);
+}
+
+.system-mode-btn {
+  height: 26px;
+  padding: 0 10px;
+  background: transparent;
+  border: none;
+  color: var(--ink-3);
+  font-size: 12px;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+}
+
+.system-mode-btn:hover {
+  background: var(--surface-3);
+  color: var(--ink);
+}
+
+.system-mode-btn.active {
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  color: var(--accent);
+}
+
+/* ============================================================
+ * Cluster group
+ * ============================================================ */
+
+.system-clusters {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.cluster-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.cluster-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 32px;
+  padding: 0 6px;
+  background: transparent;
+  border: none;
+  color: var(--ink-2);
+  font-size: 13px;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  text-align: left;
+}
+
+.cluster-header:hover {
+  background: var(--surface-3);
+  color: var(--ink);
+}
+
+.cluster-collapse-icon,
+.cluster-header-folder {
+  display: inline-flex;
+  width: 14px;
+  height: 14px;
+  align-items: center;
+  justify-content: center;
+  color: var(--ink-3);
+}
+
+.cluster-header-name {
+  font-weight: 600;
+}
+
+.cluster-header-count {
+  font-size: 10px;
+}
+
+.cluster-header-count.hidden-count {
+  display: none;
+}
+
+.cluster-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 12px;
+}
+
+/* ============================================================
+ * System grid
+ * ============================================================ */
+
+.system-grid-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.system-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 12px;
+}
+
+.system-grid-externals {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--line-2);
+}
+
+.system-grid-externals-header {
+  font-size: 11px;
+  color: var(--ink-3);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.system-grid-externals-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.system-grid-external {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  background: var(--surface-2);
+  color: var(--ink-2);
+  border: 1px dashed var(--line-2);
+  border-radius: var(--radius-sm);
+  font-size: 11px;
+}
+
+.system-grid-external-desc {
+  color: var(--ink-3);
+}
+
+/* ============================================================
+ * Module card
+ * ============================================================ */
+
+.module-card {
+  display: flex;
+  flex-direction: column;
+  min-height: 160px;
+  padding: 12px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-left-width: 3px;
+  border-radius: var(--radius);
+  color: var(--ink);
+  cursor: pointer;
+  text-align: left;
+}
+
+.module-card:hover {
+  background: var(--surface-3);
+  box-shadow: var(--shadow-1);
+}
+
+.module-card-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.module-card-letter {
+  display: inline-flex;
+  width: 20px;
+  height: 20px;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface-3);
+  color: var(--ink-2);
+  border-radius: var(--radius-sm);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.module-card-name {
+  flex: 1;
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.module-card-desc {
+  color: var(--ink-3);
+  font-size: 11px;
+  margin: 0 0 6px 0;
+}
+
+.module-card-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 6px 0;
+}
+
+.module-card-bar {
+  margin: 6px 0;
+}
+
+.module-card-fn-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 6px 0 0 0;
+  padding: 6px 0 0 0;
+  border-top: 1px solid var(--line);
+  list-style: none;
+  color: var(--ink-2);
+  font-size: 11px;
+}
+
+.module-card-fn-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 18px;
+  padding-left: 8px;
+}
+
+.module-card-fn-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.module-card-more {
+  color: var(--ink-3);
+  font-size: 10px;
+  padding-left: 8px;
+  margin-top: 2px;
+}
+
+/* ============================================================
+ * Module view + function row
+ * ============================================================ */
+
+.module-view {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 16px;
+  gap: 12px;
+}
+
+.module-view-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--line);
+}
+
+.module-view-letter {
+  display: inline-flex;
+  width: 24px;
+  height: 24px;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface-3);
+  color: var(--ink-2);
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.module-view-name {
+  flex: 1;
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.module-view-mode-group {
+  display: flex;
+  gap: 2px;
+}
+
+.module-view-mode-btn {
+  height: 24px;
+  padding: 0 10px;
+  background: transparent;
+  border: none;
+  color: var(--ink-3);
+  font-size: 12px;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+}
+
+.module-view-mode-btn:hover {
+  background: var(--surface-3);
+  color: var(--ink);
+}
+
+.module-view-mode-btn.active {
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  color: var(--accent);
+}
+
+.function-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.function-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  height: 28px;
+  padding: 0 8px;
+  background: transparent;
+  border: none;
+  color: var(--ink-2);
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  text-align: left;
+}
+
+.function-row:hover {
+  background: var(--surface-3);
+  color: var(--ink);
+}
+
+.function-row-name {
+  flex: 1;
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.function-row-pills {
+  display: inline-flex;
+  gap: 4px;
+}
+
+/* ============================================================
+ * Bar variants
+ * ============================================================ */
+
+.bar {
+  display: flex;
+  height: 6px;
+  background: var(--surface-3);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.bar.bar-none {
+  background: transparent;
+}
+
+.bar-seg {
+  background: var(--surface-3);
+}
+
+.bar-seg-proven { background: var(--ok); }
+.bar-seg-unproven { background: var(--warn); }
+.bar-seg-broken { background: var(--fail); }
+
+.bar.bar-dots {
+  background: transparent;
+  gap: 2px;
+}
+
+.bar-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 1px;
+}
+
+.bar-dot.dot-ok { background: var(--ok); }
+.bar-dot.dot-warn { background: var(--warn); }
+.bar-dot.dot-fail { background: var(--fail); }
+
+.bar.bar-types {
+  background: transparent;
+  height: auto;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.bar-type-chip {
+  display: inline-flex;
+  align-items: center;
+  height: 16px;
+  padding: 0 6px;
+  background: var(--surface-3);
+  color: var(--ink-3);
+  font-size: 10px;
+  border-radius: var(--radius-sm);
+}
+
+/* ============================================================
+ * Pill variants
+ * ============================================================ */
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  height: 18px;
+  padding: 0 6px;
+  font-size: 11px;
+  border-radius: var(--radius-sm);
+  white-space: nowrap;
+}
+
+.pill-ok {
+  background: color-mix(in srgb, var(--ok) 20%, transparent);
+  color: var(--ok);
+}
+
+.pill-warn {
+  background: color-mix(in srgb, var(--warn) 20%, transparent);
+  color: var(--warn);
+}
+
+.pill-fail {
+  background: color-mix(in srgb, var(--fail) 20%, transparent);
+  color: var(--fail);
+}
+
+.pill-muted {
+  background: var(--surface-3);
+  color: var(--ink-3);
+}
+
+/* ============================================================
+ * Shared dot
+ * ============================================================ */
+
+.dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.dot.dot-sm {
+  width: 6px;
+  height: 6px;
+}
+
+.dot.dot-ok { background: var(--ok); }
+.dot.dot-warn { background: var(--warn); }
+.dot.dot-fail { background: var(--fail); }

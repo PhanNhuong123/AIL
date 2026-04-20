@@ -19,4 +19,6 @@ export type IconName =
   | 'data'
   | 'deps'
   | 'tests'
-  | 'palette';
+  | 'palette'
+  | 'plus-circle'
+  | 'folder';
