@@ -46,8 +46,8 @@ fn parse_literal_integer() {
 #[test]
 fn parse_literal_float() {
     assert_eq!(
-        parse_v("3.14"),
-        ValueExpr::Literal(LiteralValue::Float(3.14))
+        parse_v("2.5"),
+        ValueExpr::Literal(LiteralValue::Float(2.5))
     );
 }
 

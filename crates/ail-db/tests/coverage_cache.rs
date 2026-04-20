@@ -116,7 +116,7 @@ fn t132_load_returns_none_when_invalid() {
     db.save_coverage(&node_id_str, &info).unwrap();
 
     // Mark the row stale via the public invalidation API (passes node itself in list).
-    db.invalidate_coverage_for_ancestors(&[node_id_str.clone()])
+    db.invalidate_coverage_for_ancestors(std::slice::from_ref(&node_id_str))
         .unwrap();
 
     let result = db.load_coverage(&node_id_str, hash).unwrap();

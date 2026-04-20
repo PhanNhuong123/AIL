@@ -1,0 +1,9 @@
+node_modules/
+.svelte-kit/
+build/
+.vite/
+src-tauri/target/
+src-tauri/gen/
+.env
+.env.*
+!.env.example

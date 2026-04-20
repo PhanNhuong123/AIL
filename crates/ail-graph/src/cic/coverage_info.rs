@@ -209,8 +209,10 @@ mod tests {
     #[test]
     fn coverage_config_hash_changes_on_threshold_change() {
         let cfg1 = CoverageConfig::default();
-        let mut cfg2 = CoverageConfig::default();
-        cfg2.threshold_full = 0.85;
+        let cfg2 = CoverageConfig {
+            threshold_full: 0.85,
+            ..CoverageConfig::default()
+        };
         assert_ne!(
             cfg1.config_hash(),
             cfg2.config_hash(),

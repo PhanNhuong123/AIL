@@ -1,0 +1,22 @@
+html, body, #svelte { height: 100%; margin: 0; }
+body {
+  background: var(--surface);
+  color: var(--ink);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-size: 13px;
+}
+.app-root {
+  display: grid;
+  height: 100vh;
+  grid-template-areas:
+    "titlebar  titlebar   titlebar"
+    "navigator stage      context "
+    "navigator bottom     context ";
+  grid-template-columns: 240px 1fr 320px;
+  grid-template-rows: 44px 1fr 240px;
+}
+.region-titlebar  { grid-area: titlebar;  background: var(--surface);   border-bottom: 1px solid var(--line); display: flex; align-items: center; padding: 0 12px; }
+.region-navigator { grid-area: navigator; background: var(--surface-2); border-right:  1px solid var(--line); overflow: auto; }
+.region-stage     { grid-area: stage;     background: var(--surface);   overflow: auto; }
+.region-context   { grid-area: context;   background: var(--surface-2); border-left:   1px solid var(--line); overflow: auto; }
+.region-bottom    { grid-area: bottom;    background: var(--surface-2); border-top:    1px solid var(--line); overflow: auto; }

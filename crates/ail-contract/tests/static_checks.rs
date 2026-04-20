@@ -154,7 +154,7 @@ fn following_graph(template_phase_names: &[&str], impl_phase_names: &[&str]) -> 
     // Template phase children
     let mut tmpl_child_ids = Vec::new();
     for (i, &phase_name) in template_phase_names.iter().enumerate() {
-        let mut phase = Node::new(NodeId::new(), &format!("{phase_name} phase"), Pattern::Let);
+        let mut phase = Node::new(NodeId::new(), format!("{phase_name} phase"), Pattern::Let);
         phase.metadata.name = Some(phase_name.to_owned());
         let phase_id = graph.add_node(phase).unwrap();
         graph.add_edge(tmpl_id, phase_id, EdgeKind::Ev).unwrap();
@@ -184,7 +184,7 @@ fn following_graph(template_phase_names: &[&str], impl_phase_names: &[&str]) -> 
     for (i, &phase_name) in impl_phase_names.iter().enumerate() {
         let mut phase = Node::new(
             NodeId::new(),
-            &format!("{phase_name} implementation"),
+            format!("{phase_name} implementation"),
             Pattern::Let,
         );
         phase.metadata.name = Some(phase_name.to_owned());

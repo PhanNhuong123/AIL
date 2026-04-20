@@ -705,8 +705,8 @@ fn v008_ignores_ed_edges_when_no_following_template_name() {
 fn validate_collects_all_errors() {
     let mut graph = AilGraph::new();
     // Root node with empty intent AND missing contracts — two distinct errors.
-    let mut root = Node::new(NodeId::new(), "", Pattern::Do); // empty intent
-                                                              // No contracts → also missing pre + post.
+    let root = Node::new(NodeId::new(), "", Pattern::Do); // empty intent
+                                                          // No contracts → also missing pre + post.
     let root_id = graph.add_node(root).unwrap();
     graph.set_root(root_id).unwrap();
 

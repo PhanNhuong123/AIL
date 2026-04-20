@@ -27,3 +27,10 @@ CLAUDE.md
 /examples/**/project.ail.db-shm
 /examples/**/dist/
 /examples/**/dist-ts/
+
+# --- Phase 16 Tauri IDE ---
+ide/node_modules/
+ide/.svelte-kit/
+ide/build/
+ide/.vite/
+ide/src-tauri/gen/

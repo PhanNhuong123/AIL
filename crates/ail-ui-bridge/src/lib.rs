@@ -30,6 +30,9 @@ pub mod types;
 #[cfg(feature = "tauri-commands")]
 pub mod commands;
 
+#[cfg(feature = "tauri-commands")]
+pub use commands::{get_handler, new_bridge_state, BridgeState, BridgeStateInner};
+
 pub use errors::BridgeError;
 pub use pipeline::load_verified_from_path;
 pub use serialize::{diff_graph, serialize_graph};
