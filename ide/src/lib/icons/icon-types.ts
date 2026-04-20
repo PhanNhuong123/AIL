@@ -12,4 +12,11 @@ export type IconName =
   | 'warn'
   | 'tweaks'
   | 'chevron-right'
-  | 'chevron-down';
+  | 'chevron-down'
+  | 'chevron-left'
+  | 'minus'
+  | 'plus'
+  | 'data'
+  | 'deps'
+  | 'tests'
+  | 'palette';

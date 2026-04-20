@@ -9,13 +9,15 @@ body {
   display: grid;
   height: 100vh;
   grid-template-areas:
-    "titlebar  titlebar   titlebar"
-    "navigator stage      context "
-    "navigator bottom     context ";
+    "titlebar  titlebar  titlebar"
+    "navigator toolbar   context "
+    "navigator stage     context "
+    "navigator bottom    context ";
   grid-template-columns: 240px 1fr 320px;
-  grid-template-rows: 44px 1fr 240px;
+  grid-template-rows: 44px 36px 1fr 240px;
 }
 .region-titlebar  { grid-area: titlebar;  background: var(--surface);   border-bottom: 1px solid var(--line); display: flex; align-items: center; padding: 0 12px; }
+.region-toolbar   { grid-area: toolbar;   background: var(--surface-2); border-bottom: 1px solid var(--line); display: flex; align-items: center; padding: 0 8px; gap: 8px; }
 .region-navigator { grid-area: navigator; background: var(--surface-2); border-right:  1px solid var(--line); overflow: auto; }
 .region-stage     { grid-area: stage;     background: var(--surface);   overflow: auto; }
 .region-context   { grid-area: context;   background: var(--surface-2); border-left:   1px solid var(--line); overflow: auto; }

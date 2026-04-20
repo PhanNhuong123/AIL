@@ -22,7 +22,7 @@ describe('stores initial values', () => {
   });
 
   it('overlays default to verify-only', () => {
-    expect(get(overlays)).toEqual({ verify: true, coverage: false, agent: false });
+    expect(get(overlays)).toEqual({ rules: false, verification: true, dataflow: false, dependencies: false, tests: false });
   });
 
   it('path starts empty', () => {

@@ -64,5 +64,25 @@
     <path d="M6 4l4 4-4 4"/>
   {:else if name === 'chevron-down'}
     <path d="M4 6l4 4 4-4"/>
+  {:else if name === 'chevron-left'}
+    <path d="M10 4L6 8l4 4"/>
+  {:else if name === 'minus'}
+    <path d="M3 8h10"/>
+  {:else if name === 'plus'}
+    <path d="M8 3v10M3 8h10"/>
+  {:else if name === 'data'}
+    <path d="M8 2L4 8a4 4 0 108 0L8 2z"/>
+  {:else if name === 'deps'}
+    <path d="M5 9l1-1a2.5 2.5 0 003.5 0l1-1"/>
+    <path d="M11 7l1-1a2.5 2.5 0 000-3.5 2.5 2.5 0 00-3.5 0L7 3.5"/>
+    <path d="M5 9L9.5 4.5"/>
+  {:else if name === 'tests'}
+    <path d="M6 2v5L3 13h10L10 7V2"/>
+    <path d="M5 2h6"/>
+  {:else if name === 'palette'}
+    <rect x="2" y="2" width="5" height="5" rx="1"/>
+    <rect x="9" y="2" width="5" height="5" rx="1"/>
+    <rect x="2" y="9" width="5" height="5" rx="1"/>
+    <rect x="9" y="9" width="5" height="5" rx="1"/>
   {/if}
 </svg>
