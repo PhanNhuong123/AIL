@@ -18,7 +18,7 @@
   <img alt="MCP integration" src="https://img.shields.io/badge/MCP-agent%20tools-7c3aed?style=flat-square">
   <img alt="Python emitter" src="https://img.shields.io/badge/Python-emitter-3776ab?style=flat-square&logo=python&logoColor=white">
   <img alt="TypeScript emitter" src="https://img.shields.io/badge/TypeScript-emitter-3178c6?style=flat-square&logo=typescript&logoColor=white">
-  <img alt="Phase 14" src="https://img.shields.io/badge/Phase%2014-agent%20foundation-111827?style=flat-square">
+  <img alt="v3.0.0" src="https://img.shields.io/badge/v3.0.0-coverage%20%2B%20agent-111827?style=flat-square">
 </p>
 
 </div>
@@ -191,11 +191,71 @@ Your AI now has tools to navigate your system's structure — and every action i
 
 ---
 
+## Semantic Coverage
+
+`ail coverage` answers a question tests cannot: **does the code say everything the spec asks for?** The scorer compares every parent node's intent against the semantic content of its children and reports **Full / Partial / Weak / N/A** with missing-aspect hints.
+
+```bash
+cd examples/wallet_service
+ail coverage --all
+```
+
+Commands:
+
+- `ail coverage --node NAME` — score a single node.
+- `ail coverage --all` — summary across every non-leaf node.
+- `ail coverage --warm-cache` — recompute and persist coverage for the whole graph.
+- `ail coverage --from-db PATH` — override the SQLite database path.
+
+Configure thresholds and extra concepts via the `[coverage]` section — see
+[docs/config-reference.md](./docs/config-reference.md#coverage). Ancestor
+coverage caches are invalidated automatically when a child node is mutated,
+so re-running after `ail.write` produces fresh scores without manual resets.
+
+---
+
+## AI Agent
+
+`ail agent "task"` runs a LangGraph-driven agent that plans, writes nodes
+via the MCP write tools, and re-verifies the graph — all while the hard
+Rust pipeline stays in charge of correctness.
+
+```bash
+pip install ./agents/
+export ANTHROPIC_API_KEY=sk-...
+cd examples/wallet_service
+ail agent "add error handling to transfer_money"
+```
+
+Five providers are supported out of the box:
+
+- `anthropic:claude-sonnet-4-5` (default) — `ANTHROPIC_API_KEY`.
+- `openai:gpt-4o` — `OPENAI_API_KEY`.
+- `deepseek:deepseek-chat` — `DEEPSEEK_API_KEY`.
+- `alibaba:qwen-max` (alias `qwen:`) — `DASHSCOPE_API_KEY`.
+- `ollama:llama3.1` — `OLLAMA_BASE_URL` (optional).
+
+| Env var              | Purpose                                 |
+|----------------------|-----------------------------------------|
+| `ANTHROPIC_API_KEY`  | Anthropic provider credentials          |
+| `OPENAI_API_KEY`     | OpenAI provider credentials             |
+| `DEEPSEEK_API_KEY`   | DeepSeek provider credentials           |
+| `DASHSCOPE_API_KEY`  | Alibaba / Qwen provider credentials     |
+| `OLLAMA_BASE_URL`    | Ollama endpoint (defaults to localhost) |
+
+CLI flags: `--model`, `--max-iterations`, `--steps-per-plan`, `--mcp-port`
+(reserved). Every flag also has a TOML fallback in `[agent]` —
+see [docs/config-reference.md](./docs/config-reference.md#agent). See
+[agents/README.md](./agents/README.md) for the full install, troubleshooting,
+and provider-swap walkthrough.
+
+---
+
 ## Status
 
 **v0.1 in active development.** Built in Rust. Verified by Z3. Designed to run under the AI tools you already use.
 
-**Currently:** v3.0 — Phase 14 Agent Foundation
+**Currently:** v3.0.0 — Semantic Coverage + AI Agent Foundation
 
 | Component | Status |
 |-----------|--------|
@@ -211,7 +271,7 @@ Your AI now has tools to navigate your system's structure — and every action i
 | Embedding search | ✅ v2.0 |
 | MCP write tools (5 tools) | ✅ v2.0 |
 | Semantic coverage (SCFT) | ✅ v3.0 |
-| **Agent Foundation** | 🔄 **in progress** |
+| AI Agent Foundation | ✅ v3.0 |
 | AIL IDE (visual canvas) | 🔜 v4.0 |
 
 ---
@@ -222,8 +282,7 @@ Your AI now has tools to navigate your system's structure — and every action i
 |---------|-------|-----------------|
 | ~~**v1.0**~~ | ~~Core engine~~ | ~~Parse · Graph · CIC · Z3 · Python emit · MCP read~~ |
 | ~~**v2.0**~~ | ~~Foundation~~ | ~~SQLite · TypeScript emit · Embedding search · Path-sensitive CIC · MCP write~~ |
-| ~~**v3.0 / Phase 13**~~ | ~~Semantic intelligence~~ | ~~`ail coverage` · intent coverage scoring · SCFT Step 2~~ |
-| 🔄 **v3.0 / Phase 14** | Agent foundation | `ail agent "task"` · LangGraph · Planner + Coder workers · Provider layer |
+| ~~**v3.0**~~ | ~~Semantic coverage + Agent foundation~~ | ~~`ail coverage` · `ail agent` · LangGraph · 5 providers · `[agent]` TOML~~ |
 | **v4.0** | IDE & Full Agent | Tauri visual IDE · AI Chat on canvas · Agent runs on canvas · Sheaf consistency |
 | **v5.0** | Intelligence | Entropy analysis · Interactive debug · Advanced agent workflows |
 | **v6.0** | Runtime | Runtime tracing · `.ailmap` crash → node · Production monitoring |

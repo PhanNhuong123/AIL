@@ -9,6 +9,9 @@ target
 __pycache__/
 *.py[cod]
 
+# Throwaway virtual environments
+.venv*/
+
 # Private/internal docs and agent instructions
 /docs/
 CLAUDE.md

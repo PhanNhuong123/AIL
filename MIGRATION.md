@@ -203,3 +203,100 @@ absent.
 - v2.0 command walkthrough: `GETTING_STARTED.md` §§10–14
 - End-to-end example: `examples/wallet_service/`
 - Per-phase change list: `CHANGELOG.md`
+
+---
+
+# v2.0 → v3.0
+
+## What Changed
+
+- `ail coverage --node NAME` / `--all` / `--warm-cache` / `--from-db PATH`:
+  semantic coverage scorer reporting **Full / Partial / Weak / N/A** with
+  missing-aspect hints.
+- `ail agent "<task>"`: LangGraph-driven agent (Python) that plans, writes
+  nodes via the MCP write tools, and re-verifies the graph. Five provider
+  adapters — `anthropic`, `openai`, `deepseek`, `alibaba` (alias `qwen`),
+  `ollama`.
+- New MCP tool `ail.review` returns coverage and missing-aspect data for a
+  named target node.
+- New `[coverage]` and `[agent]` sections in `ail.config.toml` (both
+  ACTIVE — see `docs/config-reference.md`).
+- `StatusOutput.root_id: Option<String>` — additive field on the existing
+  `ail.status` MCP response, consumed by the agent's coder.
+
+## No-Change Path
+
+Every v2.0 surface is preserved:
+
+- `.ail` grammar and all 17 syntax patterns.
+- `ail init`, `ail verify`, `ail build` (Python and TypeScript), `ail test`,
+  `ail search`, `ail context`, `ail status`, `ail migrate`, `ail export`,
+  `ail serve`.
+- MCP read tools (5) and write tools (5) — no rename, no removal.
+- SQLite + filesystem backends, `[database] backend = "auto"` resolution,
+  `--from-db` flag.
+- CIC propagation rules (down / up / across / diagonal) and path-sensitive
+  promoted facts.
+- `examples/wallet_service/` pipeline is unchanged.
+
+## Opt-In Paths
+
+### 1. Enable semantic coverage
+
+Add `[coverage]` to `ail.config.toml` (all fields optional — the section
+header alone is enough because defaults are sensible):
+
+```toml
+[coverage]
+enabled = true
+threshold_full = 0.8
+threshold_partial = 0.5
+extra_concepts = ["error handling", "observability"]
+```
+
+Run `ail coverage --all` from the project root. Feature-gated by the
+`embeddings` Cargo feature; when absent, the section is accepted but
+scoring is skipped with a diagnostic.
+
+### 2. Enable the AI agent
+
+```bash
+pip install ./agents/
+export ANTHROPIC_API_KEY=sk-...
+cd examples/wallet_service
+ail agent "add error handling to transfer_money"
+```
+
+See `agents/README.md` for the full provider table, API-key environment
+variables, and troubleshooting. Optional provider extras:
+`pip install './agents/[openai]'` / `[deepseek]` / `[alibaba]` /
+`[ollama]` / `[all]`.
+
+### 3. Configure agent defaults via `[agent]` TOML
+
+```toml
+[agent]
+model = "openai:gpt-4o"
+max_iterations = 100
+steps_per_plan = 30
+```
+
+CLI flags on `ail agent` override these values. When neither is set, the
+Python side falls back to `anthropic:claude-sonnet-4-5`, `50`, and `20`.
+
+## Breaking Changes
+
+None. All additions are opt-in:
+
+- `[coverage]` and `[agent]` TOML sections are optional.
+- `StatusOutput.root_id` uses serde `skip_serializing_if` — v2.0 MCP
+  clients that ignore unknown fields are unaffected.
+- `Command::Agent` is a new subcommand; existing CLI invocations keep
+  working.
+
+## Getting Help
+
+- Config field status: `docs/config-reference.md`
+- Agent install + provider guide: `agents/README.md`
+- Integration reference spec: `docs/plan/v3.0/reference/AIL-Integration-Release-v3.0.md`
+- Per-phase change list: `CHANGELOG.md`

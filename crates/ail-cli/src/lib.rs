@@ -13,7 +13,7 @@ use std::path::PathBuf;
 use clap::{Parser, Subcommand};
 
 pub use commands::{
-    agent::{run_agent, AgentArgs},
+    agent::{read_agent_config, run_agent, AgentArgs, AgentConfig},
     build::{run_build, BuildArgs},
     context::run_context,
     coverage::{read_coverage_config, run_coverage},
@@ -289,19 +289,19 @@ pub enum Command {
         /// Natural-language task to perform.
         task: String,
 
-        /// Provider:model spec (e.g., "anthropic:claude-sonnet-4-5", "openai:gpt-5").
+        /// Provider and model in 'provider:model' form (e.g. 'anthropic:claude-sonnet-4-5', 'openai:gpt-4o'). Falls back to '[agent] model' in ail.config.toml, then the Python-side default 'anthropic:claude-sonnet-4-5'.
         #[arg(long)]
         model: Option<String>,
 
-        /// MCP server port (reserved; current implementation uses stdio).
+        /// Reserved for a future network-MCP transport; the current implementation spawns 'ail serve' over stdio and ignores this value.
         #[arg(long, default_value_t = 7777)]
         mcp_port: u16,
 
-        /// Hard cap on total node visits before failing.
+        /// Maximum planner/coder/verify loop iterations. Falls back to '[agent] max_iterations', then 50.
         #[arg(long)]
         max_iterations: Option<usize>,
 
-        /// Cap on steps the coder may execute per plan.
+        /// Maximum coder steps per plan before forced replan (AIL-G0143 budget guard). Falls back to '[agent] steps_per_plan', then 20.
         #[arg(long)]
         steps_per_plan: Option<usize>,
     },
