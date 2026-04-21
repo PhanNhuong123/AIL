@@ -21,4 +21,6 @@ export type IconName =
   | 'tests'
   | 'palette'
   | 'plus-circle'
-  | 'folder';
+  | 'folder'
+  | 'swim'
+  | 'code';

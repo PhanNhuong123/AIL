@@ -1,0 +1,114 @@
+<script lang="ts">
+  import type { FunctionJson, FlowchartJson, NodeDetail } from '$lib/types';
+  import { flowMode } from './flow-state';
+  import FlowSwim from './FlowSwim.svelte';
+  import FlowchartCanvas from './FlowchartCanvas.svelte';
+  import FlowCode from './FlowCode.svelte';
+  import Icon from '$lib/icons/Icon.svelte';
+
+  export let fn        = null as FunctionJson | null;
+  export let flowchart = null as FlowchartJson | null;
+  export let detail    = null as NodeDetail | null;
+
+  function setMode(m) {
+    flowMode.set(m);
+  }
+</script>
+
+<div class="flow-view" data-testid="flow-view">
+  <!-- Sub-mode tab strip -->
+  <div class="flow-mode-strip">
+    <button
+      class="flow-mode-btn"
+      class:active={$flowMode === 'Swim'}
+      aria-pressed={$flowMode === 'Swim'}
+      on:click={() => setMode('Swim')}
+      data-testid="flow-mode-btn-swim"
+    >
+      <Icon name="swim" size={12}/>
+      Swim
+    </button>
+    <button
+      class="flow-mode-btn"
+      class:active={$flowMode === 'Flowchart'}
+      aria-pressed={$flowMode === 'Flowchart'}
+      on:click={() => setMode('Flowchart')}
+      data-testid="flow-mode-btn-flowchart"
+    >
+      Flowchart
+    </button>
+    <button
+      class="flow-mode-btn"
+      class:active={$flowMode === 'Code'}
+      aria-pressed={$flowMode === 'Code'}
+      on:click={() => setMode('Code')}
+      data-testid="flow-mode-btn-code"
+    >
+      <Icon name="code" size={12}/>
+      Code
+    </button>
+  </div>
+
+  <!-- Content -->
+  <div class="flow-body">
+    {#if $flowMode === 'Swim'}
+      <FlowSwim flowchart={flowchart ?? { nodes: [], edges: [] }} />
+    {:else if $flowMode === 'Flowchart'}
+      <FlowchartCanvas flowchart={flowchart ?? { nodes: [], edges: [] }} />
+    {:else}
+      <FlowCode {fn} {detail} />
+    {/if}
+  </div>
+</div>
+
+<style>
+  .flow-view {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-height: 0;
+  }
+
+  .flow-mode-strip {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    height: 32px;
+    padding: 0 10px;
+    background: var(--surface-2);
+    border-bottom: 1px solid var(--line);
+    flex-shrink: 0;
+  }
+
+  .flow-mode-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    height: 24px;
+    padding: 0 10px;
+    background: transparent;
+    border: none;
+    color: var(--ink-3);
+    font-size: 12px;
+    cursor: pointer;
+    border-radius: var(--radius-sm);
+  }
+
+  .flow-mode-btn:hover {
+    background: var(--surface-3);
+    color: var(--ink);
+  }
+
+  .flow-mode-btn.active {
+    background: color-mix(in srgb, var(--accent) 18%, transparent);
+    color: var(--accent);
+  }
+
+  .flow-body {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+</style>

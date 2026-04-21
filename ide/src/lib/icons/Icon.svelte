@@ -89,5 +89,15 @@
     <path d="M8 5v6M5 8h6"/>
   {:else if name === 'folder'}
     <path d="M2 5a1 1 0 011-1h3l1.5 1.5H13a1 1 0 011 1V12a1 1 0 01-1 1H3a1 1 0 01-1-1V5z"/>
+  {:else if name === 'swim'}
+    <path d="M2 4h12"/>
+    <path d="M2 8h12"/>
+    <path d="M2 12h12"/>
+    <path d="M5 4v4"/>
+    <path d="M11 8v4"/>
+  {:else if name === 'code'}
+    <path d="M5 4L2 8l3 4"/>
+    <path d="M11 4l3 4-3 4"/>
+    <path d="M9 3l-2 10"/>
   {/if}
 </svg>

@@ -4,6 +4,8 @@
  * multiClusterFixture — 3 clusters × 2 modules each; drives cluster tests.
  * bigSystemFixture(n) — parameterised generator for 16.5-B render tests.
  * detailedModuleFixture — walletFixture + populated NodeDetail entries.
+ * flowFixture — 7 nodes (all FlowNodeKind variants) + 7 edges (task 16.6).
+ * nodeDetailFixture — full NodeDetail with code blobs, rules, counterexample (task 16.6).
  */
 
 import type {
@@ -13,6 +15,9 @@ import type {
   StepJson,
   NodeDetail,
   Status,
+  FlowchartJson,
+  FlowNodeJson,
+  FlowEdgeJson,
 } from '$lib/types';
 import { walletFixture } from '$lib/chrome/fixtures';
 
@@ -253,5 +258,127 @@ export function bigSystemFixture(n = 200): GraphJson {
     types: [],
     errors: [],
     detail: {},
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Task 16.6: Flow + Node fixtures
+// ---------------------------------------------------------------------------
+
+/**
+ * flowFixture — returns a FlowchartJson with 7 nodes (all FlowNodeKind
+ * variants) and 7 edges (yes/ok/no/err/neutral labels + styles).
+ * Also exposes the fixture as a GraphJson wrapper for Stage.svelte testing.
+ */
+export function flowFixture(): { flowchart: FlowchartJson; graph: GraphJson } {
+  const nodes: FlowNodeJson[] = [
+    { id: 'n_start',  kind: 'start',    label: 'Start',         x: 200, y: 20  },
+    { id: 'n_do',     kind: 'process',  label: 'Validate',      x: 200, y: 100 },
+    { id: 'n_decide', kind: 'decision', label: 'Balance OK?',   x: 200, y: 200 },
+    { id: 'n_io',     kind: 'io',       label: 'Read Account',  x: 400, y: 200 },
+    { id: 'n_sub',    kind: 'sub',      label: 'Audit Log',     x: 200, y: 320 },
+    { id: 'n_store',  kind: 'storage',  label: 'DB Write',      x: 200, y: 440 },
+    { id: 'n_end',    kind: 'end',      label: 'End',           x: 200, y: 540 },
+  ];
+
+  const edges: FlowEdgeJson[] = [
+    { from: 'n_start',  to: 'n_do',     label: undefined,  style: undefined   },
+    { from: 'n_do',     to: 'n_decide', label: undefined,  style: undefined   },
+    { from: 'n_decide', to: 'n_sub',    label: 'yes',      style: 'ok'        },
+    { from: 'n_decide', to: 'n_io',     label: 'no',       style: 'err'       },
+    { from: 'n_io',     to: 'n_end',    label: undefined,  style: undefined   },
+    { from: 'n_sub',    to: 'n_store',  label: 'ok',       style: 'ok'        },
+    { from: 'n_store',  to: 'n_end',    label: undefined,  style: undefined   },
+  ];
+
+  const flowchart: FlowchartJson = { nodes, edges };
+
+  // Minimal GraphJson wrapper so Stage.svelte can hydrate `activeFlowchart`
+  const graph: GraphJson = {
+    project: {
+      id: 'project:root',
+      name: 'flow_demo',
+      description: 'Flow fixture project',
+      nodeCount: 1,
+      moduleCount: 1,
+      fnCount: 1,
+      status: 'ok',
+    },
+    clusters: [],
+    modules: [
+      {
+        id: 'module:m_demo',
+        name: 'demo',
+        description: 'Demo module',
+        cluster: '',
+        clusterName: '',
+        clusterColor: '#2997ff',
+        status: 'ok',
+        nodeCount: 1,
+        functions: [
+          {
+            id: 'function:fn_demo',
+            name: 'demo_fn',
+            status: 'ok',
+            steps: [
+              { id: 'step:s_demo', name: 'demo_step', status: 'ok', intent: 'demo' },
+            ],
+          },
+        ],
+      },
+    ],
+    externals: [],
+    relations: [],
+    types: [],
+    errors: [],
+    detail: {},
+  };
+
+  return { flowchart, graph };
+}
+
+/**
+ * nodeDetailFixture — full NodeDetail with:
+ *  - CodeBlob in both Python and TypeScript
+ *  - 3 receives + 1 return
+ *  - 3 own rules + 2 inherited rules
+ *  - 2 proven facts
+ *  - populated counterexample (verification.ok = false)
+ */
+export function nodeDetailFixture(): NodeDetail {
+  return {
+    name: 'transfer_step',
+    status: 'fail',
+    description: 'Validates and executes a fund transfer between two accounts.',
+    receives: [
+      { name: 'from',   desc: 'Account'  },
+      { name: 'to',     desc: 'Account'  },
+      { name: 'amount', desc: 'Money'    },
+    ],
+    returns: [
+      { name: 'receipt', desc: 'TxReceipt' },
+    ],
+    rules: [
+      { text: 'amount > 0',          source: 'own'       },
+      { text: 'from != to',          source: 'own'       },
+      { text: 'balance >= amount',   source: 'own'       },
+    ],
+    inherited: [
+      { text: 'actor authenticated', from: 'wallet_module' },
+      { text: 'currency valid',      from: 'wallet_module' },
+    ],
+    proven: ['amount > 0', 'from != to'],
+    verification: {
+      ok: false,
+      counterexample: {
+        scenario: 'amount = 1000, balance = 500',
+        effect:   'transfer proceeds despite insufficient funds',
+        violates: 'balance >= amount',
+      },
+    },
+    code: {
+      python: `def transfer_step(from_account, to_account, amount):\n    assert amount > 0\n    assert from_account != to_account\n    if from_account.balance < amount:\n        raise InsufficientFunds()\n    from_account.balance -= amount\n    to_account.balance += amount\n    return TxReceipt(ok=True)`,
+      typescript: `function transferStep(from: Account, to: Account, amount: Money): TxReceipt {\n  if (amount <= 0) throw new Error('amount must be positive');\n  if (from.id === to.id) throw new Error('self-transfer not allowed');\n  if (from.balance < amount) throw new InsufficientFundsError();\n  from.balance -= amount;\n  to.balance += amount;\n  return { ok: true };\n}`,
+    },
   };
 }
