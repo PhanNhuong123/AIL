@@ -99,5 +99,10 @@
     <path d="M5 4L2 8l3 4"/>
     <path d="M11 4l3 4-3 4"/>
     <path d="M9 3l-2 10"/>
+  {:else if name === 'close'}
+    <path d="M4 4l8 8M12 4l-8 8"/>
+  {:else if name === 'edit'}
+    <path d="M10 3l3 3-7 7H3v-3l7-7z"/>
+    <path d="M9 4l3 3"/>
   {/if}
 </svg>

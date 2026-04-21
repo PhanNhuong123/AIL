@@ -23,4 +23,6 @@ export type IconName =
   | 'plus-circle'
   | 'folder'
   | 'swim'
-  | 'code';
+  | 'code'
+  | 'close'
+  | 'edit';
