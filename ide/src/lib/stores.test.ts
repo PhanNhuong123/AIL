@@ -10,6 +10,8 @@ import {
   theme,
   density,
   tweaksPanelOpen,
+  welcomeModalOpen,
+  quickCreateModalOpen,
 } from './stores';
 
 describe('stores initial values', () => {
@@ -47,5 +49,13 @@ describe('stores initial values', () => {
 
   it('tweaksPanelOpen starts closed', () => {
     expect(get(tweaksPanelOpen)).toBe(false);
+  });
+
+  it('welcomeModalOpen starts closed', () => {
+    expect(get(welcomeModalOpen)).toBe(false);
+  });
+
+  it('quickCreateModalOpen starts closed', () => {
+    expect(get(quickCreateModalOpen)).toBe(false);
   });
 });

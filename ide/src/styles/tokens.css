@@ -15,6 +15,12 @@
   --radius-sm: 5px;
   --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.2);
   --shadow-2: 0 4px 12px rgba(0, 0, 0, 0.25);
+  --z-modal: 1000;
+  --z-tweaks: 1100;
+  --bp-collapsed-h: 44px;
+  --modal-width-qc: 480px;
+  --modal-width-tweaks: 280px;
+  --modal-backdrop: rgba(0,0,0,0.45);
 }
 :root.light {
   --surface: #ffffff;
