@@ -34,3 +34,5 @@ ide/.svelte-kit/
 ide/build/
 ide/.vite/
 ide/src-tauri/gen/
+
+.env
