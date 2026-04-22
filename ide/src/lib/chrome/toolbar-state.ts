@@ -1,8 +1,8 @@
 /**
  * toolbar-state.ts — Toolbar-scoped stores and navigation helpers.
  *
- * History is Toolbar-scoped. Navigator.selectNode writes path/selection directly
- * and is intentionally excluded from the back/forward stack.
+ * History is Toolbar-scoped. Outline.selectNode writes path/selection/zoomLevel
+ * directly and is intentionally excluded from the back/forward stack.
  */
 
 import { writable, get } from 'svelte/store';

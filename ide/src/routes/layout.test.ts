@@ -16,7 +16,7 @@ describe('+page.svelte — canonical 3-column layout', () => {
     const { container } = render(Page);
 
     expect(container.querySelector('[data-testid="region-titlebar"]')).not.toBeNull();
-    expect(container.querySelector('[data-testid="region-navigator"]')).not.toBeNull();
+    expect(container.querySelector('[data-testid="region-outline"]')).not.toBeNull();
     expect(container.querySelector('[data-testid="region-stage"]')).not.toBeNull();
     expect(container.querySelector('[data-testid="chat-panel"]')).not.toBeNull();
   });

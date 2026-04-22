@@ -1,6 +1,6 @@
 <script lang="ts">
   import TitleBar from '$lib/chrome/TitleBar.svelte';
-  import Navigator from '$lib/chrome/Navigator.svelte';
+  import Outline from '$lib/chrome/Outline.svelte';
   import Stage from '$lib/stage/Stage.svelte';
   import ChatPanel from '$lib/chat/ChatPanel.svelte';
   import WelcomeModal from '$lib/modals/WelcomeModal.svelte';
@@ -13,7 +13,7 @@
 
 <div class="app-root" data-testid="app-root">
   <TitleBar />
-  <Navigator />
+  <Outline />
   <main class="region-stage" data-testid="region-stage"><Stage /></main>
   <ChatPanel />
 </div>

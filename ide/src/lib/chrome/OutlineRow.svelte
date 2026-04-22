@@ -37,6 +37,7 @@
 <div
   class="nav-row"
   class:selected
+  data-kind={kind}
   style="padding-left: calc(8px + {depth} * 14px);"
   role="treeitem"
   aria-selected={selected}

@@ -1,6 +1,6 @@
 <script lang="ts">
   import { createEventDispatcher } from 'svelte';
-  import NavigatorSection from './NavigatorSection.svelte';
+  import OutlineSection from './OutlineSection.svelte';
 
   const dispatch = createEventDispatcher();
 
@@ -18,7 +18,7 @@
   }
 </script>
 
-<NavigatorSection title="PALETTE">
+<OutlineSection title="PALETTE">
   <div class="palette-chips">
     {#each chips as chip}
       <button
@@ -32,7 +32,7 @@
       </button>
     {/each}
   </div>
-</NavigatorSection>
+</OutlineSection>
 
 <style>
   .palette-chips {

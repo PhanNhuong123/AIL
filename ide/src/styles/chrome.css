@@ -15,7 +15,7 @@ body {
   grid-template-rows: 44px 1fr;
 }
 .region-titlebar  { grid-area: titlebar; background: var(--surface);   border-bottom: 1px solid var(--line); display: flex; align-items: center; padding: 0 12px; }
-.region-navigator { grid-area: outline;  background: var(--surface-2); border-right:  1px solid var(--line); overflow: auto; }
+.region-outline   { grid-area: outline;  background: var(--surface-2); border-right:  1px solid var(--line); overflow: auto; }
 .region-stage     { grid-area: stage;    background: var(--surface);   overflow: auto; }
 .region-chat      { grid-area: chat;     background: var(--surface-2); border-left: 1px solid var(--line); overflow: hidden; }
 
