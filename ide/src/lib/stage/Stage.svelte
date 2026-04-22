@@ -1,7 +1,7 @@
 <script lang="ts">
   import { graph, selection } from '$lib/stores';
-  import { zoomLevel } from '$lib/chrome/toolbar-state';
   import StageTabStrip from './StageTabStrip.svelte';
+  import LensBanner from './LensBanner.svelte';
   import SystemView from './SystemView.svelte';
   import ModuleView from './ModuleView.svelte';
   import FlowView from './FlowView.svelte';
@@ -45,12 +45,20 @@
     return fx.flowchart as FlowchartJson;
   }
 
+  $: kind                 = $selection.kind;
   $: activeModule         = findModule($graph, $selection.id);
   $: activeFunction       = findFunction($graph, $selection.id);
   $: activeDetail         = findStepDetail($graph, $selection.id);
   $: activeFlowchart      = activeFunction ? resolveFlowchart(activeFunction.id) : null;
   $: activeFunctionDetail = activeFunction
       ? ($graph?.detail[activeFunction.id] as NodeDetail | undefined) ?? null
+      : null;
+  // Banner scope tracks the selected id for module/function/step so the stats
+  // stay aligned with the user's selection even when the entity lookup fails
+  // ("not found" placeholder) — invariant 15.5-B. Other kinds (project, type,
+  // error, none) fall back to project-scope (null).
+  $: scopeId = kind === 'module' || kind === 'function' || kind === 'step'
+      ? $selection.id
       : null;
 </script>
 
@@ -59,20 +67,23 @@
   <div class="stage-body">
     {#if !$graph}
       <div class="stage-placeholder" data-testid="stage-empty">No project loaded.</div>
-    {:else if $zoomLevel === 0}
-      <SystemView graph={$graph} />
-    {:else if $zoomLevel === 1 && activeModule}
-      <ModuleView module={activeModule} />
-    {:else if $zoomLevel === 1}
-      <div class="stage-placeholder" data-testid="stage-module-missing">Module not found.</div>
-    {:else if $zoomLevel === 2 && activeFunction}
-      <FlowView fn={activeFunction} flowchart={activeFlowchart} detail={activeFunctionDetail} />
-    {:else if $zoomLevel === 2}
-      <div class="stage-placeholder" data-testid="stage-flow-missing">Function not found.</div>
-    {:else if $zoomLevel === 4 && activeDetail && $selection.id}
-      <NodeView stepId={$selection.id} detail={activeDetail} />
     {:else}
-      <div class="stage-placeholder" data-testid="stage-node-missing">Node detail not found.</div>
+      <LensBanner {scopeId} />
+      {#if kind === 'module' && activeModule}
+        <ModuleView module={activeModule} />
+      {:else if kind === 'module'}
+        <div class="stage-placeholder" data-testid="stage-module-missing">Module not found.</div>
+      {:else if kind === 'function' && activeFunction}
+        <FlowView fn={activeFunction} flowchart={activeFlowchart} detail={activeFunctionDetail} />
+      {:else if kind === 'function'}
+        <div class="stage-placeholder" data-testid="stage-flow-missing">Function not found.</div>
+      {:else if kind === 'step' && activeDetail && $selection.id}
+        <NodeView stepId={$selection.id} detail={activeDetail} />
+      {:else if kind === 'step'}
+        <div class="stage-placeholder" data-testid="stage-node-missing">Node detail not found.</div>
+      {:else}
+        <SystemView graph={$graph} />
+      {/if}
     {/if}
   </div>
 </div>

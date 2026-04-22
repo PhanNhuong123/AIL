@@ -4,6 +4,53 @@
 }
 
 /* ============================================================
+ * Lens Banner (task 15.5)
+ * ============================================================ */
+
+.lens-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  height: 32px;
+  padding: 0 12px;
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--line);
+  border-left: 3px solid var(--lens-hue, var(--accent));
+  color: var(--ink-2);
+  font-size: 12px;
+  flex-shrink: 0;
+}
+
+.lens-banner-left {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.lens-banner-title {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.lens-banner-desc {
+  color: var(--ink-3);
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lens-banner-stats {
+  color: var(--ink-2);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* ============================================================
  * Stage root + tab strip (task 16.5)
  * ============================================================ */
 
