@@ -12,6 +12,7 @@ import {
   tweaksPanelOpen,
   welcomeModalOpen,
   quickCreateModalOpen,
+  activeLens,
 } from './stores';
 
 describe('stores initial values', () => {
@@ -57,5 +58,9 @@ describe('stores initial values', () => {
 
   it('quickCreateModalOpen starts closed', () => {
     expect(get(quickCreateModalOpen)).toBe(false);
+  });
+
+  it('activeLens defaults to verify', () => {
+    expect(get(activeLens)).toBe('verify');
   });
 });

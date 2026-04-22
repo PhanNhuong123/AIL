@@ -17,7 +17,7 @@
   --shadow-2: 0 4px 12px rgba(0, 0, 0, 0.25);
   --z-modal: 1000;
   --z-tweaks: 1100;
-  --bp-collapsed-h: 44px;
+  --bp-collapsed-h: 44px;   /* retained; used by BottomPanel.svelte (not in canonical shell) */
   --modal-width-qc: 480px;
   --modal-width-tweaks: 280px;
   --modal-backdrop: rgba(0,0,0,0.45);

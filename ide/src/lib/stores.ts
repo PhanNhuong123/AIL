@@ -1,5 +1,5 @@
 import { writable, type Writable } from 'svelte/store';
-import type { GraphJson } from './types';
+import type { GraphJson, Lens } from './types';
 
 export type SelectionKind = 'project' | 'module' | 'function' | 'step' | 'type' | 'error' | 'none';
 export interface Selection      { kind: SelectionKind; id: string | null; }
@@ -19,3 +19,5 @@ export const density: Writable<Density>         = writable('comfortable');
 export const welcomeModalOpen: Writable<boolean> = writable(false);
 export const quickCreateModalOpen: Writable<boolean> = writable(false);
 export const tweaksPanelOpen: Writable<boolean> = writable(false);
+export type { Lens } from './types';
+export const activeLens: Writable<Lens> = writable('verify');

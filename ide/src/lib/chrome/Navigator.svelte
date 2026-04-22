@@ -30,7 +30,7 @@
   }
 </script>
 
-<aside class="region-navigator">
+<aside class="region-navigator" data-testid="region-navigator">
   <div class="nav-filter">
     <input
       class="nav-filter-input"

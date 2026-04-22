@@ -18,7 +18,7 @@
   }
 </script>
 
-<header class="region-titlebar" data-tauri-drag-region>
+<header class="region-titlebar" data-testid="region-titlebar" data-tauri-drag-region>
   {#if isMac}
     <TrafficLights />
   {/if}

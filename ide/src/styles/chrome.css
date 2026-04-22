@@ -9,26 +9,15 @@ body {
   display: grid;
   height: 100vh;
   grid-template-areas:
-    "titlebar  titlebar  titlebar"
-    "navigator toolbar   context "
-    "navigator stage     context "
-    "navigator bottom    context ";
-  grid-template-columns: 240px 1fr 320px;
-  grid-template-rows: 44px 36px 1fr 240px;
+    "titlebar titlebar titlebar"
+    "outline  stage    chat    ";
+  grid-template-columns: 260px 1fr 360px;
+  grid-template-rows: 44px 1fr;
 }
-.region-titlebar  { grid-area: titlebar;  background: var(--surface);   border-bottom: 1px solid var(--line); display: flex; align-items: center; padding: 0 12px; }
-.region-toolbar   { grid-area: toolbar;   background: var(--surface-2); border-bottom: 1px solid var(--line); display: flex; align-items: center; padding: 0 8px; gap: 8px; }
-.region-navigator { grid-area: navigator; background: var(--surface-2); border-right:  1px solid var(--line); overflow: auto; }
-.region-stage     { grid-area: stage;     background: var(--surface);   overflow: auto; }
-.region-context {
-  grid-area: context;
-  background: var(--surface-2);
-  border-left: 1px solid var(--line);
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-.region-bottom    { grid-area: bottom;    background: var(--surface-2); border-top:    1px solid var(--line); overflow: auto; }
+.region-titlebar  { grid-area: titlebar; background: var(--surface);   border-bottom: 1px solid var(--line); display: flex; align-items: center; padding: 0 12px; }
+.region-navigator { grid-area: outline;  background: var(--surface-2); border-right:  1px solid var(--line); overflow: auto; }
+.region-stage     { grid-area: stage;    background: var(--surface);   overflow: auto; }
+.region-chat      { grid-area: chat;     background: var(--surface-2); border-left: 1px solid var(--line); overflow: hidden; }
 
 /* ============================================================
  * Context Panel (task 16.7)
@@ -267,11 +256,6 @@ body {
 /* ============================================================
  * Bottom Panel (task 16.8)
  * ============================================================ */
-
-/* (a) Grid override when panel is collapsed */
-.app-root.bottom-collapsed {
-  grid-template-rows: 44px 36px 1fr var(--bp-collapsed-h);
-}
 
 /* (b) Bottom Panel shell */
 .bp {
