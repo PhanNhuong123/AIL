@@ -5,7 +5,7 @@ import { get } from 'svelte/store';
 import {
   graph,
   selection,
-  overlays,
+  activeLens,
   path,
   history,
   paletteVisible,
@@ -14,11 +14,12 @@ import { zoomLevel, pickerOpen, pickerItems } from '$lib/chrome/toolbar-state';
 import { systemMode, moduleMode, clusterCollapsed } from './stage-state';
 import { walletFixture } from '$lib/chrome/fixtures';
 import ModuleView from './ModuleView.svelte';
+import type { Lens } from '$lib/types';
 
 beforeEach(() => {
   graph.set(null);
   selection.set({ kind: 'none', id: null });
-  overlays.set({ rules: false, verification: true, dataflow: false, dependencies: false, tests: false });
+  activeLens.set('verify');
   path.set([]);
   history.set({ back: [], forward: [] });
   paletteVisible.set(false);
@@ -73,5 +74,31 @@ describe('ModuleView.svelte', () => {
     expect(get(zoomLevel)).toBe(2);
     // navigateTo pushed exactly one entry (previous path was non-empty).
     expect(get(history).back.length).toBe(1);
+  });
+
+  it('test_module_view_head_action_reflects_active_lens', async () => {
+    const lenses: Lens[] = ['structure', 'rules', 'verify', 'data', 'tests'];
+    const g = walletFixture();
+    graph.set(g);
+    const wallet = g.modules.find((m) => m.id === 'module:m_wallet')!;
+
+    const { container } = render(ModuleView, { props: { module: wallet } });
+    await tick();
+
+    for (const lens of lenses) {
+      activeLens.set(lens);
+      await tick();
+
+      // Current lens chip is present
+      const current = container.querySelector(`[data-testid="module-head-action-${lens}"]`);
+      expect(current, `head action for ${lens} should be present`).not.toBeNull();
+
+      // All other lens chips are absent
+      for (const other of lenses) {
+        if (other === lens) continue;
+        const otherEl = container.querySelector(`[data-testid="module-head-action-${other}"]`);
+        expect(otherEl, `head action for ${other} should be absent when lens=${lens}`).toBeNull();
+      }
+    }
   });
 });

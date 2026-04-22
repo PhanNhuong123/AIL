@@ -2,23 +2,12 @@ import { describe, it, expect } from 'vitest';
 import {
   computeModuleMetrics,
   computeFunctionMetrics,
-  pickActiveLens,
+  computeSystemHeadSummary,
+  computeModuleHeadSummary,
 } from './lens';
 import { multiClusterFixture, detailedModuleFixture } from './fixtures';
 import { walletFixture } from '$lib/chrome/fixtures';
-import type { Overlays } from '$lib/stores';
-import type { ModuleJson } from '$lib/types';
-
-function ov(partial: Partial<Overlays>): Overlays {
-  return {
-    rules: false,
-    verification: false,
-    dataflow: false,
-    dependencies: false,
-    tests: false,
-    ...partial,
-  };
-}
+import type { Lens, ModuleJson } from '$lib/types';
 
 function moduleById(g: ReturnType<typeof multiClusterFixture>, id: string): ModuleJson {
   const m = g.modules.find((x) => x.id === id);
@@ -27,13 +16,38 @@ function moduleById(g: ReturnType<typeof multiClusterFixture>, id: string): Modu
 }
 
 describe('lens.ts', () => {
-  it('test_rules_overlay_returns_rules_pills_and_seg_bar', () => {
+  // --- structure lens ---
+
+  it('test_compute_module_metrics_structure_lens', () => {
+    // 2 functions: fn_transfer (2 steps) + fn_balance (1 step) = 3 total steps
     const g = multiClusterFixture();
-    const m = moduleById(g, 'module:m_billing'); // detail has 2 rules, both proven, verification ok
-    const metrics = computeModuleMetrics(m, g, ov({ rules: true }));
+    const m = moduleById(g, 'module:m_wallet');
+    const metrics = computeModuleMetrics(m, g, 'structure');
+    expect(metrics.pills.length).toBe(2);
+    expect(metrics.pills[0].label).toBe('2 fn');
+    expect(metrics.pills[1].label).toBe('3 steps');
+    expect(metrics.bar.kind).toBe('none');
+    expect(metrics.showDescription).toBe(true);
+  });
+
+  it('test_compute_function_metrics_structure_lens', () => {
+    const g = multiClusterFixture();
+    const m = moduleById(g, 'module:m_wallet');
+    const fn = m.functions.find((f) => f.id === 'function:fn_transfer')!;
+    // fn_transfer has 2 steps: s_debit, s_credit
+    const metrics = computeFunctionMetrics(fn, m, g, 'structure');
+    expect(metrics.pills[0].label).toBe('2 steps');
+    expect(metrics.bar.kind).toBe('none');
+  });
+
+  // --- rules lens ---
+
+  it('test_compute_module_metrics_rules_lens', () => {
+    const g = multiClusterFixture();
+    const m = moduleById(g, 'module:m_billing');
+    const metrics = computeModuleMetrics(m, g, 'rules');
     const labels = metrics.pills.map((p) => p.label);
     expect(labels[0]).toBe('2 rules');
-    // All 2 proven, none unproven, none broken → no warn/fail pills emitted.
     expect(labels).not.toContain('0 unproven');
     expect(metrics.bar.kind).toBe('seg');
     if (metrics.bar.kind === 'seg') {
@@ -43,10 +57,12 @@ describe('lens.ts', () => {
     }
   });
 
-  it('test_verification_overlay_returns_verify_pills_and_dots_bar', () => {
+  // --- verify lens ---
+
+  it('test_compute_module_metrics_verify_lens', () => {
     const g = multiClusterFixture();
-    const m = moduleById(g, 'module:m_wallet'); // warn status, 2 functions
-    const metrics = computeModuleMetrics(m, g, ov({ verification: true }));
+    const m = moduleById(g, 'module:m_wallet');
+    const metrics = computeModuleMetrics(m, g, 'verify');
     const head = metrics.pills[0];
     expect(head.tone).toBe('warn');
     expect(head.label).toBe('⚠ issues');
@@ -57,15 +73,13 @@ describe('lens.ts', () => {
     }
   });
 
-  it('test_dataflow_overlay_returns_types_and_signals_pills_and_types_bar', () => {
+  // --- data lens ---
+
+  it('test_compute_module_metrics_data_lens', () => {
     const g = detailedModuleFixture();
     const m = moduleById(g, 'module:m_wallet');
-    const metrics = computeModuleMetrics(m, g, ov({ dataflow: true }));
+    const metrics = computeModuleMetrics(m, g, 'data');
     const labels = metrics.pills.map((p) => p.label);
-    // Wallet detail: receives 1, returns 1 → 2 signals, 2 distinct type names.
-    // Transfer detail nested under the module: 2 receives + 1 return = 3 more signals,
-    // two of which reuse `Account` (already seen). So totals: 5 signals, names:
-    // ["Account","WalletState","TxReceipt"] (3 distinct).
     expect(labels[0]).toBe('3 types');
     expect(labels[1]).toBe('5 signals');
     expect(metrics.bar.kind).toBe('types');
@@ -74,56 +88,91 @@ describe('lens.ts', () => {
     }
   });
 
-  it('test_dependencies_overlay_returns_uses_pill_and_no_bar', () => {
-    const g = multiClusterFixture();
-    const m = moduleById(g, 'module:m_wallet');
-    const metrics = computeModuleMetrics(m, g, ov({ dependencies: true }));
-    const labels = metrics.pills.map((p) => p.label);
-    // m_wallet participates in: m_wallet→m_billing (uses), m_rewards→m_wallet (uses) = 2 uses
-    expect(labels).toContain('2 uses');
-    expect(metrics.bar.kind).toBe('none');
-  });
+  // --- tests lens ---
 
-  it('test_tests_overlay_returns_placeholder_pills', () => {
+  it('test_compute_module_metrics_tests_lens', () => {
     const g = multiClusterFixture();
     const m = moduleById(g, 'module:m_wallet');
-    const metrics = computeModuleMetrics(m, g, ov({ tests: true }));
+    const metrics = computeModuleMetrics(m, g, 'tests');
     expect(metrics.pills[0].label).toBe('0 tests');
     expect(metrics.pills[0].tone).toBe('muted');
-    // Bar stays 'none' so the tests lens does not mirror verification-lens dots.
     expect(metrics.bar.kind).toBe('none');
   });
 
+  // --- all lenses for functions ---
+
+  it('test_compute_function_metrics_all_lenses', () => {
+    const lenses: Lens[] = ['structure', 'rules', 'verify', 'data', 'tests'];
+    const g = multiClusterFixture();
+    const m = moduleById(g, 'module:m_wallet');
+    const fn = m.functions[0];
+    for (const lens of lenses) {
+      const metrics = computeFunctionMetrics(fn, m, g, lens);
+      expect(metrics.pills.length).toBeGreaterThan(0);
+      expect(metrics.bar.kind).toBeDefined();
+    }
+  });
+
+  // --- empty detail fallback ---
+
   it('test_empty_detail_falls_back_to_zero_pills', () => {
-    // walletFixture.detail is empty — exercises rules/dataflow fallback to zeros.
     const g = walletFixture();
     const m = g.modules.find((x) => x.id === 'module:m_wallet')!;
 
-    const rulesMetrics = computeModuleMetrics(m, g, ov({ rules: true }));
+    const rulesMetrics = computeModuleMetrics(m, g, 'rules');
     expect(rulesMetrics.pills[0].label).toBe('0 rules');
     expect(rulesMetrics.bar.kind).toBe('none');
 
-    const dfMetrics = computeModuleMetrics(m, g, ov({ dataflow: true }));
+    const dfMetrics = computeModuleMetrics(m, g, 'data');
     expect(dfMetrics.pills.map((p) => p.label)).toEqual(['0 types', '0 signals']);
     expect(dfMetrics.bar.kind).toBe('types');
     if (dfMetrics.bar.kind === 'types') {
       expect(dfMetrics.bar.names).toEqual([]);
     }
 
-    // Function-level fallback
     const fn = m.functions[0];
-    const fnMetrics = computeFunctionMetrics(fn, m, g, ov({ rules: true }));
+    const fnMetrics = computeFunctionMetrics(fn, m, g, 'rules');
     expect(fnMetrics.pills[0].label).toBe('0 rules');
   });
 
-  it('test_overlay_priority_rules_beats_verification', () => {
-    expect(pickActiveLens(ov({ rules: true, verification: true }))).toBe('rules');
-    expect(pickActiveLens(ov({ verification: true }))).toBe('verification');
-    expect(pickActiveLens(ov({ dataflow: true, verification: true }))).toBe('verification');
-    expect(pickActiveLens(ov({ dataflow: true }))).toBe('dataflow');
-    expect(pickActiveLens(ov({ tests: true }))).toBe('tests');
-    expect(pickActiveLens(ov({ dependencies: true }))).toBe('dependencies');
-    // No overlays active → default verification
-    expect(pickActiveLens(ov({}))).toBe('verification');
+  // --- computeSystemHeadSummary ---
+
+  it('test_compute_system_head_summary_varies_by_lens', () => {
+    const lenses: Lens[] = ['structure', 'rules', 'verify', 'data', 'tests'];
+    const g = multiClusterFixture();
+    for (const lens of lenses) {
+      const s = computeSystemHeadSummary(g, lens);
+      expect(s.testid).toBe(`system-head-action-${lens}`);
+      expect(s.chips.length).toBeGreaterThan(0);
+    }
+    // structure specifically has externals and relations labels
+    const structS = computeSystemHeadSummary(g, 'structure');
+    expect(structS.chips.some((c) => /externals/.test(c.label))).toBe(true);
+    expect(structS.chips.some((c) => /relations/.test(c.label))).toBe(true);
+  });
+
+  // --- computeModuleHeadSummary structure includes relations ---
+
+  it('test_compute_module_head_summary_structure_includes_relations', () => {
+    const g = multiClusterFixture();
+    // m_wallet has cross-boundary edges: m_wallet→m_billing (cross), m_rewards→m_wallet (cross)
+    // m_billing→ext_stripe is cross-boundary for m_billing, not m_wallet
+    const m = moduleById(g, 'module:m_wallet');
+    const s = computeModuleHeadSummary(m, g, 'structure');
+    expect(s.chips.some((c) => /\d+ relations/.test(c.label))).toBe(true);
+    // m_wallet is in 2 cross-boundary relations
+    const relChip = s.chips.find((c) => /relations/.test(c.label))!;
+    expect(relChip.label).toBe('2 relations');
+  });
+
+  // --- computeModuleHeadSummary verify scope ---
+
+  it('test_compute_module_head_summary_verify_scope', () => {
+    const g = multiClusterFixture();
+    const m = moduleById(g, 'module:m_wallet'); // status 'warn'
+    const s = computeModuleHeadSummary(m, g, 'verify');
+    const labels = s.chips.map((c) => c.label);
+    const hasIssuesOrFailing = labels.some((l) => /issues|failing/.test(l));
+    expect(hasIssuesOrFailing).toBe(true);
   });
 });

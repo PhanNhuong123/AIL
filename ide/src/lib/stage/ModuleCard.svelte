@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { graph, overlays } from '$lib/stores';
+  import { graph, activeLens } from '$lib/stores';
   import { navigateTo } from '$lib/chrome/toolbar-state';
   import type { ModuleJson } from '$lib/types';
   import { computeModuleMetrics } from './lens';
@@ -10,7 +10,7 @@
 
   const MAX_FN_PREVIEW = 4;
 
-  $: metrics = $graph ? computeModuleMetrics(module, $graph, $overlays) : null;
+  $: metrics = $graph ? computeModuleMetrics(module, $graph, $activeLens) : null;
   $: functionsPreview = module.functions.slice(0, MAX_FN_PREVIEW);
   $: moreCount = Math.max(0, module.functions.length - MAX_FN_PREVIEW);
   $: letter = (module.name || '?').slice(0, 1).toUpperCase();

@@ -1,8 +1,10 @@
 <script lang="ts">
+  import { activeLens } from '$lib/stores';
   import { systemMode } from './stage-state';
   import SystemClusters from './SystemClusters.svelte';
   import SystemGrid from './SystemGrid.svelte';
   import SystemGraphPlaceholder from './SystemGraphPlaceholder.svelte';
+  import { computeSystemHeadSummary } from './lens';
   import type { GraphJson } from '$lib/types';
   import type { SystemMode } from './stage-state';
 
@@ -13,6 +15,8 @@
   function setMode(m) {
     systemMode.set(m as SystemMode);
   }
+
+  $: headSummary = graph ? computeSystemHeadSummary(graph, $activeLens) : null;
 </script>
 
 <section class="system-view" data-testid="system-view">
@@ -27,6 +31,13 @@
         on:click={() => setMode(m)}
       >{m}</button>
     {/each}
+    {#if headSummary}
+      <div class="head-actions" data-testid={headSummary.testid}>
+        {#each headSummary.chips as chip}
+          <span class="head-chip" data-tone={chip.tone}>{chip.label}</span>
+        {/each}
+      </div>
+    {/if}
   </header>
 
   {#if $systemMode === 'Clusters'}
@@ -37,3 +48,8 @@
     <SystemGraphPlaceholder />
   {/if}
 </section>
+
+<style>
+  .head-actions { display: flex; gap: 8px; margin-left: auto; align-items: center; }
+  .head-chip { font-size: 12px; color: var(--ink-3); background: var(--bg-2); border: 1px solid var(--border); border-radius: 999px; padding: 2px 8px; }
+</style>

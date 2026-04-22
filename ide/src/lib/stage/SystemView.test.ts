@@ -5,7 +5,7 @@ import { get } from 'svelte/store';
 import {
   graph,
   selection,
-  overlays,
+  activeLens,
   path,
   history,
   paletteVisible,
@@ -18,11 +18,12 @@ import {
 } from './stage-state';
 import { multiClusterFixture, bigSystemFixture } from './fixtures';
 import SystemView from './SystemView.svelte';
+import type { Lens } from '$lib/types';
 
 beforeEach(() => {
   graph.set(null);
   selection.set({ kind: 'none', id: null });
-  overlays.set({ rules: false, verification: true, dataflow: false, dependencies: false, tests: false });
+  activeLens.set('verify');
   path.set([]);
   history.set({ back: [], forward: [] });
   paletteVisible.set(false);
@@ -102,34 +103,61 @@ describe('SystemView.svelte', () => {
     expect(container.querySelector('[data-testid="system-grid-externals"]')).not.toBeNull();
   });
 
-  it('test_overlay_switch_updates_metrics', async () => {
+  it('test_system_view_head_action_reflects_active_lens', async () => {
+    const lenses: Lens[] = ['structure', 'rules', 'verify', 'data', 'tests'];
     const g = multiClusterFixture();
     graph.set(g);
 
     const { container } = render(SystemView, { props: { graph: g } });
     await tick();
 
-    // Default verification overlay — m_billing shows ✓ verified pill.
-    let verifyPill = container.querySelector(
-      '[data-testid="module-card-module:m_billing"] [data-testid="pill-verify-verified"]',
-    );
-    expect(verifyPill).not.toBeNull();
+    for (const lens of lenses) {
+      activeLens.set(lens);
+      await tick();
 
-    // Switch to rules overlay
-    overlays.update((o) => ({ ...o, rules: true }));
+      // Current lens chip is present
+      const current = container.querySelector(`[data-testid="system-head-action-${lens}"]`);
+      expect(current, `head action for ${lens} should be present`).not.toBeNull();
+
+      // All other lens chips are absent
+      for (const other of lenses) {
+        if (other === lens) continue;
+        const otherEl = container.querySelector(`[data-testid="system-head-action-${other}"]`);
+        expect(otherEl, `head action for ${other} should be absent when lens=${lens}`).toBeNull();
+      }
+    }
+  });
+
+  it('test_system_view_externals_present_when_nonempty', async () => {
+    const g = multiClusterFixture(); // has 1 external: ext_stripe
+    graph.set(g);
+
+    const { container } = render(SystemView, { props: { graph: g } });
     await tick();
 
-    const rulesPill = container.querySelector(
-      '[data-testid="module-card-module:m_billing"] [data-testid="pill-rules-count"]',
-    );
-    expect(rulesPill).not.toBeNull();
-    expect(rulesPill?.textContent).toBe('2 rules');
+    // Switch to grid mode to see externals
+    const gridBtn = container.querySelector('[data-testid="system-mode-btn-grid"]') as HTMLButtonElement;
+    fireEvent.click(gridBtn);
+    await tick();
 
-    // Verification pill gone once rules takes priority.
-    verifyPill = container.querySelector(
-      '[data-testid="module-card-module:m_billing"] [data-testid="pill-verify-verified"]',
-    );
-    expect(verifyPill).toBeNull();
+    expect(container.querySelector('[data-testid="system-grid-externals"]')).not.toBeNull();
+    expect(container.querySelector('[data-testid="system-grid-external-external:ext_stripe"]')).not.toBeNull();
+  });
+
+  it('test_system_view_externals_absent_when_empty', async () => {
+    const g = multiClusterFixture();
+    g.externals = [];
+    graph.set(g);
+
+    const { container } = render(SystemView, { props: { graph: g } });
+    await tick();
+
+    // Switch to grid mode
+    const gridBtn = container.querySelector('[data-testid="system-mode-btn-grid"]') as HTMLButtonElement;
+    fireEvent.click(gridBtn);
+    await tick();
+
+    expect(container.querySelector('[data-testid="system-grid-externals"]')).toBeNull();
   });
 
   it('test_cluster_header_counts_correct', async () => {

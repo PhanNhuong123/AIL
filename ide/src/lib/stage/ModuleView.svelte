@@ -1,6 +1,8 @@
 <script lang="ts">
+  import { graph, activeLens } from '$lib/stores';
   import FunctionRow from './FunctionRow.svelte';
   import { moduleMode } from './stage-state';
+  import { computeModuleHeadSummary } from './lens';
   import type { ModuleJson } from '$lib/types';
   import type { ModuleMode } from './stage-state';
 
@@ -16,6 +18,8 @@
     module.status === 'fail' ? 'dot-fail'
     : module.status === 'warn' ? 'dot-warn'
     : 'dot-ok';
+
+  $: headSummary = $graph ? computeModuleHeadSummary(module, $graph, $activeLens) : null;
 </script>
 
 <section class="module-view" data-testid="module-view">
@@ -44,6 +48,13 @@
         >{m}</button>
       {/each}
     </span>
+    {#if headSummary}
+      <div class="head-actions" data-testid={headSummary.testid}>
+        {#each headSummary.chips as chip}
+          <span class="head-chip" data-tone={chip.tone}>{chip.label}</span>
+        {/each}
+      </div>
+    {/if}
   </header>
 
   {#if $moduleMode === 'List'}
@@ -58,3 +69,8 @@
     <div class="stage-placeholder">Function call graph — coming soon.</div>
   {/if}
 </section>
+
+<style>
+  .head-actions { display: flex; gap: 8px; margin-left: auto; align-items: center; }
+  .head-chip { font-size: 12px; color: var(--ink-3); background: var(--bg-2); border: 1px solid var(--border); border-radius: 999px; padding: 2px 8px; }
+</style>

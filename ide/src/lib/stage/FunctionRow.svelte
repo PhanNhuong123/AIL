@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { graph, overlays } from '$lib/stores';
+  import { graph, activeLens } from '$lib/stores';
   import { navigateTo } from '$lib/chrome/toolbar-state';
   import type { ModuleJson, FunctionJson } from '$lib/types';
   import { computeFunctionMetrics } from './lens';
@@ -8,7 +8,7 @@
   export let fn = null as unknown as FunctionJson;
   export let module = null as unknown as ModuleJson;
 
-  $: metrics = $graph ? computeFunctionMetrics(fn, module, $graph, $overlays) : null;
+  $: metrics = $graph ? computeFunctionMetrics(fn, module, $graph, $activeLens) : null;
   $: dotClass =
     fn.status === 'fail' ? 'dot-fail'
     : fn.status === 'warn' ? 'dot-warn'
