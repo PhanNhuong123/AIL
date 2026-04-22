@@ -43,6 +43,7 @@ fn make_minimal_graph(module_statuses: Vec<Status>) -> GraphJson {
         relations: Vec::new(),
         types: Vec::new(),
         errors: Vec::new(),
+        issues: Vec::new(),
         detail: BTreeMap::new(),
     }
 }

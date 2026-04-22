@@ -145,6 +145,7 @@ export function multiClusterFixture(): GraphJson {
     ],
     types: [{ id: 'type:t_money', name: 'Money', status: 'ok' }],
     errors: [{ id: 'error:e_decline', name: 'CardDeclined', status: 'fail' }],
+    issues: [],
     detail: {
       'module:m_billing': billingDetail,
       'function:fn_transfer': transferDetail,
@@ -257,6 +258,7 @@ export function bigSystemFixture(n = 200): GraphJson {
     relations: [],
     types: [],
     errors: [],
+    issues: [],
     detail: {},
   };
 }
@@ -331,6 +333,7 @@ export function flowFixture(): { flowchart: FlowchartJson; graph: GraphJson } {
     relations: [],
     types: [],
     errors: [],
+    issues: [],
     detail: {},
   };
 

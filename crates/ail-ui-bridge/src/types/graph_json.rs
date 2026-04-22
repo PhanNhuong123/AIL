@@ -5,6 +5,13 @@ use serde::{Deserialize, Serialize};
 use super::node_detail::NodeDetail;
 use super::status::Status;
 
+/// Alias for `VerifyFailureJson` in its role as a project-level issue.
+///
+/// Used in `GraphJson.issues` to drive the TitleBar "⚠ N issues" pill and the
+/// verify-lens banner. The `severity` and `source` fields on `VerifyFailureJson`
+/// carry issue-level metadata.
+pub type IssueJson = crate::types::verify_result::VerifyFailureJson;
+
 /// Top-level JSON shape for a serialized `VerifiedGraph`.
 ///
 /// Matches the `GraphJson` interface in `AIL-Tauri-IDE-v4.0.md`.
@@ -19,6 +26,9 @@ pub struct GraphJson {
     pub relations: Vec<RelationJson>,
     pub types: Vec<TypeRefJson>,
     pub errors: Vec<ErrorRefJson>,
+    /// Project-level issues (verification failures, rule violations, etc.)
+    /// that feed the TitleBar pill and verify-lens banner.
+    pub issues: Vec<IssueJson>,
     pub detail: BTreeMap<String, NodeDetail>,
 }
 

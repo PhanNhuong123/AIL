@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use ail_graph::{GraphBackend, NodeId, Pattern};
+use ail_graph::{GraphBackend, NodeId};
 
 /// Stable path-like string IDs for graph nodes.
 ///
@@ -144,15 +144,4 @@ fn uuid_suffix(id: NodeId) -> String {
     } else {
         s
     }
-}
-
-/// Classify a node as "external" based on its pattern.
-///
-/// MVP: no nodes are external in the default cluster setup.
-///
-/// TODO(16.x): implement pattern-based external classification
-/// (e.g. nodes imported from other modules or marked with a special tag).
-#[allow(dead_code)]
-pub(crate) fn is_external(_pattern: &Pattern) -> bool {
-    false
 }

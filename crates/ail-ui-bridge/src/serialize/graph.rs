@@ -6,14 +6,13 @@ use ail_graph::{compute_context_packet_for_backend, GraphBackend, NodeId, Patter
 use crate::ids::IdMap;
 use crate::rollup::{rollup, rollup_from_contracts};
 use crate::types::graph_json::{
-    ClusterJson, ErrorRefJson, ExternalJson, FunctionJson, GraphJson, ModuleJson, ProjectJson,
-    RelationJson, StepJson, TypeRefJson,
+    ClusterJson, ErrorRefJson, FunctionJson, GraphJson, ModuleJson, ProjectJson, RelationJson,
+    StepJson, TypeRefJson,
 };
 use crate::types::node_detail::{
     InheritedRule, NodeDetail, ReceivesEntry, ReturnsEntry, RuleEntry, RuleSource,
     VerificationDetail,
 };
-use crate::types::patch::{GraphPatchJson, PatchItem};
 use crate::types::status::Status;
 
 const DEFAULT_CLUSTER_ID: &str = "default";
@@ -76,14 +75,18 @@ pub fn serialize_graph(graph: &VerifiedGraph, project_name: &str) -> GraphJson {
         status: project_status,
     };
 
+    let externals = crate::serialize::externals::classify_externals(backend, &id_map);
+    let issues = crate::serialize::issues::collect_issues(&detail);
+
     GraphJson {
         project,
         clusters: vec![cluster],
         modules,
-        externals: Vec::<ExternalJson>::new(),
+        externals,
         relations,
         types: all_types,
         errors: all_errors,
+        issues,
         detail,
     }
 }
@@ -106,8 +109,7 @@ fn collect_module(
 ) {
     let Some(container_node) = backend.get_node(container_id).ok().flatten() else {
         // Container node itself not found — graph corruption; skip.
-        // TODO(16.x): propagate BridgeError::NodeNotFound once
-        // collect_module returns Result.
+        // TODO: propagate BridgeError::NodeNotFound once collect_module returns Result (follow-up ticket).
         #[cfg(debug_assertions)]
         eprintln!("[ail-ui-bridge] WARNING: container node {container_id} not found; skipping");
         return;
@@ -153,8 +155,7 @@ fn collect_module(
             let Some(child_node) = backend.get_node(*child_id).ok().flatten() else {
                 // Child listed by parent but not retrievable — graph corruption.
                 // The pipeline would normally reject this before we get here.
-                // TODO(16.x): propagate BridgeError::NodeNotFound once
-                // collect_module returns Result.
+                // TODO: propagate BridgeError::NodeNotFound once collect_module returns Result (follow-up ticket).
                 #[cfg(debug_assertions)]
                 eprintln!("[ail-ui-bridge] WARNING: child node {child_id} not found; skipping");
                 continue;
@@ -272,9 +273,7 @@ fn collect_module(
 /// - Steps with no contracts: `Ok`.
 /// - Steps with contracts in a verified graph: `Ok` (contracts satisfied).
 ///
-/// TODO(16.x): Thread per-node Z3 counterexample results through
-/// `VerifiedGraph` so individual steps can show `Fail` / `Warn` without
-/// aborting the whole pipeline. Tracked in the Phase 16 roadmap.
+/// TODO: surface Z3 counterexamples per-node (Phase 16 agent/verifier integration).
 fn collect_steps(
     backend: &dyn GraphBackend,
     fn_id: NodeId,
@@ -289,8 +288,7 @@ fn collect_steps(
         let Some(child_node) = backend.get_node(child_id).ok().flatten() else {
             // Child listed by parent but not retrievable — graph corruption.
             // The pipeline would normally reject this before we get here.
-            // TODO(16.x): propagate BridgeError::NodeNotFound once
-            // collect_steps returns Result.
+            // TODO: propagate BridgeError::NodeNotFound once collect_steps returns Result (follow-up ticket).
             #[cfg(debug_assertions)]
             eprintln!("[ail-ui-bridge] WARNING: step node {child_id} not found; skipping");
             continue;
@@ -311,8 +309,7 @@ fn collect_steps(
         // All nodes in a VerifiedGraph have passed contract checks (see
         // doc-comment above). Use rollup_from_contracts(false) to make the
         // derivation explicit rather than hardcoding Status::Ok.
-        // TODO(16.x): replace `false` with real per-node failure data once
-        // VerifiedGraph exposes Z3 counterexamples at node granularity.
+        // TODO: surface Z3 counterexamples per-node (Phase 16 agent/verifier integration).
         let step_status = rollup_from_contracts(false);
         step_statuses.push(step_status);
 
@@ -333,7 +330,11 @@ fn collect_steps(
 }
 
 /// Build a `NodeDetail` for any node using the CIC context packet.
-fn build_node_detail(backend: &dyn GraphBackend, id: NodeId, status: Status) -> NodeDetail {
+pub(crate) fn build_node_detail(
+    backend: &dyn GraphBackend,
+    id: NodeId,
+    status: Status,
+) -> NodeDetail {
     let Some(node) = backend.get_node(id).ok().flatten() else {
         return NodeDetail {
             name: String::new(),
@@ -465,78 +466,5 @@ fn collect_relations(
             label: String::new(),
             style,
         });
-    }
-}
-
-/// Compute an incremental diff between two `GraphJson` values.
-///
-/// A function present only in `next` is added; only in `prev` is removed;
-/// in both with a changed status is modified. Module-level adds/removes use
-/// `PatchItem::Module`. No `Full` variant exists (constraint 16.1-C).
-pub fn diff_graph(prev: &GraphJson, next: &GraphJson) -> GraphPatchJson {
-    use std::time::{SystemTime, UNIX_EPOCH};
-
-    let mut added: Vec<PatchItem> = Vec::new();
-    let mut modified: Vec<PatchItem> = Vec::new();
-    let mut removed: Vec<String> = Vec::new();
-
-    // Build function lookup maps keyed by function id.
-    let prev_fns: BTreeMap<String, &FunctionJson> = prev
-        .modules
-        .iter()
-        .flat_map(|m| m.functions.iter().map(|f| (f.id.clone(), f)))
-        .collect();
-    let next_fns: BTreeMap<String, &FunctionJson> = next
-        .modules
-        .iter()
-        .flat_map(|m| m.functions.iter().map(|f| (f.id.clone(), f)))
-        .collect();
-
-    // Build module lookup maps.
-    let prev_mods: BTreeMap<String, &ModuleJson> =
-        prev.modules.iter().map(|m| (m.id.clone(), m)).collect();
-    let next_mods: BTreeMap<String, &ModuleJson> =
-        next.modules.iter().map(|m| (m.id.clone(), m)).collect();
-
-    // Module-level additions.
-    for (mid, m) in &next_mods {
-        if !prev_mods.contains_key(mid) {
-            added.push(PatchItem::Module((*m).clone()));
-        }
-    }
-    // Module-level removals.
-    for mid in prev_mods.keys() {
-        if !next_mods.contains_key(mid) {
-            removed.push(mid.clone());
-        }
-    }
-
-    // Function-level changes.
-    for (fid, next_fn) in &next_fns {
-        match prev_fns.get(fid) {
-            None => added.push(PatchItem::Function((*next_fn).clone())),
-            Some(prev_fn) => {
-                if prev_fn.status != next_fn.status {
-                    modified.push(PatchItem::Function((*next_fn).clone()));
-                }
-            }
-        }
-    }
-    for fid in prev_fns.keys() {
-        if !next_fns.contains_key(fid) {
-            removed.push(fid.clone());
-        }
-    }
-
-    let timestamp = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_secs())
-        .unwrap_or(0);
-
-    GraphPatchJson {
-        added,
-        modified,
-        removed,
-        timestamp,
     }
 }

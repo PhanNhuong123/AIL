@@ -2,7 +2,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import type {
   GraphJson, NodeDetail, FlowchartJson,
-  VerifyResultJson, GraphPatchJson,
+  VerifyResultJson, GraphPatchJson, Lens, LensStats,
 } from './types';
 
 // Commands
@@ -20,6 +20,9 @@ export const verifyProject  = () =>
 
 export const saveFlowchart  = (functionId: string, chart: FlowchartJson) =>
   invoke<void>('save_flowchart', { functionId, chart });
+
+export const computeLensMetrics = (lens: Lens, scopeId: string | null) =>
+  invoke<LensStats>('compute_lens_metrics', { lens, scopeId });
 
 // Events (constants mirror crates/ail-ui-bridge/src/events.rs)
 export const EVENTS = {

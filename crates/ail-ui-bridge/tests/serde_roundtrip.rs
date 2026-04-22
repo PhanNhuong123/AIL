@@ -30,4 +30,12 @@ fn test_serialize_roundtrip() {
         serde_json::from_str(&json_str).expect("deserialize from string must succeed");
 
     assert_eq!(original, restored, "roundtrip must preserve equality");
+    assert_eq!(
+        restored.issues, original.issues,
+        "roundtrip must preserve issues equality"
+    );
+    assert_eq!(
+        restored.externals, original.externals,
+        "roundtrip must preserve externals equality"
+    );
 }

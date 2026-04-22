@@ -16,12 +16,14 @@
 //! - [`pipeline::load_verified_from_path`] — run the 4-stage pipeline.
 //! - [`serialize::serialize_graph`] — serialize a `VerifiedGraph` to [`types::GraphJson`].
 //! - [`serialize::diff_graph`] — compute an incremental diff between two graphs.
+//! - [`lens::compute_lens_metrics`] — compute per-lens metrics for a scope.
 //! - [`flowchart::build_flowchart`] — build a `FlowchartJson` for a function.
 
 pub mod errors;
 pub mod events;
 pub mod flowchart;
 pub mod ids;
+pub mod lens;
 pub mod pipeline;
 pub mod rollup;
 pub mod serialize;
@@ -31,22 +33,27 @@ pub mod types;
 pub mod commands;
 
 #[cfg(feature = "tauri-commands")]
-pub use commands::{get_handler, new_bridge_state, BridgeState, BridgeStateInner};
+pub use commands::{
+    compute_lens_metrics as compute_lens_metrics_tauri, get_handler, new_bridge_state, BridgeState,
+    BridgeStateInner,
+};
 
 pub use errors::BridgeError;
+pub use lens::compute_lens_metrics;
 pub use pipeline::load_verified_from_path;
 pub use serialize::{diff_graph, serialize_graph};
 pub use types::{
     flowchart::{FlowEdgeJson, FlowNodeJson, FlowNodeKind, FlowchartJson},
     graph_json::{
-        ClusterJson, ErrorRefJson, ExternalJson, FunctionJson, GraphJson, ModuleJson, ProjectJson,
-        RelationJson, StepJson, TypeRefJson,
+        ClusterJson, ErrorRefJson, ExternalJson, FunctionJson, GraphJson, IssueJson, ModuleJson,
+        ProjectJson, RelationJson, StepJson, TypeRefJson,
     },
+    lens_stats::{Lens, LensStats},
     node_detail::{
         CodeBlob, CounterexampleDetail, InheritedRule, NodeDetail, ReceivesEntry, ReturnsEntry,
         RuleEntry, RuleSource, VerificationDetail,
     },
-    patch::{GraphPatchJson, PatchItem},
+    patch::{FunctionPatchEntry, FunctionRemoval, GraphPatchJson, StepPatchEntry, StepRemoval},
     status::Status,
     verify_result::{VerifyFailureJson, VerifyResultJson},
 };

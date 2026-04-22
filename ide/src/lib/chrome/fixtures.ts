@@ -81,6 +81,7 @@ export function walletFixture(): GraphJson {
     errors: [
       { id: 'error:e_insufficient', name: 'InsufficientFunds', status: 'ok' },
     ],
+    issues: [],
     detail: {},
   };
 }

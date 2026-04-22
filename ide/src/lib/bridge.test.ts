@@ -10,6 +10,7 @@ import {
   getFlowchart,
   verifyProject,
   saveFlowchart,
+  computeLensMetrics,
 } from './bridge';
 import type { FlowchartJson } from './types';
 
@@ -43,5 +44,15 @@ describe('bridge.ts invoke wrappers', () => {
     const chart: FlowchartJson = { nodes: [], edges: [] };
     await saveFlowchart('fn-9', chart);
     expect(invoke).toHaveBeenCalledWith('save_flowchart', { functionId: 'fn-9', chart });
+  });
+
+  it('computeLensMetrics forwards lens and scopeId', async () => {
+    await computeLensMetrics('verify', 'mod1');
+    expect(invoke).toHaveBeenCalledWith('compute_lens_metrics', { lens: 'verify', scopeId: 'mod1' });
+  });
+
+  it('computeLensMetrics accepts null scope', async () => {
+    await computeLensMetrics('structure', null);
+    expect(invoke).toHaveBeenCalledWith('compute_lens_metrics', { lens: 'structure', scopeId: null });
   });
 });

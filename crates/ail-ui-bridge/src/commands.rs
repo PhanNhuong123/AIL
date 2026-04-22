@@ -16,6 +16,7 @@ use crate::pipeline::{load_verified_from_path, read_project_name};
 use crate::serialize::serialize_graph;
 use crate::types::flowchart::FlowchartJson;
 use crate::types::graph_json::GraphJson;
+use crate::types::lens_stats::{Lens, LensStats};
 use crate::types::node_detail::NodeDetail;
 use crate::types::verify_result::VerifyResultJson;
 
@@ -103,7 +104,7 @@ pub fn get_node_detail(
         .detail
         .get(&node_id)
         .cloned()
-        .ok_or_else(|| BridgeError::NodeNotFound { id: node_id })
+        .ok_or(BridgeError::NodeNotFound { id: node_id })
 }
 
 /// Build and return the flowchart for a function identified by `function_id`.
@@ -153,8 +154,35 @@ pub fn verify_project(state: State<'_, BridgeState>) -> Result<VerifyResultJson,
     })
 }
 
+/// Compute per-lens metrics for an optional scope within the loaded project.
+///
+/// `lens` selects the metric projection. `scope_id` restricts computation to a
+/// single module, function, or step node (by path id). Pass `None` for
+/// project-wide metrics.
+#[tauri::command]
+pub fn compute_lens_metrics(
+    lens: Lens,
+    scope_id: Option<String>,
+    state: State<'_, BridgeState>,
+) -> Result<LensStats, BridgeError> {
+    let inner = state.lock().map_err(|_| BridgeError::InvalidInput {
+        reason: "state lock poisoned".to_string(),
+    })?;
+    let graph = inner
+        .graph_json
+        .as_ref()
+        .ok_or_else(|| BridgeError::InvalidInput {
+            reason: "no project loaded".to_string(),
+        })?;
+    Ok(crate::lens::compute_lens_metrics(
+        graph,
+        lens,
+        scope_id.as_deref(),
+    ))
+}
+
 /// Validate that `function_id` resolves to a function node. Persistence is
-/// deferred to a later task (16.9).
+/// deferred to a later phase (see canonical v4 roadmap).
 #[tauri::command]
 pub fn save_flowchart(
     function_id: String,
@@ -178,7 +206,7 @@ pub fn save_flowchart(
         return Err(BridgeError::NodeNotFound { id: function_id });
     }
 
-    // Persistence is deferred to task 16.9.
+    // Persistence is deferred to a later phase (see canonical v4 roadmap).
     Ok(())
 }
 
@@ -199,5 +227,6 @@ pub fn get_handler<R: tauri::Runtime>(
         get_flowchart,
         verify_project,
         save_flowchart,
+        compute_lens_metrics,
     ]
 }

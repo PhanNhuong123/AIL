@@ -13,6 +13,7 @@ export interface GraphJson {
   relations: RelationJson[];
   types: TypeRefJson[];
   errors: ErrorRefJson[];
+  issues: IssueJson[];
   detail: Record<string, NodeDetail>; // BTreeMap<String, NodeDetail>
 }
 
@@ -148,23 +149,40 @@ export interface VerifyFailureJson {
   nodeId: string;
   message: string;
   stage?: string;
+  severity?: 'fail' | 'warn';
+  source?: 'verify' | 'rule' | 'type' | 'parse';
 }
 
-// --- Patch (camelCase; internally tagged "kind") ---
-// Rust: #[serde(tag = "kind")] enum PatchItem { Module(ModuleJson), Function(FunctionJson) }
-// Variant names serialize as "Module" / "Function" (no rename_all on enum).
-export type PatchItem =
-  | ({ kind: 'Module' } & ModuleJson)
-  | ({ kind: 'Function' } & FunctionJson);
+export type IssueJson = VerifyFailureJson;
+
+// --- Patch (camelCase; fine-grained 9-array shape) ---
+export interface FunctionPatchEntry { moduleId: string; function: FunctionJson; }
+export interface FunctionRemoval    { moduleId: string; functionId: string; }
+export interface StepPatchEntry     { functionId: string; step: StepJson; }
+export interface StepRemoval        { functionId: string; stepId: string; }
 
 export interface GraphPatchJson {
-  added: PatchItem[];
-  modified: PatchItem[];
-  removed: string[];
-  // Rust u64. JS number is safe for values ≤ 2^53−1 — fine for epoch-second or
-  // epoch-millisecond timestamps, would lose precision for u64 nanoseconds.
+  modulesAdded: ModuleJson[];
+  modulesModified: ModuleJson[];
+  modulesRemoved: string[];
+  functionsAdded: FunctionPatchEntry[];
+  functionsModified: FunctionPatchEntry[];
+  functionsRemoved: FunctionRemoval[];
+  stepsAdded: StepPatchEntry[];
+  stepsModified: StepPatchEntry[];
+  stepsRemoved: StepRemoval[];
   timestamp: number;
 }
+
+// --- Lens ---
+export type Lens = 'structure' | 'rules' | 'verify' | 'data' | 'tests';
+
+export type LensStats =
+  | { lens: 'structure'; modules: number; functions: number; steps: number; nodes: number }
+  | { lens: 'rules';     total: number; unproven: number; broken: number }
+  | { lens: 'verify';    proven: number; unproven: number; counterexamples: number }
+  | { lens: 'data';      types: string[]; signals: number }
+  | { lens: 'tests';     total: number; passing: number; failing: number };
 
 // --- Error (tag = "code", content = "detail") ---
 export type BridgeError =

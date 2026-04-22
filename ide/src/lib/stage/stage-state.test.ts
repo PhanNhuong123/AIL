@@ -49,6 +49,7 @@ describe('stage-state.ts', () => {
       relations: [],
       types: [],
       errors: [],
+      issues: [],
       detail: {},
     };
     expect(groupByCluster(empty)).toEqual([]);

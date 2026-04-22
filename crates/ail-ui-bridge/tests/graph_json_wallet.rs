@@ -53,6 +53,11 @@ fn test_load_wallet_service() {
         "expected 3 Do functions (add_money, deduct_money, transfer_money), got {}",
         graph.project.fn_count
     );
+    assert!(
+        graph.issues.is_empty(),
+        "expected no issues for wallet_service (all verification passes), got: {:?}",
+        graph.issues
+    );
 }
 
 /// Test 2: all modules have the single default cluster populated.
