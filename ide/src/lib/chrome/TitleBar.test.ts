@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { render, fireEvent } from '@testing-library/svelte';
 import { tick } from 'svelte';
 import { get } from 'svelte/store';
-import { graph, path, tweaksPanelOpen } from '$lib/stores';
+import { graph, path, tweaksPanelOpen, activeLens, quickCreateModalOpen } from '$lib/stores';
 import { walletFixture, walletFixtureWithFail } from './fixtures';
 import TitleBar from './TitleBar.svelte';
 
@@ -10,6 +10,8 @@ beforeEach(() => {
   graph.set(null);
   path.set([]);
   tweaksPanelOpen.set(false);
+  activeLens.set('verify');
+  quickCreateModalOpen.set(false);
 });
 
 describe('TitleBar.svelte', () => {
@@ -99,5 +101,134 @@ describe('TitleBar.svelte', () => {
     const header = container.querySelector('header');
     expect(header?.classList.contains('region-titlebar')).toBe(true);
     expect(header?.hasAttribute('data-tauri-drag-region')).toBe(true);
+  });
+
+  // ── Lens pill group ──────────────────────────────────────────────────────
+  it('renders the lens pill group with all 5 lenses', () => {
+    const { container } = render(TitleBar);
+    const group = container.querySelector('[data-testid="lens-group"]');
+    expect(group).not.toBeNull();
+    expect(group?.getAttribute('role')).toBe('group');
+    const pills = group?.querySelectorAll('button[data-testid^="lens-"]') ?? [];
+    expect(pills.length).toBe(5);
+    const names = Array.from(pills).map((b) => b.getAttribute('data-testid'));
+    expect(names).toEqual(['lens-structure', 'lens-rules', 'lens-verify', 'lens-data', 'lens-tests']);
+  });
+
+  it('defaults to verify lens with aria-pressed="true"', () => {
+    const { container } = render(TitleBar);
+    expect(container.querySelector('[data-testid="lens-verify"]')?.getAttribute('aria-pressed')).toBe('true');
+    for (const name of ['structure', 'rules', 'data', 'tests']) {
+      expect(container.querySelector(`[data-testid="lens-${name}"]`)?.getAttribute('aria-pressed')).toBe('false');
+    }
+  });
+
+  it('clicking a lens sets activeLens and updates aria-pressed', async () => {
+    const { container } = render(TitleBar);
+    fireEvent.click(container.querySelector('[data-testid="lens-rules"]')!);
+    await tick();
+    expect(get(activeLens)).toBe('rules');
+    expect(container.querySelector('[data-testid="lens-rules"]')?.getAttribute('aria-pressed')).toBe('true');
+    expect(container.querySelector('[data-testid="lens-verify"]')?.getAttribute('aria-pressed')).toBe('false');
+  });
+
+  it('lens selection is mutually exclusive', async () => {
+    const { container } = render(TitleBar);
+    for (const name of ['structure', 'rules', 'verify', 'data', 'tests']) {
+      fireEvent.click(container.querySelector(`[data-testid="lens-${name}"]`)!);
+      await tick();
+      const pressed = container.querySelectorAll('[aria-pressed="true"]');
+      // Filter to only lens pills (exclude + New button which may have aria-pressed)
+      const lensPressed = Array.from(pressed).filter((el) =>
+        el.getAttribute('data-testid')?.startsWith('lens-')
+      );
+      expect(lensPressed.length).toBe(1);
+      expect(lensPressed[0].getAttribute('data-testid')).toBe(`lens-${name}`);
+    }
+  });
+
+  it('clicking the active lens is idempotent (no toggle off)', async () => {
+    const { container } = render(TitleBar);
+    const verifyBtn = container.querySelector('[data-testid="lens-verify"]')!;
+    fireEvent.click(verifyBtn);
+    await tick();
+    expect(get(activeLens)).toBe('verify');
+    fireEvent.click(verifyBtn);
+    await tick();
+    expect(get(activeLens)).toBe('verify');
+    expect(verifyBtn.getAttribute('aria-pressed')).toBe('true');
+  });
+
+  // ── Quick Create ──────────────────────────────────────────────────────────
+  it('renders + New button with correct aria-label', () => {
+    const { container } = render(TitleBar);
+    const btn = container.querySelector('[data-testid="new-btn"]');
+    expect(btn).not.toBeNull();
+    expect(btn?.getAttribute('aria-label')).toBe('New (Quick Create)');
+  });
+
+  it('clicking + New opens Quick Create modal', async () => {
+    const { container } = render(TitleBar);
+    fireEvent.click(container.querySelector('[data-testid="new-btn"]')!);
+    await tick();
+    expect(get(quickCreateModalOpen)).toBe(true);
+  });
+
+  it('Cmd+K opens Quick Create modal', async () => {
+    render(TitleBar);
+    fireEvent.keyDown(window, { key: 'k', metaKey: true });
+    await tick();
+    expect(get(quickCreateModalOpen)).toBe(true);
+
+    quickCreateModalOpen.set(false);
+
+    fireEvent.keyDown(window, { key: 'k', ctrlKey: true });
+    await tick();
+    expect(get(quickCreateModalOpen)).toBe(true);
+
+    quickCreateModalOpen.set(false);
+
+    fireEvent.keyDown(window, { key: 'K', metaKey: true });
+    await tick();
+    expect(get(quickCreateModalOpen)).toBe(true);
+  });
+
+  it('plain K (no modifier) does not open Quick Create', async () => {
+    render(TitleBar);
+    fireEvent.keyDown(window, { key: 'k' });
+    await tick();
+    expect(get(quickCreateModalOpen)).toBe(false);
+  });
+
+  it('+ New and Cmd+K produce the same store state', async () => {
+    const { container } = render(TitleBar);
+
+    fireEvent.click(container.querySelector('[data-testid="new-btn"]')!);
+    await tick();
+    const afterClick = get(quickCreateModalOpen);
+
+    quickCreateModalOpen.set(false);
+
+    fireEvent.keyDown(window, { key: 'k', metaKey: true });
+    await tick();
+    const afterKey = get(quickCreateModalOpen);
+
+    expect(afterClick).toBe(true);
+    expect(afterKey).toBe(true);
+  });
+
+  it('Tweaks button still toggles tweaksPanelOpen (regression)', async () => {
+    const { container } = render(TitleBar);
+    const tweaksBtn = container.querySelector('[aria-label="Tweaks"]');
+    expect(get(tweaksPanelOpen)).toBe(false);
+    fireEvent.click(tweaksBtn!);
+    await tick();
+    expect(get(tweaksPanelOpen)).toBe(true);
+  });
+
+  it('renders generic traffic lights in non-mac environment (platform detection)', () => {
+    const { container } = render(TitleBar);
+    expect(container.querySelector('[data-testid="traffic-lights-generic"]')).not.toBeNull();
+    expect(container.querySelector('[data-testid="traffic-lights-mac"]')).toBeNull();
   });
 });

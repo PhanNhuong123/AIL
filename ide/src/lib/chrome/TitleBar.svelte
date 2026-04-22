@@ -1,10 +1,13 @@
 <script lang="ts">
-  import { graph, path, tweaksPanelOpen } from '$lib/stores';
+  import { onMount } from 'svelte';
+  import { graph, path, tweaksPanelOpen, activeLens, quickCreateModalOpen } from '$lib/stores';
+  import type { Lens } from '$lib/stores';
   import { countPills, breadcrumbs } from './rollup';
   import TrafficLights from './TrafficLights.svelte';
   import Icon from '$lib/icons/Icon.svelte';
 
   const isMac = typeof navigator !== 'undefined' && navigator.platform.includes('Mac');
+  const LENSES = ['structure', 'rules', 'verify', 'data', 'tests'] as const;
 
   $: crumbs = breadcrumbs($graph, $path);
   $: pills  = countPills($graph);
@@ -16,12 +19,30 @@
   function toggleTweaks() {
     tweaksPanelOpen.update((v) => !v);
   }
+
+  function setLens(lens) {
+    activeLens.set(lens as Lens);
+  }
+
+  function openQuickCreate() {
+    quickCreateModalOpen.set(true);
+  }
+
+  onMount(() => {
+    function handleKeydown(e) {
+      const ev = e as KeyboardEvent;
+      if ((ev.metaKey || ev.ctrlKey) && ev.key.toLowerCase() === 'k') {
+        ev.preventDefault();
+        openQuickCreate();
+      }
+    }
+    window.addEventListener('keydown', handleKeydown);
+    return () => window.removeEventListener('keydown', handleKeydown);
+  });
 </script>
 
 <header class="region-titlebar" data-testid="region-titlebar" data-tauri-drag-region>
-  {#if isMac}
-    <TrafficLights />
-  {/if}
+  <TrafficLights variant={isMac ? 'mac' : 'generic'} />
 
   <div class="brand" data-tauri-drag-region>
     <span class="brand-name">AIL</span>
@@ -47,6 +68,26 @@
     </nav>
   {/if}
 
+  <div
+    class="lens-group"
+    role="group"
+    aria-label="Active lens"
+    data-testid="lens-group"
+  >
+    {#each LENSES as lens}
+      <button
+        type="button"
+        class="lens-pill"
+        class:active={$activeLens === lens}
+        aria-pressed={$activeLens === lens}
+        data-testid="lens-{lens}"
+        on:click={() => setLens(lens)}
+      >
+        {lens}
+      </button>
+    {/each}
+  </div>
+
   <div class="spacer" data-tauri-drag-region></div>
 
   {#if $graph !== null}
@@ -65,8 +106,22 @@
   {/if}
 
   <button
+    type="button"
+    class="new-btn"
+    data-testid="new-btn"
+    on:click={openQuickCreate}
+    aria-label="New (Quick Create)"
+    title="Create new node (Cmd/Ctrl+K)"
+  >
+    <Icon name="plus" size={11} />
+    New
+  </button>
+
+  <button
+    type="button"
     class="icon-btn"
     class:active={$tweaksPanelOpen}
+    aria-pressed={$tweaksPanelOpen}
     on:click={toggleTweaks}
     aria-label="Tweaks"
     title="Tweaks"
@@ -95,7 +150,7 @@
     font-size: 9px;
     font-weight: 600;
     background: var(--accent);
-    color: #fff;
+    color: var(--surface);
     border-radius: var(--radius-sm);
     padding: 1px 4px;
     letter-spacing: 0.02em;
@@ -137,6 +192,37 @@
     color: var(--ink);
   }
 
+  .lens-group {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    margin-left: 8px;
+    background: var(--surface-3);
+    border-radius: var(--radius-sm);
+    padding: 2px;
+    flex-shrink: 0;
+  }
+
+  .lens-pill {
+    background: transparent;
+    border: none;
+    color: var(--ink-3);
+    font-size: 11px;
+    text-transform: capitalize;
+    cursor: pointer;
+    padding: 3px 10px;
+    border-radius: var(--radius-sm);
+  }
+
+  .lens-pill:hover {
+    color: var(--ink);
+  }
+
+  .lens-pill[aria-pressed="true"] {
+    background: color-mix(in srgb, var(--accent) 20%, transparent);
+    color: var(--accent);
+  }
+
   .spacer {
     flex: 1;
     min-width: 8px;
@@ -168,6 +254,25 @@
     background: color-mix(in srgb, var(--warn) 15%, transparent);
     color: var(--warn);
   }
+
+  .new-btn {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    height: 24px;
+    padding: 0 10px;
+    margin-right: 4px;
+    background: var(--accent);
+    color: var(--surface);
+    border: none;
+    border-radius: var(--radius-sm);
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+
+  .new-btn:hover { opacity: 0.88; }
 
   .icon-btn {
     display: flex;
