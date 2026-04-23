@@ -2,12 +2,13 @@
  * flow-state.ts — Flow-view-scoped stores and pure viewport/position helpers.
  *
  * Stores:
- *   flowMode          — active sub-mode tab: Swim | Flowchart | Code
- *   flowViewport      — SVG pan/zoom transform { x, y, k }
- *   flowNodePositions — mutable per-node positions (overrides FlowNodeJson.x/y)
+ *   flowMode           — active sub-mode tab: Swim | Flowchart | Code
+ *   flowViewport       — SVG pan/zoom transform { x, y, k }
+ *   flowNodePositions  — mutable per-node positions (overrides FlowNodeJson.x/y)
  *   flowSelectedNodeId — id of the selected node (null = none)
- *   flowDraftEdge     — edge being drawn from a port drag (null = none)
- *   createdEdges      — edges created by port-drag interactions this session
+ *   flowFocusedNodeId  — id of the focused node for dimming neighbours (null = no focus)
+ *   flowDraftEdge      — edge being drawn from a port drag (null = none)
+ *   createdEdges       — edges created by port-drag interactions this session
  *
  * Pure helpers: clampZoom, applyPan, applyZoom, getNodePos, setNodePos
  */
@@ -45,6 +46,7 @@ export const flowMode: Writable<FlowMode>                        = writable('Swi
 export const flowViewport: Writable<Viewport>                    = writable({ x: 0, y: 0, k: 1 });
 export const flowNodePositions: Writable<Map<string, { x: number; y: number }>> = writable(new Map());
 export const flowSelectedNodeId: Writable<string | null>         = writable(null);
+export const flowFocusedNodeId: Writable<string | null>          = writable(null);
 export const flowDraftEdge: Writable<DraftEdge | null>           = writable(null);
 export const createdEdges: Writable<FlowEdgeJson[]>              = writable([]);
 
@@ -114,6 +116,7 @@ export function resetFlowState(): void {
   flowViewport.set({ x: 0, y: 0, k: 1 });
   flowNodePositions.set(new Map());
   flowSelectedNodeId.set(null);
+  flowFocusedNodeId.set(null);
   flowDraftEdge.set(null);
   createdEdges.set([]);
 }

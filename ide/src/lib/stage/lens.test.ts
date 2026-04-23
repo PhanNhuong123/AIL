@@ -4,10 +4,11 @@ import {
   computeFunctionMetrics,
   computeSystemHeadSummary,
   computeModuleHeadSummary,
+  computeSwimNodeHint,
 } from './lens';
 import { multiClusterFixture, detailedModuleFixture } from './fixtures';
 import { walletFixture } from '$lib/chrome/fixtures';
-import type { Lens, ModuleJson } from '$lib/types';
+import type { Lens, ModuleJson, FlowNodeJson } from '$lib/types';
 
 function moduleById(g: ReturnType<typeof multiClusterFixture>, id: string): ModuleJson {
   const m = g.modules.find((x) => x.id === id);
@@ -174,5 +175,35 @@ describe('lens.ts', () => {
     const labels = s.chips.map((c) => c.label);
     const hasIssuesOrFailing = labels.some((l) => /issues|failing/.test(l));
     expect(hasIssuesOrFailing).toBe(true);
+  });
+});
+
+describe('computeSwimNodeHint', () => {
+  it('test_compute_swim_node_hint_structure', () => {
+    const node: FlowNodeJson = { id: 'x', kind: 'process', label: 'Do', x: 0, y: 0 };
+    const r = computeSwimNodeHint(node, 'structure');
+    expect(r).toEqual({ subLabel: 'process', tone: 'muted' });
+  });
+
+  it('test_compute_swim_node_hint_verify_status_variants', () => {
+    const okNode: FlowNodeJson = { id: 'a', kind: 'process', label: 'A', x: 0, y: 0, status: 'ok' };
+    const warnNode: FlowNodeJson = { id: 'b', kind: 'decision', label: 'B', x: 0, y: 0, status: 'warn' };
+    const failNode: FlowNodeJson = { id: 'c', kind: 'io', label: 'C', x: 0, y: 0, status: 'fail' };
+    const noStatusNode: FlowNodeJson = { id: 'd', kind: 'start', label: 'D', x: 0, y: 0 };
+    expect(computeSwimNodeHint(okNode, 'verify')).toEqual({ subLabel: '✓', tone: 'ok' });
+    expect(computeSwimNodeHint(warnNode, 'verify')).toEqual({ subLabel: '⚠', tone: 'warn' });
+    expect(computeSwimNodeHint(failNode, 'verify')).toEqual({ subLabel: '✗', tone: 'fail' });
+    expect(computeSwimNodeHint(noStatusNode, 'verify')).toEqual({ subLabel: '', tone: 'muted' });
+  });
+
+  it('test_compute_swim_node_hint_tests', () => {
+    const node: FlowNodeJson = { id: 'x', kind: 'process', label: 'Do', x: 0, y: 0, status: 'fail' };
+    expect(computeSwimNodeHint(node, 'tests')).toEqual({ subLabel: '0 tests', tone: 'muted' });
+  });
+
+  it('test_compute_swim_node_hint_rules_data_are_muted', () => {
+    const node: FlowNodeJson = { id: 'x', kind: 'process', label: 'Do', x: 0, y: 0, status: 'fail' };
+    expect(computeSwimNodeHint(node, 'rules')).toEqual({ subLabel: '', tone: 'muted' });
+    expect(computeSwimNodeHint(node, 'data')).toEqual({ subLabel: '', tone: 'muted' });
   });
 });

@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { FunctionJson, FlowchartJson, NodeDetail } from '$lib/types';
-  import { flowMode } from './flow-state';
+  import { flowMode, flowFocusedNodeId, flowSelectedNodeId } from './flow-state';
+  import { activeLens } from '$lib/stores';
   import FlowSwim from './FlowSwim.svelte';
   import FlowchartCanvas from './FlowchartCanvas.svelte';
   import FlowCode from './FlowCode.svelte';
@@ -13,6 +14,9 @@
   function setMode(m) {
     flowMode.set(m);
   }
+
+  // Clear focus when leaving Swim mode
+  $: if ($flowMode !== 'Swim') flowFocusedNodeId.set(null);
 </script>
 
 <div class="flow-view" data-testid="flow-view">
@@ -47,12 +51,30 @@
       <Icon name="code" size={12}/>
       Code
     </button>
+    {#if $flowMode === 'Swim'}
+      <div class="flow-mode-sep" aria-hidden="true"></div>
+      <button
+        class="flow-mode-btn flow-focus-btn"
+        class:active={$flowFocusedNodeId !== null}
+        aria-pressed={$flowFocusedNodeId !== null}
+        on:click={() => {
+          const focusedId = $flowFocusedNodeId;
+          const selectedId = $flowSelectedNodeId;
+          if (focusedId !== null) {
+            flowFocusedNodeId.set(null);
+          } else if (selectedId !== null) {
+            flowFocusedNodeId.set(selectedId);
+          }
+        }}
+        data-testid="flow-focus-btn"
+      >Focus</button>
+    {/if}
   </div>
 
   <!-- Content -->
   <div class="flow-body">
     {#if $flowMode === 'Swim'}
-      <FlowSwim flowchart={flowchart ?? { nodes: [], edges: [] }} />
+      <FlowSwim flowchart={flowchart ?? { nodes: [], edges: [] }} {fn} />
     {:else if $flowMode === 'Flowchart'}
       <FlowchartCanvas flowchart={flowchart ?? { nodes: [], edges: [] }} />
     {:else}
@@ -102,6 +124,14 @@
   .flow-mode-btn.active {
     background: color-mix(in srgb, var(--accent) 18%, transparent);
     color: var(--accent);
+  }
+
+  .flow-mode-sep {
+    width: 1px;
+    height: 14px;
+    background: var(--line);
+    margin: 0 4px;
+    flex-shrink: 0;
   }
 
   .flow-body {

@@ -2,9 +2,9 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { render, fireEvent } from '@testing-library/svelte';
 import { tick } from 'svelte';
 import { get } from 'svelte/store';
-import { graph, selection, path, history } from '$lib/stores';
+import { graph, selection, path, history, activeLens } from '$lib/stores';
 import { zoomLevel } from '$lib/chrome/toolbar-state';
-import { flowMode, createdEdges, flowNodePositions, flowViewport } from './flow-state';
+import { flowMode, createdEdges, flowNodePositions, flowViewport, flowFocusedNodeId, flowSelectedNodeId } from './flow-state';
 import { flowFixture } from './fixtures';
 import FlowView from './FlowView.svelte';
 
@@ -18,6 +18,9 @@ beforeEach(() => {
   createdEdges.set([]);
   flowNodePositions.set(new Map());
   flowViewport.set({ x: 0, y: 0, k: 1 });
+  flowFocusedNodeId.set(null);
+  flowSelectedNodeId.set(null);
+  activeLens.set('verify');
 });
 
 describe('FlowView.svelte', () => {
@@ -76,6 +79,39 @@ describe('FlowView.svelte', () => {
     expect(get(selection).kind).toBe(selBefore.kind);
   });
 
+  it('test_mode_switch_preserves_flowSelectedNodeId', async () => {
+    const { flowchart, graph: g } = flowFixture();
+    graph.set(g);
+    flowSelectedNodeId.set('n_do');
+
+    const { container } = render(FlowView, {
+      props: {
+        fn: g.modules[0].functions[0],
+        flowchart,
+        detail: null,
+      },
+    });
+    await tick();
+
+    // Swim → Flowchart
+    const fcBtn = container.querySelector('[data-testid="flow-mode-btn-flowchart"]') as HTMLButtonElement;
+    fireEvent.click(fcBtn);
+    await tick();
+    expect(get(flowSelectedNodeId)).toBe('n_do');
+
+    // Flowchart → Code
+    const codeBtn = container.querySelector('[data-testid="flow-mode-btn-code"]') as HTMLButtonElement;
+    fireEvent.click(codeBtn);
+    await tick();
+    expect(get(flowSelectedNodeId)).toBe('n_do');
+
+    // Code → Swim
+    const swimBtn = container.querySelector('[data-testid="flow-mode-btn-swim"]') as HTMLButtonElement;
+    fireEvent.click(swimBtn);
+    await tick();
+    expect(get(flowSelectedNodeId)).toBe('n_do');
+  });
+
   it('test_code_mode_renders_flow_code', async () => {
     const { flowchart, graph: g } = flowFixture();
     graph.set(g);
@@ -95,5 +131,60 @@ describe('FlowView.svelte', () => {
 
     expect(get(flowMode)).toBe('Code');
     expect(container.querySelector('[data-testid="flow-code"]')).not.toBeNull();
+  });
+
+  it('test_focus_btn_not_rendered_in_flowchart_mode', async () => {
+    const { flowchart, graph: g } = flowFixture();
+    graph.set(g);
+    flowMode.set('Flowchart');
+    const { container } = render(FlowView, { props: { fn: g.modules[0].functions[0], flowchart, detail: null } });
+    await tick();
+    expect(container.querySelector('[data-testid="flow-focus-btn"]')).toBeNull();
+  });
+
+  it('test_focus_btn_not_rendered_in_code_mode', async () => {
+    const { flowchart, graph: g } = flowFixture();
+    graph.set(g);
+    flowMode.set('Code');
+    const { container } = render(FlowView, { props: { fn: g.modules[0].functions[0], flowchart, detail: null } });
+    await tick();
+    expect(container.querySelector('[data-testid="flow-focus-btn"]')).toBeNull();
+  });
+
+  it('test_focus_btn_rendered_in_swim_mode', async () => {
+    const { flowchart, graph: g } = flowFixture();
+    graph.set(g);
+    const { container } = render(FlowView, { props: { fn: g.modules[0].functions[0], flowchart, detail: null } });
+    await tick();
+    const btn = container.querySelector('[data-testid="flow-focus-btn"]');
+    expect(btn).not.toBeNull();
+    expect(btn?.getAttribute('aria-pressed')).toBe('false');
+  });
+
+  it('test_mode_switch_clears_focus', async () => {
+    const { flowchart, graph: g } = flowFixture();
+    graph.set(g);
+    flowFocusedNodeId.set('n_decide');
+    const { container } = render(FlowView, { props: { fn: g.modules[0].functions[0], flowchart, detail: null } });
+    await tick();
+    const fcBtn = container.querySelector('[data-testid="flow-mode-btn-flowchart"]') as HTMLButtonElement;
+    fireEvent.click(fcBtn);
+    await tick();
+    expect(get(flowFocusedNodeId)).toBeNull();
+  });
+
+  it('test_mode_switch_does_not_reset_activeLens', async () => {
+    const { flowchart, graph: g } = flowFixture();
+    graph.set(g);
+    activeLens.set('rules');
+    const { container } = render(FlowView, { props: { fn: g.modules[0].functions[0], flowchart, detail: null } });
+    await tick();
+    const codeBtn = container.querySelector('[data-testid="flow-mode-btn-code"]') as HTMLButtonElement;
+    fireEvent.click(codeBtn);
+    await tick();
+    const swimBtn = container.querySelector('[data-testid="flow-mode-btn-swim"]') as HTMLButtonElement;
+    fireEvent.click(swimBtn);
+    await tick();
+    expect(get(activeLens)).toBe('rules');
   });
 });

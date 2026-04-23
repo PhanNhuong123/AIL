@@ -1,15 +1,14 @@
 <script lang="ts">
-  import type { FlowchartJson } from '$lib/types';
-  import { flowSelectedNodeId } from './flow-state';
+  import type { FlowchartJson, FlowEdgeJson, FunctionJson } from '$lib/types';
+  import { flowSelectedNodeId, flowFocusedNodeId } from './flow-state';
   import { navigateTo } from '$lib/chrome/toolbar-state';
-  import { path } from '$lib/stores';
+  import { path, activeLens } from '$lib/stores';
   import { get } from 'svelte/store';
+  import SwimNode from './SwimNode.svelte';
+  import { NODE_W, NODE_H, PAD } from './swim-layout';
 
   export let flowchart = { nodes: [], edges: [] } as FlowchartJson;
-
-  const NODE_W = 120;
-  const NODE_H = 48;
-  const PAD    = 24;
+  export let fn = null as FunctionJson | null;
 
   // Collect unique Y lanes (swim lanes by Y coordinate)
   $: lanes = buildLanes(flowchart.nodes);
@@ -36,10 +35,14 @@
     );
   }
 
-  $: selectedId = $flowSelectedNodeId;
+  function isNeighbor(nodeId, focusedId, edges) {
+    return (edges as FlowEdgeJson[]).some(
+      (e) => (e.from === focusedId && e.to === nodeId) || (e.to === focusedId && e.from === nodeId),
+    );
+  }
 </script>
 
-<div class="flow-swim" data-testid="flow-swim">
+<div class="flow-swim" data-testid="flow-swim" aria-label={fn ? 'Flow for ' + fn.name : undefined}>
   <svg
     width="100%"
     height={lanes.length > 0 ? lanes[lanes.length - 1].y + NODE_H + PAD * 2 : 200}
@@ -58,35 +61,13 @@
 
     <!-- Nodes -->
     {#each flowchart.nodes as node (node.id)}
-      <!-- svelte-ignore a11y-click-events-have-key-events -->
-      <!-- svelte-ignore a11y-no-static-element-interactions -->
-      <g
-        class="swim-node"
-        class:swim-node-selected={selectedId === node.id}
-        on:click={() => {
-          flowSelectedNodeId.set(node.id);
-          handleNodeClick(node);
-        }}
-        data-testid="swim-node-{node.id}"
-        role="button"
-        tabindex="0"
-      >
-        <rect
-          x={node.x + PAD}
-          y={node.y + PAD}
-          width={NODE_W}
-          height={NODE_H}
-          rx="6"
-          class="swim-node-rect"
-        />
-        <text
-          x={node.x + PAD + NODE_W / 2}
-          y={node.y + PAD + NODE_H / 2 + 1}
-          dominant-baseline="middle"
-          text-anchor="middle"
-          class="swim-node-label"
-        >{node.label}</text>
-      </g>
+      <SwimNode
+        {node}
+        lens={$activeLens}
+        selected={$flowSelectedNodeId === node.id}
+        dimmed={$flowFocusedNodeId !== null && $flowFocusedNodeId !== node.id && !isNeighbor(node.id, $flowFocusedNodeId, flowchart.edges)}
+        on:nodeclick={() => { flowSelectedNodeId.set(node.id); handleNodeClick(node); }}
+      />
     {/each}
 
     <!-- Edges (simple straight lines in swim view) -->
@@ -94,13 +75,25 @@
       {@const fromN = flowchart.nodes.find((n) => n.id === edge.from)}
       {@const toN   = flowchart.nodes.find((n) => n.id === edge.to)}
       {#if fromN && toN}
+        {@const midX = (fromN.x + PAD + NODE_W / 2 + toN.x + PAD + NODE_W / 2) / 2}
+        {@const midY = (fromN.y + PAD + NODE_H + toN.y + PAD) / 2}
         <line
           x1={fromN.x + PAD + NODE_W / 2}
           y1={fromN.y + PAD + NODE_H}
           x2={toN.x   + PAD + NODE_W / 2}
           y2={toN.y   + PAD}
           class="swim-edge"
+          data-testid={edge.label ? `swim-branch-edge-${edge.label}` : undefined}
         />
+        {#if edge.label}
+          <text
+            x={midX}
+            y={midY}
+            dominant-baseline="middle"
+            text-anchor="middle"
+            class="swim-edge-label"
+          >{edge.label}</text>
+        {/if}
       {/if}
     {/each}
   </svg>
@@ -124,26 +117,14 @@
     stroke-dasharray: 4 4;
   }
 
-  .swim-node-rect {
-    fill: var(--surface-2);
-    stroke: var(--ink-3);
-    stroke-width: 1.5px;
-    cursor: pointer;
-  }
-
-  .swim-node-selected .swim-node-rect {
-    fill: color-mix(in srgb, var(--accent) 18%, var(--surface-2));
-    stroke: var(--accent);
-  }
-
-  .swim-node-label {
-    font-size: 11px;
-    fill: var(--ink);
-    pointer-events: none;
-  }
-
   .swim-edge {
     stroke: var(--ink-3);
     stroke-width: 1.5px;
+  }
+
+  .swim-edge-label {
+    font-size: 10px;
+    fill: var(--ink-3);
+    pointer-events: none;
   }
 </style>

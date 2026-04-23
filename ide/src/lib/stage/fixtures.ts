@@ -275,9 +275,9 @@ export function bigSystemFixture(n = 200): GraphJson {
 export function flowFixture(): { flowchart: FlowchartJson; graph: GraphJson } {
   const nodes: FlowNodeJson[] = [
     { id: 'n_start',  kind: 'start',    label: 'Start',         x: 200, y: 20  },
-    { id: 'n_do',     kind: 'process',  label: 'Validate',      x: 200, y: 100 },
-    { id: 'n_decide', kind: 'decision', label: 'Balance OK?',   x: 200, y: 200 },
-    { id: 'n_io',     kind: 'io',       label: 'Read Account',  x: 400, y: 200 },
+    { id: 'n_do',     kind: 'process',  label: 'Validate',      x: 200, y: 100, status: 'ok'   },
+    { id: 'n_decide', kind: 'decision', label: 'Balance OK?',   x: 200, y: 200, status: 'warn' },
+    { id: 'n_io',     kind: 'io',       label: 'Read Account',  x: 400, y: 200, status: 'fail' },
     { id: 'n_sub',    kind: 'sub',      label: 'Audit Log',     x: 200, y: 320 },
     { id: 'n_store',  kind: 'storage',  label: 'DB Write',      x: 200, y: 440 },
     { id: 'n_end',    kind: 'end',      label: 'End',           x: 200, y: 540 },

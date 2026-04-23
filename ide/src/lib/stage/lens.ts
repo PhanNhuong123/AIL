@@ -8,7 +8,7 @@
  * They MUST NOT call computeLensMetrics (invariant 15.6-B).
  */
 
-import type { GraphJson, ModuleJson, FunctionJson, Status, NodeDetail, RelationJson, Lens } from '$lib/types';
+import type { GraphJson, ModuleJson, FunctionJson, Status, NodeDetail, RelationJson, Lens, FlowNodeJson } from '$lib/types';
 
 export type PillTone = 'ok' | 'warn' | 'fail' | 'muted';
 
@@ -210,6 +210,30 @@ export function computeSystemHeadSummary(graph: GraphJson, lens: Lens): HeadChip
     }
     case 'tests':
       return { lens, testid, chips: [{ label: '0 tests', tone: 'muted' }] };
+  }
+}
+
+export function computeSwimNodeHint(
+  node: FlowNodeJson,
+  lens: Lens,
+): { subLabel: string; tone: PillTone } {
+  switch (lens) {
+    case 'structure':
+      return { subLabel: node.kind, tone: 'muted' };
+    case 'rules':
+      return { subLabel: '', tone: 'muted' };
+    case 'verify':
+      return node.status === 'ok'
+        ? { subLabel: '✓', tone: 'ok' }
+        : node.status === 'fail'
+        ? { subLabel: '✗', tone: 'fail' }
+        : node.status === 'warn'
+        ? { subLabel: '⚠', tone: 'warn' }
+        : { subLabel: '', tone: 'muted' };
+    case 'data':
+      return { subLabel: '', tone: 'muted' };
+    case 'tests':
+      return { subLabel: '0 tests', tone: 'muted' };
   }
 }
 
