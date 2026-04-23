@@ -11,6 +11,9 @@
  * Transition table:
  *   wheel (no mod)       any              → pan via applyPan, mode unchanged
  *   wheel + ctrl/meta    any              → zoom via applyZoom, mode unchanged
+ *   zoom-in              any              → applyZoom(vp, -100), mode unchanged
+ *   zoom-out             any              → applyZoom(vp, 100), mode unchanged
+ *   zoom-reset           any              → viewport {x:0, y:0, k:1}, mode unchanged
  *   mousedown background idle             → clear selection, stay idle
  *   mousedown node       idle             → select + capture drag origin → dragging-node
  *   mousedown port       idle             → init draft edge → dragging-port
@@ -72,7 +75,10 @@ export type InteractionEvent =
   | { type: 'mousedown-port'; nodeId: string; port: PortSide; tipX: number; tipY: number }
   | { type: 'mousemove'; svgX: number; svgY: number }
   | { type: 'mouseup-node'; nodeId: string }
-  | { type: 'mouseup-background' };
+  | { type: 'mouseup-background' }
+  | { type: 'zoom-in' }
+  | { type: 'zoom-out' }
+  | { type: 'zoom-reset' };
 
 // ---------------------------------------------------------------------------
 // Hit test
@@ -237,6 +243,18 @@ export function reduce(state: InteractionState, event: InteractionEvent): Intera
         return { ...state, mode: 'idle', activeNodeId: null };
       }
       return state;
+    }
+
+    case 'zoom-in': {
+      return { ...state, viewport: applyZoom(state.viewport, -100) };
+    }
+
+    case 'zoom-out': {
+      return { ...state, viewport: applyZoom(state.viewport, 100) };
+    }
+
+    case 'zoom-reset': {
+      return { ...state, viewport: { x: 0, y: 0, k: 1 } };
     }
 
     default:

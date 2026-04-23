@@ -10,14 +10,13 @@
   } from './flow-state';
   import type { DraftEdge } from './flow-state';
   import { reduce, emptyState, hitTest } from './flow-interaction';
+  import { NODE_W, NODE_H, GRID_SIZE } from './swim-layout';
   import FlowchartShape from './FlowchartShape.svelte';
   import FlowchartEdge from './FlowchartEdge.svelte';
+  import FlowchartZoomControls from './FlowchartZoomControls.svelte';
   import { get } from 'svelte/store';
 
   export let flowchart = { nodes: [], edges: [] } as FlowchartJson;
-
-  const NODE_W = 120;
-  const NODE_H = 48;
 
   // Seed positions when flowchart changes
   $: { seedPositions(flowchart.nodes); }
@@ -49,6 +48,17 @@
   let iState = emptyState();
 
   function dispatch(ev) {
+    // Re-sync from all stores before reducing so that state set externally
+    // (e.g. by FlowSwim on a previous mount, or by other components) is never
+    // clobbered by a stale iState snapshot (invariant 15.8-A / 15.7-A).
+    iState = {
+      ...iState,
+      viewport: get(flowViewport),
+      positions: get(flowNodePositions),
+      selectedNodeId: get(flowSelectedNodeId),
+      draftEdge: get(flowDraftEdge),
+      createdEdges: get(createdEdges),
+    };
     iState = reduce(iState, ev);
     flowViewport.set(iState.viewport);
     flowNodePositions.set(iState.positions);
@@ -142,7 +152,13 @@
       <marker id="arrow-neutral" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
         <path d="M0,0 L0,6 L8,3 z" fill="var(--ink-3)"/>
       </marker>
+      <pattern id="canvas-grid" width={GRID_SIZE} height={GRID_SIZE} patternUnits="userSpaceOnUse">
+        <circle cx="1" cy="1" r="1" fill="var(--line-2)" />
+      </pattern>
     </defs>
+
+    <!-- Dot-grid background: fixed to viewport (outside the pan/zoom <g>) -->
+    <rect width="100%" height="100%" fill="url(#canvas-grid)" data-testid="canvas-grid" />
 
     <g transform="translate({vp.x},{vp.y}) scale({vp.k})">
       <!-- Edges -->
@@ -166,8 +182,8 @@
         {#if fromNode}
           {@const fp = nodePos(fromNode)}
           <line
-            x1={fp.x + 60}
-            y1={fp.y + 48}
+            x1={fp.x + NODE_W / 2}
+            y1={fp.y + NODE_H}
             x2={draftEdge.tipX}
             y2={draftEdge.tipY}
             stroke="var(--accent)"
@@ -191,16 +207,22 @@
           status={node.status}
           selected={selectedId === node.id}
         />
-        <!-- Port circles when this node is selected -->
+        <!-- Port circles when this node is selected (invariant 15.8-B) -->
         {#if selectedId === node.id}
-          <circle cx={pos.x + 60}  cy={pos.y}       r="5" class="port-circle" data-testid="port-top-{node.id}"/>
-          <circle cx={pos.x + 120} cy={pos.y + 24}  r="5" class="port-circle" data-testid="port-right-{node.id}"/>
-          <circle cx={pos.x + 60}  cy={pos.y + 48}  r="5" class="port-circle" data-testid="port-bottom-{node.id}"/>
-          <circle cx={pos.x}       cy={pos.y + 24}  r="5" class="port-circle" data-testid="port-left-{node.id}"/>
+          <circle cx={pos.x + NODE_W / 2} cy={pos.y}              r="5" class="port-circle" data-testid="port-top-{node.id}"/>
+          <circle cx={pos.x + NODE_W}     cy={pos.y + NODE_H / 2} r="5" class="port-circle" data-testid="port-right-{node.id}"/>
+          <circle cx={pos.x + NODE_W / 2} cy={pos.y + NODE_H}     r="5" class="port-circle" data-testid="port-bottom-{node.id}"/>
+          <circle cx={pos.x}              cy={pos.y + NODE_H / 2} r="5" class="port-circle" data-testid="port-left-{node.id}"/>
         {/if}
       {/each}
     </g>
   </svg>
+
+  <FlowchartZoomControls
+    on:zoomin={() => { dispatch({ type: 'zoom-in' }); iState = { ...iState, viewport: get(flowViewport) }; }}
+    on:zoomout={() => { dispatch({ type: 'zoom-out' }); iState = { ...iState, viewport: get(flowViewport) }; }}
+    on:zoomreset={() => { dispatch({ type: 'zoom-reset' }); iState = { ...iState, viewport: get(flowViewport) }; }}
+  />
 </div>
 
 <style>

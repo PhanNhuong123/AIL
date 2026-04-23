@@ -1,14 +1,12 @@
 <script lang="ts">
   import type { FlowEdgeJson, FlowNodeJson } from '$lib/types';
+  import { NODE_W as W, NODE_H as H } from './swim-layout';
 
   export let edge     = {} as FlowEdgeJson;
   export let fromNode = undefined as FlowNodeJson | undefined;
   export let toNode   = undefined as FlowNodeJson | undefined;
   export let fromPos  = undefined as { x: number; y: number } | undefined;
   export let toPos    = undefined as { x: number; y: number } | undefined;
-
-  const W = 120;
-  const H = 48;
 
   $: fx = (fromPos?.x ?? fromNode?.x ?? 0) + W / 2;
   $: fy = (fromPos?.y ?? fromNode?.y ?? 0) + H;
@@ -30,7 +28,7 @@
   $: midY = (fy + ty) / 2;
 </script>
 
-<g class="flowchart-edge {colorClass}">
+<g class="flowchart-edge {colorClass}" data-testid="flowchart-edge-{edge.from}-{edge.to}">
   <path {d} marker-end={markerId} class="edge-path"/>
   {#if edge.label}
     <text x={midX} y={midY - 4} text-anchor="middle" class="edge-label"

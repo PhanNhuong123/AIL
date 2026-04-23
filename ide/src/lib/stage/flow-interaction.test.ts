@@ -73,6 +73,76 @@ describe('flow-interaction (pure reducer)', () => {
     });
     expect(s4.mode).toBe('dragging-node'); // unchanged
   });
+
+  it('test_reducer_drag_mousemove_updates_positions', () => {
+    let state = emptyState();
+    // Seed an initial position for the node we will drag.
+    state = { ...state, positions: new Map([['n_do', { x: 100, y: 100 }]]) };
+
+    // mousedown-node enters dragging mode and captures origin.
+    state = reduce(state, {
+      type: 'mousedown-node',
+      nodeId: 'n_do',
+      svgX: 150,
+      svgY: 120,
+    });
+    expect(state.mode).toBe('dragging-node');
+
+    // Mousemove applies delta (20, 10) relative to the drag origin.
+    state = reduce(state, { type: 'mousemove', svgX: 170, svgY: 130 });
+
+    const pos = state.positions.get('n_do');
+    expect(pos?.x).toBe(120); // 100 + 20
+    expect(pos?.y).toBe(110); // 100 + 10
+
+    // mouseup ends drag and clears activeNodeId.
+    state = reduce(state, { type: 'mouseup-node', nodeId: 'n_do' });
+    expect(state.mode).toBe('idle');
+    expect(state.activeNodeId).toBeNull();
+  });
+});
+
+describe('zoom reducer events (task 15.8)', () => {
+  it('test_flowchart_zoom_clamps_at_max', () => {
+    let state = emptyState();
+    for (let i = 0; i < 50; i++) {
+      state = reduce(state, { type: 'zoom-in' });
+    }
+    expect(state.viewport.k).toBeLessThanOrEqual(4.0);
+  });
+
+  it('test_flowchart_zoom_clamps_at_min', () => {
+    let state = emptyState();
+    for (let i = 0; i < 50; i++) {
+      state = reduce(state, { type: 'zoom-out' });
+    }
+    expect(state.viewport.k).toBeGreaterThanOrEqual(0.2);
+  });
+
+  it('test_zoom_in_increases_k', () => {
+    const s0 = emptyState();
+    const s1 = reduce(s0, { type: 'zoom-in' });
+    expect(s1.viewport.k).toBeGreaterThan(1);
+    expect(s1.mode).toBe('idle'); // mode unchanged
+  });
+
+  it('test_zoom_out_decreases_k', () => {
+    const s0 = emptyState();
+    const s1 = reduce(s0, { type: 'zoom-out' });
+    expect(s1.viewport.k).toBeLessThan(1);
+    expect(s1.mode).toBe('idle');
+  });
+
+  it('test_zoom_reset_restores_viewport', () => {
+    let state = emptyState();
+    state = reduce(state, { type: 'zoom-in' });
+    state = reduce(state, { type: 'zoom-in' });
+    state = reduce(state, { type: 'zoom-reset' });
+    expect(state.viewport.k).toBe(1);
+    expect(state.viewport.x).toBe(0);
+    expect(state.viewport.y).toBe(0);
+    expect(state.mode).toBe('idle');
+  });
 });
 
 describe('hitTest', () => {
