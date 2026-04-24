@@ -33,11 +33,24 @@ use crate::watcher;
 /// Watcher callbacks capture the generation at dispatch and no-op when the
 /// generation has advanced, protecting against races where a pending
 /// debounced event from the previous project fires after re-load.
+///
+/// `agent_run` holds the active agent subprocess handle (Phase 16 task 16.1).
+/// There is at most one run at a time; `run_agent` supersedes any prior run
+/// via `Drop` on the replaced handle. `load_project` intentionally does NOT
+/// touch `agent_run` — a run may legitimately outlive a project reload, and
+/// callers that need cancel-on-reload must call `cancel_agent_run` first.
+///
+/// `agent_run_seq` and `agent_id_nonce` combine to produce string-serialized
+/// run ids that are unique across the process lifetime. See
+/// [`crate::agent::next_run_id_string`].
 pub struct BridgeStateInner {
     pub project_path: Option<PathBuf>,
     pub graph_json: Option<GraphJson>,
     pub watcher: Option<Debouncer<RecommendedWatcher, FileIdMap>>,
     pub load_generation: u64,
+    pub agent_run: Option<crate::agent::RunHandle>,
+    pub agent_run_seq: u64,
+    pub agent_id_nonce: u64,
 }
 
 /// Mutex-wrapped bridge state managed by Tauri.
@@ -50,6 +63,9 @@ pub fn new_bridge_state() -> BridgeState {
         graph_json: None,
         watcher: None,
         load_generation: 0,
+        agent_run: None,
+        agent_run_seq: 0,
+        agent_id_nonce: crate::agent::seed_nonce(),
     })
 }
 
@@ -298,5 +314,7 @@ pub fn get_handler<R: tauri::Runtime>(
         save_flowchart,
         compute_lens_metrics,
         start_watch_project,
+        crate::agent::run_agent,
+        crate::agent::cancel_agent_run,
     ]
 }

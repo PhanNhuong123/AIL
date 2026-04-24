@@ -452,6 +452,18 @@ body {
 }
 .cp-head-title { font-size: 13px; font-weight: 600; color: var(--ink); }
 .cp-head-sub   { font-size: 11px; color: var(--ink-3); }
+.cp-head-stop  {
+  margin-left: auto;
+  padding: 2px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--fail);
+  background: transparent;
+  border: 1px solid var(--fail);
+  border-radius: 6px;
+  cursor: pointer;
+}
+.cp-head-stop:hover { background: color-mix(in srgb, var(--fail) 12%, transparent); }
 .cp-msgs {
   flex: 1;
   min-height: 0;

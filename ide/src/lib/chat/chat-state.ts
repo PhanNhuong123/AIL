@@ -6,26 +6,46 @@
  *   (b) chatDraft      — current draft string in the input row
  *   (c) chatMessages   — the conversation message list (seed + exchange)
  *   (d) chatPreviewCards — pending AI-proposed change cards
+ *   (e) isAgentRunning — Phase 16: true between runAgent() and agent-complete
+ *   (f) currentRunId   — Phase 16: stringified run id returned by run_agent
  *
  * Write rules:
  *   chatMode       — written ONLY by handleModeChange in ChatPanel.svelte
  *                    OR chip dispatch (handleChipClick does NOT change mode)
  *   chatDraft      — written ONLY by handleDraftChange, handleChipClick,
  *                    and handleSend (clears to '') in ChatPanel.svelte
- *   chatMessages   — written ONLY by handleSend in ChatPanel.svelte
- *                    and resetChatState()
- *   chatPreviewCards — written ONLY by handlePreviewConfirm / Adjust / Discard
- *                    in ChatPanel.svelte and resetChatState()
+ *   chatMessages   — written ONLY by handleSend in ChatPanel.svelte,
+ *                    the route-level onAgentStep/onAgentMessage/
+ *                    onAgentComplete handlers in +page.svelte (guarded by
+ *                    currentRunId), and resetChatState()
+ *   chatPreviewCards — written ONLY by handlePreviewConfirm / Adjust /
+ *                    Discard in ChatPanel.svelte, the route-level
+ *                    onAgentMessage handler (preview append), the route-level
+ *                    handlePreviewApply handler (remove on apply), and
+ *                    resetChatState()
+ *   isAgentRunning — written ONLY by handleSend (true before await),
+ *                    handleSend.catch (false on reject), handleStop (false
+ *                    on ack), the route-level onAgentComplete handler
+ *                    (false on matching runId), and resetChatState()
+ *   currentRunId   — written ONLY by handleSend (set to runAgent resolve
+ *                    value), handleSend.catch (null), handleStop (null),
+ *                    the route-level onAgentComplete handler (null on
+ *                    matching runId), and resetChatState()
  *
  * INVARIANT 15.10-B: No file under ide/src/lib/chat/** may import from
  * $lib/chrome/bottom-panel-state.ts. Types ChatMessage, PreviewCardModel,
  * SuggestChip are re-declared locally here.
+ *
+ * INVARIANT 16.1-C: PreviewCardModel.patch is a typed GraphPatchJson
+ * imported from $lib/types (NOT bottom-panel-state). Preview Apply is
+ * applied only by the +page.svelte handler through applyGraphPatch;
+ * chat components never write graph or selection stores.
  */
 
 import { writable } from 'svelte/store';
 import type { Writable } from 'svelte/store';
 import type { Selection } from '$lib/stores';
-import type { Lens } from '$lib/types';
+import type { GraphPatchJson, Lens } from '$lib/types';
 
 // ---------------------------------------------------------------------------
 // Types — re-declared locally (NOT imported from bottom-panel-state)
@@ -44,6 +64,14 @@ export interface PreviewCardModel {
   id: string;
   title: string;
   summary: string;
+  /** Phase 16: optional canonical graph patch applied by `+page.svelte`
+   *  handler on `previewapply`. Absent on seed cards and cards that carry
+   *  pure-informational previews. */
+  patch?: GraphPatchJson;
+  /** Phase 16: run id that produced this card. */
+  runId?: string;
+  /** Phase 16: agent messageId that produced this card. */
+  messageId?: string;
 }
 
 export interface SuggestChip {
@@ -81,6 +109,8 @@ export const chatMode:         Writable<ChatMode>           = writable('edit');
 export const chatDraft:        Writable<string>             = writable('');
 export const chatMessages:     Writable<ChatMessage[]>      = writable([CHAT_ASSISTANT_SEED]);
 export const chatPreviewCards: Writable<PreviewCardModel[]> = writable([CHAT_PREVIEW_SEED]);
+export const isAgentRunning:   Writable<boolean>            = writable(false);
+export const currentRunId:     Writable<string | null>      = writable(null);
 
 // ---------------------------------------------------------------------------
 // Reset
@@ -91,6 +121,8 @@ export function resetChatState(): void {
   chatDraft.set('');
   chatMessages.set([CHAT_ASSISTANT_SEED]);
   chatPreviewCards.set([CHAT_PREVIEW_SEED]);
+  isAgentRunning.set(false);
+  currentRunId.set(null);
 }
 
 // ---------------------------------------------------------------------------

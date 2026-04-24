@@ -1,8 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const invoke = vi.fn();
+const listen = vi.fn();
 vi.mock('@tauri-apps/api/core', () => ({ invoke: (...args: unknown[]) => invoke(...args) }));
-vi.mock('@tauri-apps/api/event', () => ({ listen: vi.fn() }));
+vi.mock('@tauri-apps/api/event', () => ({ listen: (...args: unknown[]) => listen(...args) }));
 
 import {
   loadProject,
@@ -12,8 +13,14 @@ import {
   saveFlowchart,
   computeLensMetrics,
   startWatchProject,
+  runAgent,
+  cancelAgentRun,
+  onAgentStep,
+  onAgentMessage,
+  onAgentComplete,
+  EVENTS,
 } from './bridge';
-import type { FlowchartJson } from './types';
+import type { AgentRunRequest, FlowchartJson } from './types';
 
 describe('bridge.ts invoke wrappers', () => {
   beforeEach(() => {
@@ -60,5 +67,65 @@ describe('bridge.ts invoke wrappers', () => {
   it('startWatchProject invokes start_watch_project with no args', async () => {
     await startWatchProject();
     expect(invoke).toHaveBeenCalledWith('start_watch_project');
+  });
+
+  it('runAgent forwards request under key "req"', async () => {
+    const req: AgentRunRequest = {
+      text: 'add rate limiter',
+      selectionKind: 'function',
+      selectionId: 'mod1/fn1',
+      path: ['mod1', 'fn1'],
+      lens: 'verify',
+      mode: 'edit',
+    };
+    invoke.mockResolvedValueOnce('r-42');
+    const runId = await runAgent(req);
+    expect(invoke).toHaveBeenCalledWith('run_agent', { req });
+    expect(runId).toBe('r-42');
+  });
+
+  it('cancelAgentRun forwards runId', async () => {
+    invoke.mockResolvedValueOnce({ cancelled: true });
+    const result = await cancelAgentRun('r-42');
+    expect(invoke).toHaveBeenCalledWith('cancel_agent_run', { runId: 'r-42' });
+    expect(result).toEqual({ cancelled: true });
+  });
+});
+
+describe('bridge.ts event listeners', () => {
+  beforeEach(() => {
+    listen.mockReset();
+    listen.mockImplementation((_event: string, _cb: unknown) => Promise.resolve(() => {}));
+  });
+
+  it('onAgentStep subscribes to agent-step event', async () => {
+    const h = vi.fn();
+    await onAgentStep(h);
+    expect(listen).toHaveBeenCalledWith(EVENTS.AGENT_STEP, expect.any(Function));
+  });
+
+  it('onAgentMessage subscribes to agent-message event', async () => {
+    const h = vi.fn();
+    await onAgentMessage(h);
+    expect(listen).toHaveBeenCalledWith(EVENTS.AGENT_MESSAGE, expect.any(Function));
+  });
+
+  it('onAgentComplete subscribes to agent-complete event', async () => {
+    const h = vi.fn();
+    await onAgentComplete(h);
+    expect(listen).toHaveBeenCalledWith(EVENTS.AGENT_COMPLETE, expect.any(Function));
+  });
+
+  it('listener callback unwraps event payload', async () => {
+    let captured: ((e: { payload: unknown }) => void) | null = null;
+    listen.mockImplementationOnce((_e: string, cb: (e: { payload: unknown }) => void) => {
+      captured = cb;
+      return Promise.resolve(() => {});
+    });
+    const h = vi.fn();
+    await onAgentStep(h);
+    expect(captured).not.toBeNull();
+    captured!({ payload: { runId: 'r-7', index: 1, phase: 'plan', text: 'hi' } });
+    expect(h).toHaveBeenCalledWith({ runId: 'r-7', index: 1, phase: 'plan', text: 'hi' });
   });
 });

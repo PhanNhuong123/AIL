@@ -6,7 +6,7 @@ edition = "2021"
 
 [features]
 default = []
-tauri-commands = ["dep:tauri", "dep:notify-debouncer-full", "dep:notify", "dep:log"]
+tauri-commands = ["dep:tauri", "dep:notify-debouncer-full", "dep:notify", "dep:log", "dep:tokio"]
 
 [dependencies]
 serde        = { workspace = true }
@@ -20,7 +20,9 @@ tauri        = { version = "2", optional = true }
 notify-debouncer-full = { version = "0.3", optional = true }
 notify       = { version = "6", optional = true }
 log          = { version = "0.4", optional = true }
+tokio        = { version = "1", features = ["process", "io-util", "rt-multi-thread", "sync", "macros"], optional = true }
 
 [dev-dependencies]
 tempfile     = "3"
 ail-graph    = { workspace = true }
+tokio        = { version = "1", features = ["process", "io-util", "rt-multi-thread", "sync", "macros", "time"] }

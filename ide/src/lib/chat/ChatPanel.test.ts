@@ -1,16 +1,25 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+
+// Establish the Tauri mock surface BEFORE importing bridge.ts. This pattern
+// is new to the chat folder — 16.1 tests are the first to need it.
+const invoke = vi.fn();
+vi.mock('@tauri-apps/api/core', () => ({ invoke: (...args: unknown[]) => invoke(...args) }));
+vi.mock('@tauri-apps/api/event', () => ({ listen: vi.fn() }));
+
 import { render, fireEvent } from '@testing-library/svelte';
 import { tick } from 'svelte';
 import { get } from 'svelte/store';
 import { graph, selection, path, activeLens, overlays } from '$lib/stores';
-import type { Selection } from '$lib/stores';
 import {
   chatMode, chatDraft, chatMessages, chatPreviewCards,
+  isAgentRunning, currentRunId,
   resetChatState, CHAT_ASSISTANT_SEED, CHAT_PREVIEW_SEED, CHAT_PLACEHOLDERS,
 } from './chat-state';
 import ChatPanel from './ChatPanel.svelte';
 
 beforeEach(() => {
+  invoke.mockReset();
+  invoke.mockResolvedValue('r-default');
   graph.set(null);
   selection.set({ kind: 'none', id: null });
   path.set([]);
@@ -72,9 +81,10 @@ describe('ChatPanel.svelte', () => {
     await tick();
     fireEvent.click(sendBtn);
     await tick();
-    expect(get(chatMessages).length).toBe(3);
+    // Phase 16: ChatPanel appends the user message; the assistant reply
+    // arrives later through the route-level `onAgentMessage` handler.
+    expect(get(chatMessages).length).toBe(2);
     expect(container.querySelector('[data-testid="chat-message-1"]')?.textContent).toContain('hello');
-    expect(container.querySelector('[data-testid="chat-message-2"]')).not.toBeNull();
     expect(get(chatDraft)).toBe('');
   });
 
@@ -87,7 +97,7 @@ describe('ChatPanel.svelte', () => {
     fireEvent.keyDown(input, { key: 'Enter' });
     await tick();
     const msgs = get(chatMessages);
-    expect(msgs.length).toBe(3);
+    expect(msgs.length).toBe(2);
     expect(msgs[1].role).toBe('user');
     expect(msgs[1].text).toBe('hello');
     expect(get(chatDraft)).toBe('');
@@ -99,6 +109,7 @@ describe('ChatPanel.svelte', () => {
     fireEvent.click(container.querySelector('[data-testid="chat-send-btn"]') as HTMLButtonElement);
     await tick();
     expect(get(chatMessages).length).toBe(1);
+    expect(invoke).not.toHaveBeenCalled();
   });
 
   it('test_preview_card_renders_seed', async () => {
@@ -109,31 +120,39 @@ describe('ChatPanel.svelte', () => {
     expect(cards[0].textContent).toContain(CHAT_PREVIEW_SEED.title);
   });
 
-  it('test_preview_confirm_removes_card', async () => {
+  it('test_preview_confirm_does_not_mutate_cards_or_invoke_bridge', async () => {
+    // 16.1-C: Chat components MUST NOT write graph/selection and MUST NOT
+    // remove preview cards directly. Parent (+page.svelte) handles that
+    // on `previewapply`. The actual dispatch -> parent wiring is covered
+    // in src/routes/page.test.ts.
     const { container } = render(ChatPanel);
     await tick();
+    const cardsBefore = get(chatPreviewCards).length;
+    const invokeCountBefore = invoke.mock.calls.length;
     fireEvent.click(container.querySelector('[data-testid="chat-preview-confirm"]') as HTMLButtonElement);
     await tick();
-    expect(get(chatPreviewCards).length).toBe(0);
-    expect(container.querySelectorAll('[data-testid="chat-preview-card"]').length).toBe(0);
+    expect(get(chatPreviewCards).length).toBe(cardsBefore);
+    expect(invoke.mock.calls.length).toBe(invokeCountBefore);
   });
 
-  it('test_preview_adjust_removes_card', async () => {
+  it('test_preview_adjust_quotes_summary_into_draft', async () => {
     const { container } = render(ChatPanel);
     await tick();
     fireEvent.click(container.querySelector('[data-testid="chat-preview-adjust"]') as HTMLButtonElement);
     await tick();
-    expect(get(chatPreviewCards).length).toBe(0);
-    expect(container.querySelectorAll('[data-testid="chat-preview-card"]').length).toBe(0);
+    expect(get(chatDraft)).toBe(CHAT_PREVIEW_SEED.summary);
+    // Card stays visible (Refine does not remove it; user edits + sends).
+    expect(get(chatPreviewCards).length).toBe(1);
   });
 
-  it('test_preview_discard_removes_card', async () => {
+  it('test_preview_discard_does_not_mutate_cards_directly', async () => {
+    // Discard is delegated via `previewdismiss`; parent removes the card.
     const { container } = render(ChatPanel);
     await tick();
+    const cardsBefore = get(chatPreviewCards).length;
     fireEvent.click(container.querySelector('[data-testid="chat-preview-discard"]') as HTMLButtonElement);
     await tick();
-    expect(get(chatPreviewCards).length).toBe(0);
-    expect(container.querySelectorAll('[data-testid="chat-preview-card"]').length).toBe(0);
+    expect(get(chatPreviewCards).length).toBe(cardsBefore);
   });
 
   it('test_chips_render_default_when_no_selection', async () => {
@@ -286,5 +305,115 @@ describe('ChatPanel.svelte', () => {
     expect(get(path)).toEqual(pathBefore);
     expect(get(activeLens)).toBe(lensBefore);
     expect(get(overlays)).toEqual(overlaysBefore);
+  });
+
+  // -----------------------------------------------------------------------
+  // Phase 16 task 16.1 — backend wiring
+  // -----------------------------------------------------------------------
+
+  it('test_send_invokes_run_agent_with_sendtime_context', async () => {
+    // 16.1-A: context read at SEND time. Set stores AFTER mount, then send.
+    const { container } = render(ChatPanel);
+    await tick();
+    selection.set({ kind: 'function', id: 'mod/fn' });
+    path.set(['mod', 'fn']);
+    activeLens.set('rules');
+    chatMode.set('ask');
+    await tick();
+
+    invoke.mockResolvedValueOnce('r-99');
+    const input = container.querySelector('[data-testid="chat-input"]') as HTMLInputElement;
+    fireEvent.input(input, { target: { value: 'inspect' } });
+    await tick();
+    fireEvent.click(container.querySelector('[data-testid="chat-send-btn"]') as HTMLButtonElement);
+    await Promise.resolve();
+    await tick();
+
+    const call = invoke.mock.calls.find((c) => c[0] === 'run_agent');
+    expect(call).toBeTruthy();
+    const req = call![1].req;
+    expect(req.text).toBe('inspect');
+    expect(req.selectionKind).toBe('function');
+    expect(req.selectionId).toBe('mod/fn');
+    expect(req.path).toEqual(['mod', 'fn']);
+    expect(req.lens).toBe('rules');
+    expect(req.mode).toBe('ask');
+
+    // currentRunId is set after the invoke promise resolves.
+    await tick();
+    expect(get(currentRunId)).toBe('r-99');
+  });
+
+  it('test_send_blocked_while_agent_running', async () => {
+    const { container } = render(ChatPanel);
+    await tick();
+    // Simulate an in-flight run.
+    isAgentRunning.set(true);
+    await tick();
+
+    const before = invoke.mock.calls.length;
+    const msgsBefore = get(chatMessages).length;
+
+    const input = container.querySelector('[data-testid="chat-input"]') as HTMLInputElement;
+    fireEvent.input(input, { target: { value: 'second send' } });
+    await tick();
+    fireEvent.click(container.querySelector('[data-testid="chat-send-btn"]') as HTMLButtonElement);
+    await tick();
+
+    // No invoke, no user message appended.
+    const runAgentCalls = invoke.mock.calls.slice(before).filter((c) => c[0] === 'run_agent');
+    expect(runAgentCalls.length).toBe(0);
+    expect(get(chatMessages).length).toBe(msgsBefore);
+  });
+
+  it('test_stop_button_visible_only_when_running', async () => {
+    const { container } = render(ChatPanel);
+    await tick();
+    expect(container.querySelector('[data-testid="chat-stop-btn"]')).toBeNull();
+
+    isAgentRunning.set(true);
+    await tick();
+    expect(container.querySelector('[data-testid="chat-stop-btn"]')).not.toBeNull();
+
+    isAgentRunning.set(false);
+    await tick();
+    expect(container.querySelector('[data-testid="chat-stop-btn"]')).toBeNull();
+  });
+
+  it('test_stop_click_calls_cancel_agent_run_with_current_id', async () => {
+    const { container } = render(ChatPanel);
+    isAgentRunning.set(true);
+    currentRunId.set('r-42');
+    await tick();
+    invoke.mockResolvedValueOnce({ cancelled: true });
+
+    fireEvent.click(container.querySelector('[data-testid="chat-stop-btn"]') as HTMLButtonElement);
+    await tick();
+
+    const call = invoke.mock.calls.find((c) => c[0] === 'cancel_agent_run');
+    expect(call).toBeTruthy();
+    expect(call![1]).toEqual({ runId: 'r-42' });
+  });
+
+  it('test_send_error_clears_running_state_and_appends_error_message', async () => {
+    const { container } = render(ChatPanel);
+    await tick();
+    invoke.mockRejectedValueOnce(new Error('spawn failed'));
+    const input = container.querySelector('[data-testid="chat-input"]') as HTMLInputElement;
+    fireEvent.input(input, { target: { value: 'go' } });
+    await tick();
+    fireEvent.click(container.querySelector('[data-testid="chat-send-btn"]') as HTMLButtonElement);
+    // Give the rejected promise a microtask to resolve.
+    await Promise.resolve();
+    await Promise.resolve();
+    await tick();
+
+    expect(get(isAgentRunning)).toBe(false);
+    expect(get(currentRunId)).toBeNull();
+    const msgs = get(chatMessages);
+    const last = msgs[msgs.length - 1];
+    expect(last.role).toBe('assistant');
+    expect(last.text).toContain('Agent error');
+    expect(last.text).toContain('spawn failed');
   });
 });

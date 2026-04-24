@@ -18,7 +18,19 @@ pub const VERIFY_COMPLETE: &str = "verify-complete";
 /// Payload: coverage result (Phase 17+).
 pub const COVERAGE_COMPLETE: &str = "coverage-complete";
 
-/// Emitted for each step of an AI agent run.
+/// Emitted for each planner / coder / verifier step of an AI agent run.
 ///
-/// Payload: agent step (Phase 17+).
+/// Payload: [`crate::types::agent::AgentStepPayload`]
 pub const AGENT_STEP: &str = "agent-step";
+
+/// Emitted when the agent produces an assistant message (optionally with a
+/// preview card carrying a `GraphPatchJson`).
+///
+/// Payload: [`crate::types::agent::AgentMessagePayload`]
+pub const AGENT_MESSAGE: &str = "agent-message";
+
+/// Emitted exactly once per run on terminal status (`done` | `error` |
+/// `cancelled`).
+///
+/// Payload: [`crate::types::agent::AgentCompletePayload`]
+pub const AGENT_COMPLETE: &str = "agent-complete";

@@ -190,3 +190,56 @@ export type BridgeError =
   | { code: 'PipelineError';   detail: { stage: string; detail: string } }
   | { code: 'NodeNotFound';    detail: { id: string } }
   | { code: 'InvalidInput';    detail: { reason: string } };
+
+// --- Agent (Phase 16 task 16.1) ---------------------------------------------
+// Mirrors crates/ail-ui-bridge/src/types/agent.rs. camelCase.
+//
+// `runId` is a STRING on the wire: the Rust side composes it from a u64
+// counter XOR'd with a session nonce and stringifies the result, so JS's
+// IEEE-754 `number` type cannot silently collide high-bit ids at 2^53.
+
+export type AgentMode = 'edit' | 'ask' | 'test';
+
+export type SelectionKindWire =
+  | 'project' | 'module' | 'function' | 'step'
+  | 'type'    | 'error'  | 'none';
+
+export interface AgentRunRequest {
+  text: string;
+  selectionKind: SelectionKindWire;
+  selectionId: string | null;
+  path: string[];
+  lens: Lens;
+  mode: AgentMode;
+  model?: string;
+}
+
+export interface AgentStepPayload {
+  runId: string;
+  index: number;
+  phase: string; // 'plan' | 'code' | 'verify' by convention; free-form string on the wire
+  text: string;
+}
+
+export interface AgentPreview {
+  title: string;
+  summary: string;
+  patch?: GraphPatchJson;
+}
+
+export interface AgentMessagePayload {
+  runId: string;
+  messageId: string;
+  text: string;
+  preview?: AgentPreview;
+}
+
+export interface AgentCompletePayload {
+  runId: string;
+  status: 'done' | 'error' | 'cancelled';
+  error?: string;
+}
+
+export interface AgentCancelResult {
+  cancelled: boolean;
+}

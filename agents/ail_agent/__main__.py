@@ -13,7 +13,7 @@ from ail_agent.orchestrator import (
     initial_state,
     set_workflow_context,
 )
-from ail_agent.progress import Progress
+from ail_agent.progress import JsonProgress, Progress
 from ail_agent.registry import get_provider
 
 _DEFAULT_MODEL = "anthropic:claude-sonnet-4-5"
@@ -65,6 +65,26 @@ def _build_parser() -> argparse.ArgumentParser:
         metavar="PATH",
         help="Path to the `ail` binary or command name for PATH lookup. Default: ail",
     )
+    parser.add_argument(
+        "--json-events",
+        action="store_true",
+        dest="json_events",
+        help=(
+            "Emit structured JSON envelopes on stdout (one per line) instead "
+            "of human-readable text. Used by the Tauri IDE sidecar in Phase "
+            "16. Requires --run-id to be meaningful for the consumer."
+        ),
+    )
+    parser.add_argument(
+        "--run-id",
+        default="0",
+        dest="run_id",
+        metavar="ID",
+        help=(
+            "Opaque run identifier echoed in every JSON envelope. Only used "
+            "when --json-events is set. Default: 0"
+        ),
+    )
     return parser
 
 
@@ -74,7 +94,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     Returns the process exit code; the module-level guard calls sys.exit(main()).
     """
     args = _build_parser().parse_args(argv)
-    progress = Progress()
+    progress: Progress = (
+        JsonProgress(run_id=args.run_id) if args.json_events else Progress()
+    )
 
     # Resolve provider early so config errors surface before any MCP connection.
     try:

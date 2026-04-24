@@ -30,6 +30,8 @@ pub mod serialize;
 pub mod types;
 
 #[cfg(feature = "tauri-commands")]
+pub mod agent;
+#[cfg(feature = "tauri-commands")]
 pub mod commands;
 #[cfg(feature = "tauri-commands")]
 pub mod watcher;
@@ -45,6 +47,10 @@ pub use lens::compute_lens_metrics;
 pub use pipeline::load_verified_from_path;
 pub use serialize::{diff_graph, serialize_graph};
 pub use types::{
+    agent::{
+        AgentCancelResult, AgentCompletePayload, AgentMessagePayload, AgentMode, AgentPreview,
+        AgentRunRequest, AgentStepPayload,
+    },
     flowchart::{FlowEdgeJson, FlowNodeJson, FlowNodeKind, FlowchartJson},
     graph_json::{
         ClusterJson, ErrorRefJson, ExternalJson, FunctionJson, GraphJson, IssueJson, ModuleJson,

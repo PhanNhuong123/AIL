@@ -3,6 +3,8 @@ import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import type {
   GraphJson, NodeDetail, FlowchartJson,
   VerifyResultJson, GraphPatchJson, Lens, LensStats,
+  AgentRunRequest, AgentStepPayload, AgentMessagePayload,
+  AgentCompletePayload, AgentCancelResult,
 } from './types';
 
 // Commands
@@ -31,12 +33,26 @@ export const computeLensMetrics = (lens: Lens, scopeId: string | null) =>
 export const startWatchProject = () =>
   invoke<void>('start_watch_project');
 
+// Run a single agent turn. Returns the `runId` that the frontend must pass
+// back into `cancelAgentRun` and must compare against every incoming agent
+// event before mutating chat state (invariant 16.1-B layer 4).
+export const runAgent = (req: AgentRunRequest) =>
+  invoke<string>('run_agent', { req });
+
+// Cancel the active agent run if it matches `runId`. Resolves to
+// `{cancelled:false}` when the run is already done / never existed /
+// superseded.
+export const cancelAgentRun = (runId: string) =>
+  invoke<AgentCancelResult>('cancel_agent_run', { runId });
+
 // Events (constants mirror crates/ail-ui-bridge/src/events.rs)
 export const EVENTS = {
   GRAPH_UPDATED:     'graph-updated',
   VERIFY_COMPLETE:   'verify-complete',
   COVERAGE_COMPLETE: 'coverage-complete',
   AGENT_STEP:        'agent-step',
+  AGENT_MESSAGE:     'agent-message',
+  AGENT_COMPLETE:    'agent-complete',
 } as const;
 
 export const onGraphUpdated = (
@@ -52,5 +68,17 @@ export const onVerifyComplete = (
 export const onCoverageComplete = (h: (p: unknown) => void) =>
   listen(EVENTS.COVERAGE_COMPLETE, (e) => h(e.payload));
 
-export const onAgentStep = (h: (p: unknown) => void) =>
-  listen(EVENTS.AGENT_STEP, (e) => h(e.payload));
+export const onAgentStep = (
+  h: (p: AgentStepPayload) => void,
+): Promise<UnlistenFn> =>
+  listen<AgentStepPayload>(EVENTS.AGENT_STEP, (e) => h(e.payload));
+
+export const onAgentMessage = (
+  h: (p: AgentMessagePayload) => void,
+): Promise<UnlistenFn> =>
+  listen<AgentMessagePayload>(EVENTS.AGENT_MESSAGE, (e) => h(e.payload));
+
+export const onAgentComplete = (
+  h: (p: AgentCompletePayload) => void,
+): Promise<UnlistenFn> =>
+  listen<AgentCompletePayload>(EVENTS.AGENT_COMPLETE, (e) => h(e.payload));
