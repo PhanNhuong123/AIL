@@ -11,6 +11,7 @@ import {
   verifyProject,
   saveFlowchart,
   computeLensMetrics,
+  startWatchProject,
 } from './bridge';
 import type { FlowchartJson } from './types';
 
@@ -54,5 +55,10 @@ describe('bridge.ts invoke wrappers', () => {
   it('computeLensMetrics accepts null scope', async () => {
     await computeLensMetrics('structure', null);
     expect(invoke).toHaveBeenCalledWith('compute_lens_metrics', { lens: 'structure', scopeId: null });
+  });
+
+  it('startWatchProject invokes start_watch_project with no args', async () => {
+    await startWatchProject();
+    expect(invoke).toHaveBeenCalledWith('start_watch_project');
   });
 });

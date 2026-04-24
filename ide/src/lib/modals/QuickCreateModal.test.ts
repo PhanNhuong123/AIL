@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, fireEvent } from '@testing-library/svelte';
 import { tick } from 'svelte';
 import { get } from 'svelte/store';
@@ -49,5 +49,20 @@ describe('QuickCreateModal.svelte', () => {
     await tick();
 
     expect(get(quickCreateModalOpen)).toBe(false);
+  });
+
+  // -------------------------------------------------------------------------
+  // Invariant 15.11-B: canonical modal trigger ownership
+  // -------------------------------------------------------------------------
+
+  it('invariant 15.11-B: does not register a global keydown listener that opens modals', async () => {
+    const spy = vi.spyOn(window, 'addEventListener');
+    quickCreateModalOpen.set(true);
+    render(QuickCreateModal);
+    await tick();
+
+    const keydownCalls = spy.mock.calls.filter((c) => c[0] === 'keydown');
+    expect(keydownCalls).toHaveLength(0);
+    spy.mockRestore();
   });
 });

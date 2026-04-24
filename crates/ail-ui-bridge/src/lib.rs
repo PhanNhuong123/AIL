@@ -31,6 +31,8 @@ pub mod types;
 
 #[cfg(feature = "tauri-commands")]
 pub mod commands;
+#[cfg(feature = "tauri-commands")]
+pub mod watcher;
 
 #[cfg(feature = "tauri-commands")]
 pub use commands::{

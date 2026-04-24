@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onDestroy } from 'svelte';
-  import { activeLens } from '$lib/stores';
+  import { activeLens, graph } from '$lib/stores';
   import { computeLensMetrics } from '$lib/bridge';
   import type { LensStats } from '$lib/types';
   import {
@@ -18,9 +18,12 @@
 
   onDestroy(() => { destroyed = true; });
 
-  $: void refetch($activeLens, scopeId);
+  // `$graph` is added as a reactive dependency so that a watcher-driven
+  // patch update triggers a fresh metrics fetch (fix 15.11 MED staleness).
+  // The body ignores the graph value — it's a trigger only.
+  $: void refetch($activeLens, scopeId, $graph);
 
-  async function refetch(lens, scope) {
+  async function refetch(lens, scope, _g) {
     const lensVal = lens as import('$lib/types').Lens;
     const scopeVal = scope as string | null;
     const reqId = ++lastRequest;

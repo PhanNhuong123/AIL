@@ -24,6 +24,13 @@ export const saveFlowchart  = (functionId: string, chart: FlowchartJson) =>
 export const computeLensMetrics = (lens: Lens, scopeId: string | null) =>
   invoke<LensStats>('compute_lens_metrics', { lens, scopeId });
 
+// Start the `.ail` file-system watcher for the currently loaded project. The
+// command reads the project path from bridge state; requires a prior
+// `loadProject` call. Zero-arg by design — the frontend does not track the
+// canonical project path.
+export const startWatchProject = () =>
+  invoke<void>('start_watch_project');
+
 // Events (constants mirror crates/ail-ui-bridge/src/events.rs)
 export const EVENTS = {
   GRAPH_UPDATED:     'graph-updated',

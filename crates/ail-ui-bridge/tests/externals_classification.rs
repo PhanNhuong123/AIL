@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-use ail_graph::{AilGraph, EdgeKind, GraphBackend, Node, NodeId, Pattern};
+use ail_graph::{AilGraph, EdgeKind, Node, NodeId, Pattern};
 use ail_ui_bridge::ids::IdMap;
 use ail_ui_bridge::pipeline::{load_verified_from_path, read_project_name};
 use ail_ui_bridge::serialize::externals::classify_externals;

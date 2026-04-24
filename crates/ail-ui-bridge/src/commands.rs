@@ -7,7 +7,9 @@
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
-use tauri::State;
+use notify::RecommendedWatcher;
+use notify_debouncer_full::{Debouncer, FileIdMap};
+use tauri::{AppHandle, Runtime, State};
 
 use crate::errors::BridgeError;
 use crate::flowchart::build_flowchart;
@@ -19,11 +21,23 @@ use crate::types::graph_json::GraphJson;
 use crate::types::lens_stats::{Lens, LensStats};
 use crate::types::node_detail::NodeDetail;
 use crate::types::verify_result::VerifyResultJson;
+use crate::watcher;
 
 /// Shared Tauri application state for the bridge.
+///
+/// `watcher` holds the active `.ail` file-system watcher (one per loaded
+/// project). Replacing it via `.take()` on `load_project` is the sole
+/// teardown mechanism — `Drop` stops the underlying notify thread.
+///
+/// `load_generation` is a monotonic token bumped on every `load_project`.
+/// Watcher callbacks capture the generation at dispatch and no-op when the
+/// generation has advanced, protecting against races where a pending
+/// debounced event from the previous project fires after re-load.
 pub struct BridgeStateInner {
     pub project_path: Option<PathBuf>,
     pub graph_json: Option<GraphJson>,
+    pub watcher: Option<Debouncer<RecommendedWatcher, FileIdMap>>,
+    pub load_generation: u64,
 }
 
 /// Mutex-wrapped bridge state managed by Tauri.
@@ -34,6 +48,8 @@ pub fn new_bridge_state() -> BridgeState {
     Mutex::new(BridgeStateInner {
         project_path: None,
         graph_json: None,
+        watcher: None,
+        load_generation: 0,
     })
 }
 
@@ -46,7 +62,7 @@ pub fn new_bridge_state() -> BridgeState {
 /// 2. `supplied` has `ail.config.toml` but no `src/` subdir     → root = supplied, parse_dir = supplied
 /// 3. `supplied`'s parent has `ail.config.toml` (legacy src/ call)→ root = parent,  parse_dir = supplied
 /// 4. All else → root = supplied, parse_dir = supplied
-fn resolve_project_layout(supplied: &Path) -> (PathBuf, PathBuf) {
+pub(crate) fn resolve_project_layout(supplied: &Path) -> (PathBuf, PathBuf) {
     if supplied.join("ail.config.toml").is_file() && supplied.join("src").is_dir() {
         (supplied.to_path_buf(), supplied.join("src"))
     } else if supplied.join("ail.config.toml").is_file() {
@@ -79,10 +95,63 @@ pub fn load_project(path: String, state: State<'_, BridgeState>) -> Result<Graph
     let mut inner = state.lock().map_err(|_| BridgeError::InvalidInput {
         reason: "state lock poisoned".to_string(),
     })?;
+    // Drop any prior watcher BEFORE mutating path: its callback may still fire
+    // otherwise and emit a patch against a stale `graph_json`.
+    if let Some(old) = inner.watcher.take() {
+        drop(old);
+    }
+    inner.load_generation = inner.load_generation.wrapping_add(1);
     inner.project_path = Some(root);
     inner.graph_json = Some(graph_json.clone());
 
     Ok(graph_json)
+}
+
+/// Start a `.ail` file-system watcher scoped to the currently loaded project's
+/// parse directory. Debounced events fire a full re-pipeline + diff + emit of
+/// [`crate::events::GRAPH_UPDATED`] with a [`crate::types::patch::GraphPatchJson`].
+///
+/// Requires a prior successful `load_project`. A re-invocation replaces the
+/// previous watcher — but normally callers only invoke this once per project
+/// load; `load_project` tears down the prior watcher by itself.
+#[tauri::command]
+pub fn start_watch_project<R: Runtime>(
+    app: AppHandle<R>,
+    state: State<'_, BridgeState>,
+) -> Result<(), BridgeError> {
+    let (parse_dir, generation) = {
+        let inner = state.lock().map_err(|_| BridgeError::InvalidInput {
+            reason: "state lock poisoned".to_string(),
+        })?;
+        let root = inner
+            .project_path
+            .as_ref()
+            .ok_or_else(|| BridgeError::InvalidInput {
+                reason: "no project loaded".to_string(),
+            })?;
+        let (_, parse_dir) = resolve_project_layout(root);
+        (parse_dir, inner.load_generation)
+    };
+
+    // Build the debouncer OUTSIDE the state lock. notify spawns a worker
+    // thread during construction; holding the mutex across that would
+    // serialize unrelated commands.
+    let debouncer = watcher::start_watcher(app, parse_dir, generation)?;
+
+    let mut inner = state.lock().map_err(|_| BridgeError::InvalidInput {
+        reason: "state lock poisoned".to_string(),
+    })?;
+    // If a concurrent `load_project` raced and already replaced the watcher,
+    // drop the one we just built rather than clobber a newer entry.
+    if inner.load_generation != generation {
+        drop(debouncer);
+        return Ok(());
+    }
+    if let Some(old) = inner.watcher.take() {
+        drop(old);
+    }
+    inner.watcher = Some(debouncer);
+    Ok(())
 }
 
 /// Return the `NodeDetail` for a node identified by `node_id` (path string).
@@ -228,5 +297,6 @@ pub fn get_handler<R: tauri::Runtime>(
         verify_project,
         save_flowchart,
         compute_lens_metrics,
+        start_watch_project,
     ]
 }

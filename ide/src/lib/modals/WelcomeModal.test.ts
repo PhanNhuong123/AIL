@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, fireEvent } from '@testing-library/svelte';
 import { tick } from 'svelte';
 import { get } from 'svelte/store';
@@ -53,5 +53,16 @@ describe('WelcomeModal.svelte', () => {
     await fireEvent.click(dialog!);
     await tick();
     expect(get(welcomeModalOpen)).toBe(true);
+  });
+
+  it('invariant 15.11-B: does not register a global keydown listener', async () => {
+    const spy = vi.spyOn(window, 'addEventListener');
+    welcomeModalOpen.set(true);
+    render(WelcomeModal);
+    await tick();
+
+    const keydownCalls = spy.mock.calls.filter((c) => c[0] === 'keydown');
+    expect(keydownCalls).toHaveLength(0);
+    spy.mockRestore();
   });
 });
