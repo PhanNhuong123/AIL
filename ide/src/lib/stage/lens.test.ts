@@ -5,10 +5,12 @@ import {
   computeSystemHeadSummary,
   computeModuleHeadSummary,
   computeSwimNodeHint,
+  computeNodeDetailSummary,
 } from './lens';
-import { multiClusterFixture, detailedModuleFixture } from './fixtures';
+import { multiClusterFixture, detailedModuleFixture, nodeDetailFixture } from './fixtures';
 import { walletFixture } from '$lib/chrome/fixtures';
-import type { Lens, ModuleJson, FlowNodeJson } from '$lib/types';
+import type { Lens, ModuleJson, FlowNodeJson, NodeDetail } from '$lib/types';
+import type { PillTone } from './lens';
 
 function moduleById(g: ReturnType<typeof multiClusterFixture>, id: string): ModuleJson {
   const m = g.modules.find((x) => x.id === id);
@@ -205,5 +207,52 @@ describe('computeSwimNodeHint', () => {
     const node: FlowNodeJson = { id: 'x', kind: 'process', label: 'Do', x: 0, y: 0, status: 'fail' };
     expect(computeSwimNodeHint(node, 'rules')).toEqual({ subLabel: '', tone: 'muted' });
     expect(computeSwimNodeHint(node, 'data')).toEqual({ subLabel: '', tone: 'muted' });
+  });
+});
+
+describe('computeNodeDetailSummary', () => {
+  it('returns non-empty items + correct tone for all 5 lenses', () => {
+    const detail = nodeDetailFixture();
+    const cases: Array<{ lens: Lens; headingIncludes: string; minItems: number; tone: PillTone }> = [
+      { lens: 'structure', headingIncludes: 'Signature',    minItems: 1, tone: 'muted' },
+      { lens: 'rules',     headingIncludes: 'Rules',        minItems: 1, tone: 'warn'  },
+      { lens: 'verify',    headingIncludes: 'Verification', minItems: 1, tone: detail.verification.ok ? 'ok' : 'fail' },
+      { lens: 'data',      headingIncludes: 'Data Flow',    minItems: 2, tone: 'ok'    },
+      { lens: 'tests',     headingIncludes: 'Tests',        minItems: 1, tone: 'muted' },
+    ];
+    for (const c of cases) {
+      const s = computeNodeDetailSummary(detail, c.lens);
+      expect(s.lens).toBe(c.lens);
+      expect(s.heading).toContain(c.headingIncludes);
+      expect(s.items.length).toBeGreaterThanOrEqual(c.minItems);
+      expect(s.tone).toBe(c.tone);
+    }
+  });
+
+  it('null detail returns empty items for every lens', () => {
+    for (const lens of ['structure', 'rules', 'verify', 'data', 'tests'] as const) {
+      const s = computeNodeDetailSummary(null, lens);
+      expect(s.lens).toBe(lens);
+      expect(s.heading).toBe('');
+      expect(s.items).toEqual([]);
+      expect(s.tone).toBe('muted');
+    }
+  });
+
+  it('verify lens with counterexample includes scenario/effect/violates', () => {
+    const base = nodeDetailFixture();
+    const detail: NodeDetail = {
+      ...base,
+      verification: {
+        ok: false,
+        counterexample: { scenario: 'S1', effect: 'E1', violates: 'V1' },
+      },
+    };
+    const s = computeNodeDetailSummary(detail, 'verify');
+    expect(s.tone).toBe('fail');
+    const joined = s.items.join(' | ');
+    expect(joined).toContain('Scenario: S1');
+    expect(joined).toContain('Effect: E1');
+    expect(joined).toContain('Violates: V1');
   });
 });

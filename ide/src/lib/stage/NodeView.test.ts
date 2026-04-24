@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { render, fireEvent } from '@testing-library/svelte';
 import { tick } from 'svelte';
 import { get } from 'svelte/store';
-import { graph, selection, path, history } from '$lib/stores';
+import { graph, selection, path, history, activeLens } from '$lib/stores';
 import { zoomLevel } from '$lib/chrome/toolbar-state';
 import {
   nodeViewActiveTab,
@@ -22,6 +22,7 @@ beforeEach(() => {
   nodeViewActiveTab.set('code');
   nodeCodeLang.set('python');
   nodeTestResult.set(null);
+  activeLens.set('verify');
 });
 
 describe('NodeView.svelte', () => {
@@ -176,5 +177,76 @@ describe('NodeView.svelte', () => {
     expect(get(nodeViewActiveTab)).toBe('code');
     // Lang must still be typescript
     expect(get(nodeCodeLang)).toBe('typescript');
+  });
+
+  it('tests lens renders placeholder items without throwing', async () => {
+    activeLens.set('tests');
+    const detail = nodeDetailFixture();
+    const { container } = render(NodeView, { props: { stepId: 'step:s_transfer', detail } });
+    await tick();
+    const sentinel = container.querySelector('[data-testid="node-detail-lens-tests"]');
+    expect(sentinel).not.toBeNull();
+    const items = container.querySelectorAll('[data-testid^="node-detail-lens-item-"]');
+    expect(items.length).toBeGreaterThan(0);
+    expect(items[0].textContent?.trim().length ?? 0).toBeGreaterThan(0);
+  });
+
+  it('detail=null across lens changes does not throw', async () => {
+    const { container } = render(NodeView, { props: { stepId: 'step:s_transfer', detail: null } });
+    for (const lens of ['verify', 'structure', 'tests'] as const) {
+      activeLens.set(lens);
+      await tick();
+      const section = container.querySelector('[data-testid="node-detail-lens-section"]');
+      expect(section).not.toBeNull();
+    }
+  });
+
+  it('lens change does not reset nodeViewActiveTab or nodeCodeLang', async () => {
+    const detail = nodeDetailFixture();
+    render(NodeView, { props: { stepId: 'step:s_transfer', detail } });
+    nodeViewActiveTab.set('proof');
+    nodeCodeLang.set('typescript');
+    activeLens.set('structure');
+    await tick();
+    activeLens.set('data');
+    await tick();
+    expect(get(nodeViewActiveTab)).toBe('proof');
+    expect(get(nodeCodeLang)).toBe('typescript');
+  });
+
+  it('renders correct lens sentinel for each of the 5 lenses', async () => {
+    const detail = nodeDetailFixture();
+    const allLenses = ['structure', 'rules', 'verify', 'data', 'tests'] as const;
+    const { container } = render(NodeView, { props: { stepId: 'step:s_transfer', detail } });
+    for (const lens of allLenses) {
+      activeLens.set(lens);
+      await tick();
+      expect(container.querySelector('[data-testid="node-detail-lens-' + lens + '"]')).not.toBeNull();
+      for (const other of allLenses) {
+        if (other === lens) continue;
+        expect(container.querySelector('[data-testid="node-detail-lens-' + other + '"]')).toBeNull();
+      }
+      const heading = container.querySelector('[data-testid="node-detail-lens-heading"]');
+      expect(heading).not.toBeNull();
+      expect(heading?.textContent?.trim().length ?? 0).toBeGreaterThan(0);
+    }
+  });
+
+  it('all 6 side tabs clickable and render corresponding tab body', async () => {
+    const detail = nodeDetailFixture();
+    const { container } = render(NodeView, { props: { stepId: 'step:s_transfer', detail } });
+    const tabs = ['code', 'proof', 'types', 'rules', 'test', 'history'] as const;
+    for (const id of tabs) {
+      const btn = container.querySelector('[data-testid="node-tab-btn-' + id + '"]') as HTMLElement | null;
+      expect(btn).not.toBeNull();
+      btn?.click();
+      await tick();
+      expect(get(nodeViewActiveTab)).toBe(id);
+      expect(container.querySelector('[data-testid="node-tab-' + id + '"]')).not.toBeNull();
+      for (const other of tabs) {
+        if (other === id) continue;
+        expect(container.querySelector('[data-testid="node-tab-' + other + '"]')).toBeNull();
+      }
+    }
   });
 });

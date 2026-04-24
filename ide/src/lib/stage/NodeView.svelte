@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { NodeDetail } from '$lib/types';
+  import { activeLens } from '$lib/stores';
   import {
     nodeViewActiveTab,
     resetTestResultForStep,
@@ -7,6 +8,7 @@
   } from './node-view-state';
   import type { NodeTab } from './node-view-state';
   import NodeDetailCard from './NodeDetailCard.svelte';
+  import NodeDetailLensSection from './NodeDetailLensSection.svelte';
   import NodeTabCode from './NodeTabCode.svelte';
   import NodeTabProof from './NodeTabProof.svelte';
   import NodeTabTypes from './NodeTabTypes.svelte';
@@ -40,6 +42,7 @@
     <!-- Left: detail card -->
     <div class="node-view-detail">
       <NodeDetailCard {detail} {stepId} />
+      <NodeDetailLensSection lens={$activeLens} {detail} />
     </div>
 
     <!-- Right: tabs -->

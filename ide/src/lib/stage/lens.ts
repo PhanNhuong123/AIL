@@ -237,6 +237,76 @@ export function computeSwimNodeHint(
   }
 }
 
+// --- NodeDetailLensSummary and computeNodeDetailSummary (task 15.9) ---
+
+export interface NodeDetailLensSummary {
+  lens: Lens;
+  heading: string;
+  items: string[];
+  tone: PillTone;
+}
+
+export function computeNodeDetailSummary(
+  detail: NodeDetail | null,
+  lens: Lens,
+): NodeDetailLensSummary {
+  if (detail === null) {
+    return { lens, heading: '', items: [], tone: 'muted' };
+  }
+  switch (lens) {
+    case 'structure': {
+      const items: string[] = [];
+      if (detail.description && detail.description.length > 0) items.push(detail.description);
+      for (const r of detail.receives) items.push('← ' + r.name + ': ' + r.desc);
+      for (const r of detail.returns) items.push('→ ' + r.name + ': ' + r.desc);
+      if (items.length === 0) items.push('No signature data');
+      return { lens, heading: 'Signature', items, tone: 'muted' };
+    }
+    case 'rules': {
+      const items: string[] = [];
+      for (const r of detail.rules) items.push(r.text);
+      for (const r of detail.inherited) items.push(r.text + ' (from ' + r.from + ')');
+      if (items.length === 0) items.push('No rules defined');
+      const total = detail.rules.length + detail.inherited.length;
+      return { lens, heading: 'Rules (' + total + ')', items, tone: 'warn' };
+    }
+    case 'verify': {
+      const items: string[] = [];
+      if (detail.verification.ok) {
+        for (const p of detail.proven) items.push('✓ ' + p);
+        if (items.length === 0) items.push('Verified');
+        return { lens, heading: 'Verification', items, tone: 'ok' };
+      }
+      const ce = detail.verification.counterexample;
+      if (ce) {
+        items.push('Scenario: ' + ce.scenario);
+        items.push('Effect: ' + ce.effect);
+        items.push('Violates: ' + ce.violates);
+      } else {
+        items.push('Not verified');
+      }
+      return { lens, heading: 'Verification', items, tone: 'fail' };
+    }
+    case 'data': {
+      const recNames = detail.receives.map((r) => r.name).join(', ');
+      const retNames = detail.returns.map((r) => r.name).join(', ');
+      const items = [
+        'Receives: ' + (recNames.length > 0 ? recNames : 'none'),
+        'Returns: ' + (retNames.length > 0 ? retNames : 'none'),
+      ];
+      return { lens, heading: 'Data Flow', items, tone: 'ok' };
+    }
+    case 'tests': {
+      return {
+        lens,
+        heading: 'Tests',
+        items: ['No test field on NodeDetail — attach test results via agent (Phase 16/17)'],
+        tone: 'muted',
+      };
+    }
+  }
+}
+
 export function computeModuleHeadSummary(module: ModuleJson, graph: GraphJson, lens: Lens): HeadChipSummary {
   const testid = `module-head-action-${lens}`;
   const members = moduleMemberIds(module);
