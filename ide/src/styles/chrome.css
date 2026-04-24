@@ -432,6 +432,140 @@ body {
 .bp-console-icon { flex-shrink: 0; }
 .bp-console-text { color: inherit; }
 
+/* ============================================================
+ * Chat Panel (task 15.10)
+ * ============================================================ */
+.cp {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+.cp-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  height: 40px;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--line);
+  flex-shrink: 0;
+}
+.cp-head-title { font-size: 13px; font-weight: 600; color: var(--ink); }
+.cp-head-sub   { font-size: 11px; color: var(--ink-3); }
+.cp-msgs {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.cp-msg { display: flex; flex-direction: column; gap: 2px; }
+.cp-msg-role {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--ink-3);
+}
+.cp-msg-user .cp-msg-text { color: var(--ink); }
+.cp-msg-assistant .cp-msg-text { color: var(--ink-2); }
+.cp-preview {
+  background: var(--surface-3);
+  border: 1px solid var(--line-2);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.cp-preview-title { font-size: 12px; font-weight: 600; color: var(--ink); }
+.cp-preview-summary { font-size: 11px; color: var(--ink-2); }
+.cp-preview-actions { display: flex; gap: 6px; margin-top: 4px; }
+.cp-preview-btn {
+  height: 24px;
+  padding: 0 10px;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-size: 11px;
+  cursor: pointer;
+  background: var(--surface-2);
+  color: var(--ink-2);
+}
+.cp-preview-btn:hover { color: var(--ink); background: var(--surface); }
+.cp-preview-btn.primary { background: var(--accent); color: var(--surface); }
+.cp-preview-btn.primary:hover { opacity: 0.88; }
+.cp-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 6px 12px 0;
+  flex-shrink: 0;
+}
+.cp-chip {
+  height: 24px;
+  padding: 0 10px;
+  background: var(--surface-3);
+  border: 1px solid var(--line-2);
+  border-radius: var(--radius-sm);
+  color: var(--ink-2);
+  font-size: 11px;
+  cursor: pointer;
+}
+.cp-chip:hover { color: var(--ink); border-color: var(--accent); }
+.cp-modes {
+  display: flex;
+  gap: 2px;
+  padding: 6px 12px 0;
+  flex-shrink: 0;
+}
+.cp-mode-btn {
+  height: 24px;
+  padding: 0 10px;
+  background: transparent;
+  border: none;
+  color: var(--ink-3);
+  font-size: 11px;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+}
+.cp-mode-btn:hover { background: var(--surface-3); color: var(--ink); }
+.cp-mode-btn.active {
+  background: var(--surface-3);
+  color: var(--ink);
+  border-bottom: 2px solid var(--accent);
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+}
+.cp-input-row {
+  display: flex;
+  gap: 6px;
+  padding: 8px 12px;
+  border-top: 1px solid var(--line);
+  flex-shrink: 0;
+}
+.cp-input {
+  flex: 1;
+  height: 30px;
+  background: var(--surface-3);
+  border: 1px solid var(--line-2);
+  border-radius: var(--radius-sm);
+  color: var(--ink);
+  font-size: 12px;
+  padding: 0 10px;
+}
+.cp-input:focus { outline: none; border-color: var(--accent); }
+.cp-send-btn {
+  height: 30px;
+  padding: 0 14px;
+  background: var(--accent);
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--surface);
+  font-size: 12px;
+  cursor: pointer;
+}
+.cp-send-btn:hover { opacity: 0.88; }
+
 /* (c) Modal primitives */
 .modal-backdrop {
   position: fixed;

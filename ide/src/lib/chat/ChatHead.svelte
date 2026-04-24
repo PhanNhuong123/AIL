@@ -1,0 +1,8 @@
+<script lang="ts">
+  export let subtext = '' as string;
+</script>
+
+<div class="cp-head" data-testid="chat-head">
+  <span class="cp-head-title">Assistant</span>
+  <span class="cp-head-sub" data-testid="chat-context-subtext">{subtext}</span>
+</div>
