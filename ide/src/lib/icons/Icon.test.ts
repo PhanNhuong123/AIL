@@ -23,4 +23,14 @@ describe('Icon.svelte', () => {
     expect(svg?.getAttribute('stroke')).toBe('currentColor');
     expect(svg?.getAttribute('fill')).toBe('none');
   });
+
+  it('renders sparkle icon', () => {
+    const { container } = render(Icon, { props: { name: 'sparkle' } });
+    expect(container.querySelector('[data-testid="icon-sparkle"]')).not.toBeNull();
+  });
+
+  it('renders wrench icon', () => {
+    const { container } = render(Icon, { props: { name: 'wrench' } });
+    expect(container.querySelector('[data-testid="icon-wrench"]')).not.toBeNull();
+  });
 });

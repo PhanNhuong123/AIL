@@ -25,4 +25,6 @@ export type IconName =
   | 'swim'
   | 'code'
   | 'close'
-  | 'edit';
+  | 'edit'
+  | 'sparkle'
+  | 'wrench';

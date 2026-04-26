@@ -104,5 +104,9 @@
   {:else if name === 'edit'}
     <path d="M10 3l3 3-7 7H3v-3l7-7z"/>
     <path d="M9 4l3 3"/>
+  {:else if name === 'sparkle'}
+    <path d="M8 1L9.6 5.4L14 7L9.6 8.6L8 13L6.4 8.6L2 7L6.4 5.4L8 1Z" stroke-linejoin="round"/>
+  {:else if name === 'wrench'}
+    <path d="M12 2.5a2.5 2.5 0 0 0-3.4 3.4l-5.7 5.7a1 1 0 0 0 0 1.4l1 1a1 1 0 0 0 1.4 0l5.7-5.7A2.5 2.5 0 1 0 12 2.5z"/>
   {/if}
 </svg>
