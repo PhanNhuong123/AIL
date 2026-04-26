@@ -41,6 +41,7 @@ import {
   currentRunId,
   resetChatState,
 } from '$lib/chat/chat-state';
+import { sidebarActiveTab, resetSidebarState } from '$lib/chat/sidebar-state';
 import {
   nodeViewActiveTab,
   nodeCodeLang,
@@ -104,6 +105,8 @@ beforeEach(() => {
   welcomeModalOpen.set(false);
   tweaksPanelOpen.set(false);
   resetChatState();
+  resetSidebarState();
+  sidebarActiveTab.set('chat');
   nodeViewActiveTab.set('code');
   nodeCodeLang.set('python');
 });
@@ -115,7 +118,10 @@ describe('+page.svelte — canonical 3-column layout', () => {
     expect(container.querySelector('[data-testid="region-titlebar"]')).not.toBeNull();
     expect(container.querySelector('[data-testid="region-outline"]')).not.toBeNull();
     expect(container.querySelector('[data-testid="region-stage"]')).not.toBeNull();
-    expect(container.querySelector('[data-testid="chat-panel"]')).not.toBeNull();
+    // 15.12-A: ChatPanel is mounted inside RightSidebar, not directly in the grid.
+    const sidebar = container.querySelector('[data-testid="right-sidebar"]');
+    expect(sidebar).not.toBeNull();
+    expect(sidebar!.querySelector('[data-testid="chat-panel"]')).not.toBeNull();
   });
 
   it('test_removed_components_absent_from_shell', () => {

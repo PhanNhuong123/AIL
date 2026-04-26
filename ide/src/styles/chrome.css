@@ -11,13 +11,14 @@ body {
   grid-template-areas:
     "titlebar titlebar titlebar"
     "outline  stage    chat    ";
-  grid-template-columns: 260px 1fr 360px;
+  grid-template-columns: 260px 1fr var(--sb-w, 360px);
   grid-template-rows: 44px 1fr;
+  transition: grid-template-columns 200ms ease;
 }
+html.sb-collapsed .app-root { --sb-w: 44px; }
 .region-titlebar  { grid-area: titlebar; background: var(--surface);   border-bottom: 1px solid var(--line); display: flex; align-items: center; padding: 0 12px; }
 .region-outline   { grid-area: outline;  background: var(--surface-2); border-right:  1px solid var(--line); overflow: auto; }
 .region-stage     { grid-area: stage;    background: var(--surface);   overflow: auto; }
-.region-chat      { grid-area: chat;     background: var(--surface-2); border-left: 1px solid var(--line); overflow: hidden; }
 
 /* ============================================================
  * Context Panel (task 16.7)
@@ -578,6 +579,54 @@ body {
 }
 .cp-send-btn:hover { opacity: 0.88; }
 
+/* ============================================================
+ * Right Sidebar (task 15.12-A)
+ * ============================================================ */
+.right-sidebar {
+  grid-area: chat;
+  display: grid;
+  grid-template-columns: 1fr 44px;
+  min-width: 0;
+  overflow: hidden;
+  background: var(--surface-2);
+  border-left: 1px solid var(--line);
+  transition: grid-template-columns 180ms ease;
+}
+.right-sidebar.collapsed { grid-template-columns: 0fr 44px; }
+.sb-content {
+  min-width: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.sb-rail {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 2px;
+  padding: 6px 4px;
+  background: var(--bg);
+  border-left: 1px solid var(--line);
+}
+.sb-rail-btn {
+  height: 36px;
+  min-width: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  color: var(--ink-3);
+  cursor: pointer;
+}
+.sb-rail-btn:hover { background: var(--surface-3); color: var(--ink); }
+.sb-rail-btn.active {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  color: var(--accent);
+  border-color: var(--accent-2);
+}
+
 /* (c) Modal primitives */
 .modal-backdrop {
   position: fixed;
@@ -688,6 +737,30 @@ body {
   resize: vertical;
   min-height: 72px;
 }
+.qc-kind-row {
+  display: flex;
+  gap: 2px;
+  background: var(--surface-3);
+  border-radius: var(--radius-sm);
+  padding: 2px;
+  margin-bottom: 4px;
+}
+.qc-kind-btn {
+  flex: 1;
+  height: 26px;
+  border: none;
+  background: transparent;
+  border-radius: var(--radius-sm);
+  color: var(--ink-3);
+  font-size: 11px;
+  cursor: pointer;
+  text-transform: capitalize;
+}
+.qc-kind-btn:hover { color: var(--ink); }
+.qc-kind-btn.active {
+  background: var(--surface-2);
+  color: var(--ink);
+}
 .qc-actions {
   display: flex;
   justify-content: flex-end;
@@ -713,23 +786,23 @@ body {
 }
 .qc-actions button.primary:hover { opacity: 0.88; }
 
-/* (f) Tweaks panel */
-.tweaks-backdrop {
-  z-index: var(--z-tweaks);
-  align-items: flex-start;
-  justify-content: flex-end;
-  background: transparent;
-}
-.tweaks-panel {
+/* ============================================================
+ * Tweaks — floating corner card (task 15.12-E)
+ * ============================================================ */
+.tweaks-floating {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
   width: var(--modal-width-tweaks);
-  height: 100vh;
+  max-height: 70vh;
+  overflow-y: auto;
   background: var(--surface-2);
-  border-left: 1px solid var(--line-2);
+  border: 1px solid var(--line-2);
+  border-radius: var(--radius-lg);
   box-shadow: var(--shadow-2);
+  z-index: var(--z-tweaks);
   display: flex;
   flex-direction: column;
-  overflow: hidden;
-  z-index: var(--z-tweaks);
 }
 .tweaks-body {
   flex: 1;
