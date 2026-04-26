@@ -23,6 +23,7 @@
 
 mod checks;
 mod errors;
+mod sheaf;
 mod types;
 mod verify;
 
@@ -33,6 +34,7 @@ pub mod z3_verify;
 
 pub use checks::check_static_contracts;
 pub use errors::{ContractError, ContractStageError};
+pub use sheaf::{build_nerve, CechNerve, SheafOverlap, SheafSection};
 pub use types::{BreakingChange, ContractRecord, ContractSummary, VerifiedGraph};
 pub use verify::verify;
 

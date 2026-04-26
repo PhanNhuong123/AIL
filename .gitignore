@@ -36,3 +36,4 @@ ide/.vite/
 ide/src-tauri/gen/
 
 .env
+.tmp-design
