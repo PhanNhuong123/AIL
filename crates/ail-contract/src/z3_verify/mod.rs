@@ -43,10 +43,13 @@
 
 mod context_builder;
 mod node_verifier;
+mod obstruction;
 mod sort;
 
 #[cfg(test)]
 mod tests;
+
+pub use obstruction::{detect_obstructions, ObstructionResult, ObstructionStatus};
 
 use std::collections::HashMap;
 

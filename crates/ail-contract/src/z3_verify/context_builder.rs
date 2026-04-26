@@ -27,7 +27,21 @@ pub(super) fn build_encode_context<'ctx>(
     z3_ctx: &'ctx z3::Context,
 ) -> EncodeContext<'ctx> {
     let mut enc = EncodeContext::new(z3_ctx);
+    populate_encode_context(&mut enc, node, graph);
+    enc
+}
 
+/// Populate an existing [`EncodeContext`] with all variables from a `Do` node's
+/// parameter list and return type.
+///
+/// Extracted from [`build_encode_context`] so that the obstruction detector can
+/// merge variables from two nodes into a single shared context without re-creating
+/// the Z3 context.
+pub(super) fn populate_encode_context(
+    enc: &mut EncodeContext<'_>,
+    node: &Node,
+    graph: &dyn GraphBackend,
+) {
     // ── 1. Params ─────────────────────────────────────────────────────────────
     for param in &node.metadata.params {
         match sort_for_type_ref(&param.type_ref, graph) {
@@ -47,7 +61,7 @@ pub(super) fn build_encode_context<'ctx>(
                 // Record or text type — no Z3 scalar representation.
                 // If the type is a Describe node, expand its scalar fields
                 // so expressions like "param.balance" can be encoded.
-                expand_record_fields(&mut enc, &param.name, &param.type_ref, graph);
+                expand_record_fields(enc, &param.name, &param.type_ref, graph);
             }
         }
     }
@@ -66,12 +80,10 @@ pub(super) fn build_encode_context<'ctx>(
             }
             Z3Sort::Uninterpreted => {
                 // Describe return type: expand scalar fields as "result.{field}".
-                expand_record_fields(&mut enc, "result", ret_type, graph);
+                expand_record_fields(enc, "result", ret_type, graph);
             }
         }
     }
-
-    enc
 }
 
 /// Collect the type constraints that should be asserted for each non-Uninterpreted

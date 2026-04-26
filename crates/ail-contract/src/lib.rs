@@ -42,6 +42,8 @@ pub use verify::verify;
 pub use errors::{EncodeError, VerifyError};
 #[cfg(feature = "z3-verify")]
 pub use z3_verify::verify_contracts;
+#[cfg(feature = "z3-verify")]
+pub use z3_verify::{detect_obstructions, ObstructionResult, ObstructionStatus};
 
 #[cfg(test)]
 #[cfg(feature = "z3-verify")]
