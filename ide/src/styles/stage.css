@@ -978,3 +978,21 @@
 .node-tab-history-author { font-size: 11px; color: var(--accent); font-weight: 600; }
 .node-tab-history-ts { font-size: 10px; color: var(--ink-3); }
 .node-tab-history-msg { font-size: 12px; color: var(--ink-2); }
+
+/* 16.2 patch-state animation markers */
+@keyframes patch-added-in {
+  from { background: color-mix(in srgb, var(--ok) 20%, transparent); }
+  to   { background: transparent; }
+}
+@keyframes patch-modified-in {
+  from { background: color-mix(in srgb, var(--accent) 15%, transparent); }
+  to   { background: transparent; }
+}
+
+[data-patch-state="added"]    { animation: patch-added-in 600ms ease-out forwards; }
+[data-patch-state="modified"] { animation: patch-modified-in 400ms ease-out forwards; }
+@keyframes patch-removed-out {
+  from { opacity: 1; }
+  to   { opacity: 0; }
+}
+[data-patch-state="removed"] { animation: patch-removed-out 300ms ease-out forwards; }

@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 
 const invoke = vi.fn();
 // Capture listeners registered by onMount so tests can dispatch synthetic
@@ -45,6 +45,7 @@ import {
   nodeViewActiveTab,
   nodeCodeLang,
 } from '$lib/stage/node-view-state';
+import { patchEffects, clearPatchEffects } from '$lib/patch-effects';
 import Page from './+page.svelte';
 
 function emptyGraph(projectId = 'p1'): GraphJson {
@@ -156,33 +157,41 @@ describe('+page.svelte — task 15.11 watcher subscription', () => {
   });
 
   it('graph-updated patch handler applies the patch to $graph', async () => {
-    graph.set(emptyGraph());
-    render(Page);
-    await tick();
+    // 16.2: handler now flows through a 250 ms debounce buffer; we advance
+    // fake timers to force a flush before asserting graph state.
+    vi.useFakeTimers();
+    try {
+      graph.set(emptyGraph());
+      render(Page);
+      await tick();
 
-    const handler = listeners.get('graph-updated');
-    expect(handler).toBeDefined();
+      const handler = listeners.get('graph-updated');
+      expect(handler).toBeDefined();
 
-    const patch: GraphPatchJson = {
-      ...emptyPatch(),
-      modulesAdded: [
-        {
-          id: 'm-new',
-          name: 'new',
-          description: '',
-          cluster: 'default',
-          clusterName: 'default',
-          clusterColor: '#2997ff',
-          status: 'ok',
-          nodeCount: 1,
-          functions: [],
-        },
-      ],
-    };
-    handler!({ payload: patch } as unknown as Parameters<PatchHandler>[0]);
+      const patch: GraphPatchJson = {
+        ...emptyPatch(),
+        modulesAdded: [
+          {
+            id: 'm-new',
+            name: 'new',
+            description: '',
+            cluster: 'default',
+            clusterName: 'default',
+            clusterColor: '#2997ff',
+            status: 'ok',
+            nodeCount: 1,
+            functions: [],
+          },
+        ],
+      };
+      handler!({ payload: patch } as unknown as Parameters<PatchHandler>[0]);
+      vi.advanceTimersByTime(250);
 
-    const g = get(graph);
-    expect(g?.modules.map((m) => m.id)).toEqual(['m-new']);
+      const g = get(graph);
+      expect(g?.modules.map((m) => m.id)).toEqual(['m-new']);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('invariant 15.11-C: patch apply preserves non-graph/non-selection stores', async () => {
@@ -208,29 +217,36 @@ describe('+page.svelte — task 15.11 watcher subscription', () => {
   });
 
   it('reconciles selection when current node is removed by the patch', async () => {
-    const g = emptyGraph();
-    g.modules.push({
-      id: 'm1',
-      name: 'm1',
-      description: '',
-      cluster: 'default',
-      clusterName: 'default',
-      clusterColor: '#2997ff',
-      status: 'ok',
-      nodeCount: 1,
-      functions: [],
-    });
-    graph.set(g);
-    selection.set({ kind: 'module', id: 'm1' });
+    // 16.2: debounce buffer flush required before selection reconcile fires.
+    vi.useFakeTimers();
+    try {
+      const g = emptyGraph();
+      g.modules.push({
+        id: 'm1',
+        name: 'm1',
+        description: '',
+        cluster: 'default',
+        clusterName: 'default',
+        clusterColor: '#2997ff',
+        status: 'ok',
+        nodeCount: 1,
+        functions: [],
+      });
+      graph.set(g);
+      selection.set({ kind: 'module', id: 'm1' });
 
-    render(Page);
-    await tick();
-    const handler = listeners.get('graph-updated')!;
-    handler({
-      payload: { ...emptyPatch(), modulesRemoved: ['m1'] },
-    } as unknown as Parameters<PatchHandler>[0]);
+      render(Page);
+      await tick();
+      const handler = listeners.get('graph-updated')!;
+      handler({
+        payload: { ...emptyPatch(), modulesRemoved: ['m1'] },
+      } as unknown as Parameters<PatchHandler>[0]);
+      vi.advanceTimersByTime(250);
 
-    expect(get(selection)).toEqual({ kind: 'project', id: 'p1' });
+      expect(get(selection)).toEqual({ kind: 'project', id: 'p1' });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('starts watcher once per project id and not again for the same id', async () => {
@@ -498,6 +514,393 @@ describe('+page.svelte — task 16.1 agent listener wiring', () => {
 
     for (const [, fn] of unlistenFns) {
       expect(fn).toHaveBeenCalled();
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Helper builders for 16.2 tests
+// ---------------------------------------------------------------------------
+
+function seedGraphTwoModules(): GraphJson {
+  return {
+    project: { id: 'p1', name: 'Proj', description: '', nodeCount: 2, moduleCount: 2, fnCount: 0, status: 'ok' },
+    clusters: [],
+    modules: [
+      { id: 'm1', name: 'm1', description: '', cluster: 'c', clusterName: 'c', clusterColor: '#fff', status: 'ok', nodeCount: 1, functions: [] },
+      { id: 'm2', name: 'm2', description: '', cluster: 'c', clusterName: 'c', clusterColor: '#fff', status: 'ok', nodeCount: 1, functions: [] },
+    ],
+    externals: [],
+    relations: [],
+    types: [],
+    errors: [],
+    issues: [],
+    detail: {},
+  };
+}
+
+function seedGraphWithModule(id: string): GraphJson {
+  return {
+    project: { id: 'p1', name: 'Proj', description: '', nodeCount: 1, moduleCount: 1, fnCount: 0, status: 'ok' },
+    clusters: [],
+    modules: [
+      { id, name: id, description: '', cluster: 'c', clusterName: 'c', clusterColor: '#fff', status: 'ok', nodeCount: 1, functions: [] },
+    ],
+    externals: [],
+    relations: [],
+    types: [],
+    errors: [],
+    issues: [],
+    detail: {},
+  };
+}
+
+function patchAddModule(id: string): GraphPatchJson {
+  return {
+    ...emptyPatch(),
+    modulesAdded: [{ id, name: id, description: '', cluster: 'c', clusterName: 'c', clusterColor: '#fff', status: 'ok', nodeCount: 1, functions: [] }],
+    timestamp: Date.now(),
+  };
+}
+
+function patchRemoveModule(id: string): GraphPatchJson {
+  return { ...emptyPatch(), modulesRemoved: [id], timestamp: Date.now() };
+}
+
+function patchModifyModule(id: string): GraphPatchJson {
+  return {
+    ...emptyPatch(),
+    modulesModified: [{ id, name: id, description: 'modified', cluster: 'c', clusterName: 'c', clusterColor: '#fff', status: 'ok', nodeCount: 1, functions: [] }],
+    timestamp: Date.now(),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Task 16.2 — debounce, merge, animation
+// ---------------------------------------------------------------------------
+
+describe('+page.svelte — task 16.2 debounce, merge, animation', () => {
+  afterEach(() => {
+    clearPatchEffects();
+  });
+
+  it('L1 — two rapid graph-updated coalesce to one graph.update call', async () => {
+    vi.useFakeTimers();
+    try {
+      graph.set(emptyGraph());
+      render(Page);
+      await tick();
+
+      const handler = listeners.get('graph-updated');
+      expect(handler).toBeDefined();
+
+      const updateSpy = vi.spyOn(graph, 'update');
+      handler!({ payload: patchAddModule('m-coalesce-1') } as unknown as Parameters<PatchHandler>[0]);
+      handler!({ payload: patchAddModule('m-coalesce-2') } as unknown as Parameters<PatchHandler>[0]);
+
+      // No update yet — debounce timer not elapsed
+      expect(updateSpy).not.toHaveBeenCalled();
+
+      vi.advanceTimersByTime(250);
+
+      // Exactly one batch update
+      expect(updateSpy).toHaveBeenCalledTimes(1);
+      updateSpy.mockRestore();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('L2 — merged patch contains content from both coalesced patches', async () => {
+    vi.useFakeTimers();
+    try {
+      graph.set(emptyGraph());
+      render(Page);
+      await tick();
+
+      const handler = listeners.get('graph-updated')!;
+      handler({ payload: patchAddModule('m-merged-a') } as unknown as Parameters<PatchHandler>[0]);
+      handler({ payload: patchAddModule('m-merged-b') } as unknown as Parameters<PatchHandler>[0]);
+
+      vi.advanceTimersByTime(250);
+
+      const ids = get(graph)!.modules.map((m) => m.id);
+      expect(ids).toContain('m-merged-a');
+      expect(ids).toContain('m-merged-b');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('L3 — debounce-buffer preserves 15.11-C stores AND writes patchEffects', async () => {
+    vi.useFakeTimers();
+    try {
+      clearPatchEffects();
+      graph.set(emptyGraph());
+      activeLens.set('rules');
+      chatDraft.set('preserved-draft');
+      chatMode.set('ask');
+      nodeViewActiveTab.set('proof');
+      nodeCodeLang.set('typescript');
+      const beforeChatCount = get(chatMessages).length;
+
+      render(Page);
+      await tick();
+
+      const handler = listeners.get('graph-updated')!;
+      handler({ payload: patchAddModule('m-l3-a') } as unknown as Parameters<PatchHandler>[0]);
+      handler({ payload: patchAddModule('m-l3-b') } as unknown as Parameters<PatchHandler>[0]);
+
+      vi.advanceTimersByTime(250);
+
+      // 15.11-C stores must remain untouched
+      expect(get(activeLens)).toBe('rules');
+      expect(get(chatDraft)).toBe('preserved-draft');
+      expect(get(chatMode)).toBe('ask');
+      expect(get(nodeViewActiveTab)).toBe('proof');
+      expect(get(nodeCodeLang)).toBe('typescript');
+      expect(get(chatMessages).length).toBe(beforeChatCount);
+
+      // patchEffects is the NEW allowlisted write
+      expect(get(patchEffects).addedIds.length).toBeGreaterThan(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('L4 — unmount cancels pending debounce timer (no post-destroy graph.update)', async () => {
+    vi.useFakeTimers();
+    try {
+      graph.set(emptyGraph());
+      const { unmount } = render(Page);
+      await tick();
+
+      const handler = listeners.get('graph-updated')!;
+      handler({ payload: patchAddModule('m-l4') } as unknown as Parameters<PatchHandler>[0]);
+
+      const updateSpy = vi.spyOn(graph, 'update');
+
+      // Unmount before timer fires
+      unmount();
+      await tick();
+
+      // Advance timer — should NOT fire because destroyed=true and timer cleared
+      vi.advanceTimersByTime(500);
+
+      expect(updateSpy).not.toHaveBeenCalled();
+      updateSpy.mockRestore();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('L5 — preview Apply during burst drains buffer synchronously before patch', async () => {
+    vi.useFakeTimers();
+    try {
+      graph.set(emptyGraph());
+      const { container } = render(Page);
+      await tick();
+
+      currentRunId.set('r-l5');
+
+      // Queue a watcher patch without flushing
+      const handler = listeners.get('graph-updated')!;
+      handler({ payload: patchAddModule('m-from-watcher') } as unknown as Parameters<PatchHandler>[0]);
+
+      // Now simulate agent message with preview
+      const msgHandler = listeners.get('agent-message')!;
+      msgHandler({
+        payload: {
+          runId: 'r-l5',
+          messageId: 'm-l5',
+          text: 'proposed',
+          preview: { title: 'T', summary: 'S', patch: patchAddModule('m-from-preview') },
+        },
+      } as unknown as Parameters<PatchHandler>[0]);
+      await tick();
+
+      // Click apply on the newly added card (last Confirm button)
+      const confirmBtns = container.querySelectorAll('[data-testid="chat-preview-confirm"]');
+      fireEvent.click(confirmBtns[confirmBtns.length - 1] as HTMLButtonElement);
+      await tick();
+
+      // Both modules must appear (watcher flushed + preview applied)
+      const ids = get(graph)!.modules.map((m) => m.id);
+      expect(ids).toContain('m-from-watcher');
+      expect(ids).toContain('m-from-preview');
+
+      // Timer no longer pending (flushNow cleared it)
+      const updateSpy = vi.spyOn(graph, 'update');
+      vi.advanceTimersByTime(500);
+      expect(updateSpy).not.toHaveBeenCalled();
+      updateSpy.mockRestore();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('L6 — patchEffects.addedIds populated after flush, cleared after delay', async () => {
+    // Fake timers so the assertion lands on deterministic instants:
+    //   t=250ms → flushPatch fires → patchEffects populated; setTimeout(clearPatchEffects, 650) scheduled.
+    //   t=250+650=900ms → clearPatchEffects fires → patchEffects empty.
+    vi.useFakeTimers();
+    try {
+      graph.set(emptyGraph());
+      render(Page);
+      await tick();
+
+      clearPatchEffects();
+      const handler = listeners.get('graph-updated')!;
+      handler({ payload: patchAddModule('m-effects') } as unknown as Parameters<PatchHandler>[0]);
+
+      // Flush
+      vi.advanceTimersByTime(250);
+      expect(get(patchEffects).addedIds).toContain('m-effects');
+
+      // Clear delay
+      vi.advanceTimersByTime(650);
+      expect(get(patchEffects).addedIds).toHaveLength(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('L7 — only modified modules see content change; untouched modules are content-equal', async () => {
+    // applyGraphPatch shallow-clones the modules array on entry, so strict
+    // object identity (===) is NOT preserved on untouched modules. Svelte's
+    // keyed {#each (mod.id)} block uses the id key, not object identity, so
+    // re-render scoping still works correctly. This test asserts the
+    // observable invariant: untouched module retains its data; modified
+    // module reflects the patch payload.
+    vi.useFakeTimers();
+    try {
+      graph.set(seedGraphTwoModules());
+      render(Page);
+      await tick();
+
+      const m1Before = get(graph)!.modules[0];
+      const m2Before = get(graph)!.modules[1];
+
+      const handler = listeners.get('graph-updated')!;
+      handler({ payload: patchModifyModule('m2') } as unknown as Parameters<PatchHandler>[0]);
+
+      vi.advanceTimersByTime(250);
+
+      const modsAfter = get(graph)!.modules;
+      // m1 is unchanged in content (description still '')
+      expect(modsAfter[0].id).toBe('m1');
+      expect(modsAfter[0].description).toBe(m1Before.description);
+      expect(modsAfter[0].name).toBe(m1Before.name);
+      // m2 has the modified content (description: 'modified' from builder)
+      expect(modsAfter[1].id).toBe('m2');
+      expect(modsAfter[1].description).toBe('modified');
+      expect(modsAfter[1].description).not.toBe(m2Before.description);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('L8 — buffer that cancels out (add then remove same id) produces zero graph.update calls', async () => {
+    vi.useFakeTimers();
+    try {
+      graph.set(emptyGraph());
+      render(Page);
+      await tick();
+
+      const updateSpy = vi.spyOn(graph, 'update');
+      const handler = listeners.get('graph-updated')!;
+
+      handler({ payload: patchAddModule('m-cancel') } as unknown as Parameters<PatchHandler>[0]);
+      handler({ payload: patchRemoveModule('m-cancel') } as unknown as Parameters<PatchHandler>[0]);
+
+      vi.advanceTimersByTime(250);
+
+      // Merged patch is empty → flushPatch bails early → no graph.update
+      expect(updateSpy).not.toHaveBeenCalled();
+      updateSpy.mockRestore();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('L10 — 200-module graph: patch modifying 1 module triggers exactly 1 graph.update flush', async () => {
+    vi.useFakeTimers();
+    try {
+      // Build a 200-module graph
+      const big = emptyGraph();
+      for (let i = 0; i < 200; i++) {
+        big.modules.push({
+          id: `m${i}`, name: `m${i}`, description: '', cluster: 'c',
+          clusterName: 'c', clusterColor: '#fff', status: 'ok',
+          nodeCount: 1, functions: [],
+        });
+      }
+      graph.set(big);
+      render(Page);
+      await tick();
+
+      const updateSpy = vi.spyOn(graph, 'update');
+      const handler = listeners.get('graph-updated')!;
+      // Modify one module
+      handler({ payload: patchModifyModule('m100') } as unknown as Parameters<PatchHandler>[0]);
+      vi.advanceTimersByTime(250);
+
+      // Exactly one debounced flush
+      expect(updateSpy).toHaveBeenCalledTimes(1);
+      // Only m100 has its content changed; other 199 retain original content
+      const mods = get(graph)!.modules;
+      expect(mods).toHaveLength(200);
+      expect(mods[100].description).toBe('modified');
+      expect(mods[0].description).toBe('');
+      expect(mods[199].description).toBe('');
+      updateSpy.mockRestore();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('L9 — preview Apply drains pending watcher buffer before applying preview patch', async () => {
+    vi.useFakeTimers();
+    try {
+      graph.set(emptyGraph());
+      const { container } = render(Page);
+      await tick();
+
+      currentRunId.set('r-l9');
+
+      // Queue watcher patch without flushing (timer pending)
+      const handler = listeners.get('graph-updated')!;
+      handler({ payload: patchAddModule('m-watcher-l9') } as unknown as Parameters<PatchHandler>[0]);
+
+      // Add a preview card via agent-message
+      const msgHandler = listeners.get('agent-message')!;
+      msgHandler({
+        payload: {
+          runId: 'r-l9',
+          messageId: 'm-l9',
+          text: 'proposed',
+          preview: { title: 'T', summary: 'S', patch: patchAddModule('m-preview-l9') },
+        },
+      } as unknown as Parameters<PatchHandler>[0]);
+      await tick();
+
+      // Click Apply on the newly added card
+      const confirmBtns = container.querySelectorAll('[data-testid="chat-preview-confirm"]');
+      fireEvent.click(confirmBtns[confirmBtns.length - 1] as HTMLButtonElement);
+      await tick();
+
+      // Both modules must be present (watcher flushed via flushNow + preview applied)
+      const ids = get(graph)!.modules.map((m) => m.id);
+      expect(ids).toContain('m-watcher-l9');
+      expect(ids).toContain('m-preview-l9');
+
+      // Debounce timer was cleared by flushNow → no double-apply
+      const updateSpy = vi.spyOn(graph, 'update');
+      vi.advanceTimersByTime(500);
+      expect(updateSpy).not.toHaveBeenCalled();
+      updateSpy.mockRestore();
+    } finally {
+      vi.useRealTimers();
     }
   });
 });

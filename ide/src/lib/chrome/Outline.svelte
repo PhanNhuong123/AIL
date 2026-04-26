@@ -4,6 +4,7 @@
   import { expanded, filterTerm, toggleExpanded } from './outline-state';
   import { filterTree, isVisible, ALL } from './filter';
   import { zoomLevel, stageLevelForKind } from './toolbar-state';
+  import { patchEffects } from '$lib/patch-effects';
   import OutlineRow from './OutlineRow.svelte';
   import OutlineSection from './OutlineSection.svelte';
 
@@ -11,6 +12,17 @@
   $: visible = filterTree(g, $filterTerm);
   // When filter is active, show all visible items regardless of expand state
   $: filtering = visible !== ALL;
+
+  $: addedIds    = $patchEffects.addedIds;
+  $: modifiedIds = $patchEffects.modifiedIds;
+  $: removedIds  = $patchEffects.removedIds;
+
+  function patchStateFor(id) {
+    if (addedIds.includes(id)) return 'added';
+    if (modifiedIds.includes(id)) return 'modified';
+    if (removedIds.includes(id)) return 'removed';
+    return undefined;
+  }
 
   // Outline row clicks update selection, path, and zoomLevel (via stageLevelForKind),
   // intentionally outside the toolbar back/forward history stack (invariant 15.4-B).
@@ -52,54 +64,60 @@
         />
       {/if}
 
-      {#each g.modules as mod}
+      {#each g.modules as mod (mod.id)}
         {#if isVisible(visible, mod.id)}
-          <OutlineRow
-            kind="module"
-            name={mod.name}
-            status={mod.status}
-            depth={1}
-            hasChildren={mod.functions.length > 0}
-            expanded={isOpen(mod.id)}
-            selected={$selection.id === mod.id}
-            onClick={() => selectNode('module', mod.id, [g.project.id])}
-            onToggle={() => toggleExpanded(mod.id)}
-          />
+          <div data-patch-state={patchStateFor(mod.id)}>
+            <OutlineRow
+              kind="module"
+              name={mod.name}
+              status={mod.status}
+              depth={1}
+              hasChildren={mod.functions.length > 0}
+              expanded={isOpen(mod.id)}
+              selected={$selection.id === mod.id}
+              onClick={() => selectNode('module', mod.id, [g.project.id])}
+              onToggle={() => toggleExpanded(mod.id)}
+            />
 
-          {#if isOpen(mod.id)}
-            {#each mod.functions as fn_}
-              {#if isVisible(visible, fn_.id)}
-                <OutlineRow
-                  kind="function"
-                  name={fn_.name}
-                  status={fn_.status}
-                  depth={2}
-                  hasChildren={(fn_.steps || []).length > 0}
-                  expanded={isOpen(fn_.id)}
-                  selected={$selection.id === fn_.id}
-                  onClick={() => selectNode('function', fn_.id, [g.project.id, mod.id])}
-                  onToggle={() => toggleExpanded(fn_.id)}
-                />
+            {#if isOpen(mod.id)}
+              {#each mod.functions as fn_ (fn_.id)}
+                {#if isVisible(visible, fn_.id)}
+                  <div data-patch-state={patchStateFor(fn_.id)}>
+                    <OutlineRow
+                      kind="function"
+                      name={fn_.name}
+                      status={fn_.status}
+                      depth={2}
+                      hasChildren={(fn_.steps || []).length > 0}
+                      expanded={isOpen(fn_.id)}
+                      selected={$selection.id === fn_.id}
+                      onClick={() => selectNode('function', fn_.id, [g.project.id, mod.id])}
+                      onToggle={() => toggleExpanded(fn_.id)}
+                    />
 
-                {#if isOpen(fn_.id)}
-                  {#each fn_.steps || [] as step}
-                    {#if isVisible(visible, step.id)}
-                      <OutlineRow
-                        kind="step"
-                        name={step.name}
-                        status={step.status}
-                        depth={3}
-                        hasChildren={false}
-                        expanded={false}
-                        selected={$selection.id === step.id}
-                        onClick={() => selectNode('step', step.id, [g.project.id, mod.id, fn_.id])}
-                      />
+                    {#if isOpen(fn_.id)}
+                      {#each fn_.steps || [] as step (step.id)}
+                        {#if isVisible(visible, step.id)}
+                          <div data-patch-state={patchStateFor(step.id)}>
+                            <OutlineRow
+                              kind="step"
+                              name={step.name}
+                              status={step.status}
+                              depth={3}
+                              hasChildren={false}
+                              expanded={false}
+                              selected={$selection.id === step.id}
+                              onClick={() => selectNode('step', step.id, [g.project.id, mod.id, fn_.id])}
+                            />
+                          </div>
+                        {/if}
+                      {/each}
                     {/if}
-                  {/each}
+                  </div>
                 {/if}
-              {/if}
-            {/each}
-          {/if}
+              {/each}
+            {/if}
+          </div>
         {/if}
       {/each}
     </OutlineSection>

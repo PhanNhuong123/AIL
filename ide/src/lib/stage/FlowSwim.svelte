@@ -71,6 +71,7 @@
     {/each}
 
     <!-- Edges (simple straight lines in swim view) -->
+    <!-- Phase 17: edge animation deferred from 16.2 — GraphPatchJson has no edge arrays; flowchart edges depend on Phase 17 sheaf-aware projection. -->
     {#each flowchart.edges as edge (edge.from + '->' + edge.to)}
       {@const fromN = flowchart.nodes.find((n) => n.id === edge.from)}
       {@const toN   = flowchart.nodes.find((n) => n.id === edge.to)}

@@ -28,6 +28,7 @@
   $: midY = (fy + ty) / 2;
 </script>
 
+<!-- Phase 17: edge animation deferred from 16.2 — GraphPatchJson has no edge arrays; flowchart edges depend on Phase 17 sheaf-aware projection. -->
 <g class="flowchart-edge {colorClass}" data-testid="flowchart-edge-{edge.from}-{edge.to}">
   <path {d} marker-end={markerId} class="edge-path"/>
   {#if edge.label}

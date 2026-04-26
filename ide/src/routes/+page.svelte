@@ -15,11 +15,14 @@
   import type {
     AgentStepPayload, AgentMessagePayload, AgentCompletePayload,
   } from '$lib/types';
+  import type { GraphPatchJson } from '$lib/types';
   import { graph, selection } from '$lib/stores';
   import {
     chatMessages, chatPreviewCards, currentRunId, isAgentRunning,
   } from '$lib/chat/chat-state';
   import { applyGraphPatch, reconcileSelectionAfterPatch } from '$lib/graph-patch';
+  import { mergePatches, isEmptyPatch, emptyPatch } from '$lib/patch-merge';
+  import { patchEffects, clearPatchEffects, computePatchEffects, CLEAR_DELAY_MS } from '$lib/patch-effects';
   import '../styles/tokens.css';
   import '../styles/chrome.css';
   import '../styles/stage.css';
@@ -40,6 +43,14 @@
   // Bounded per-run to prevent unbounded growth from a misbehaving sidecar.
   const pendingEvents = new Map();
   const PENDING_LIMIT = 64;
+
+  // Debounce state for graph-updated patches (task 16.2).
+  // `destroyed` is hoisted to module-level so flushPatch can read it safely.
+  let patchBuffer = emptyPatch();
+  let debounceTimer = null as ReturnType<typeof setTimeout> | null;
+  let clearEffectsTimer = null as ReturnType<typeof setTimeout> | null;
+  const DEBOUNCE_MS = 250;
+  let destroyed = false;
 
   function bufferEvent(runId, event) {
     const arr = pendingEvents.get(runId) ?? [];
@@ -103,9 +114,56 @@
     }
   });
 
+  // ---------------------------------------------------------------------------
+  // Patch debounce helpers (task 16.2)
+  // ---------------------------------------------------------------------------
+
+  function applyPatchAndAnimate(patch) {
+    graph.update((g) => (g ? applyGraphPatch(g, patch) : g));
+    const next = get(graph);
+    if (next) {
+      selection.update((s) => reconcileSelectionAfterPatch(s, patch, next));
+      // Only set effects when graph was non-null (fixes I4 too).
+      patchEffects.set(computePatchEffects(patch));
+      if (clearEffectsTimer !== null) clearTimeout(clearEffectsTimer);
+      clearEffectsTimer = setTimeout(() => {
+        clearPatchEffects();
+        clearEffectsTimer = null;
+      }, CLEAR_DELAY_MS);
+    }
+  }
+
+  function schedulePatchFlush(patch) {
+    patchBuffer = mergePatches(patchBuffer, patch);
+    if (debounceTimer !== null) clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(flushPatch, DEBOUNCE_MS);
+  }
+
+  function flushPatch() {
+    if (destroyed) return;
+    const merged = patchBuffer;
+    patchBuffer = emptyPatch();
+    debounceTimer = null;
+    if (isEmptyPatch(merged)) return;
+    applyPatchAndAnimate(merged);
+  }
+
+  function flushNow() {
+    if (debounceTimer !== null) {
+      clearTimeout(debounceTimer);
+      debounceTimer = null;
+    }
+    const merged = patchBuffer;
+    patchBuffer = emptyPatch();
+    if (!isEmptyPatch(merged)) applyPatchAndAnimate(merged);
+  }
+
+  // ---------------------------------------------------------------------------
+  // onMount: event subscriptions
+  // ---------------------------------------------------------------------------
+
   onMount(() => {
     const unlistens = [] as Array<() => void>;
-    let destroyed = false;
 
     function register(p) {
       p.then((fn) => {
@@ -114,14 +172,10 @@
       });
     }
 
-    // Watcher (invariant 15.11-C): patch application writes ONLY `graph`
-    // and `selection`.
+    // Watcher (invariant 15.11-C + 16.2): patch application writes ONLY
+    // `graph`, `selection`, and `patchEffects` (16.2 allowlisted writer).
     register(onGraphUpdated((patch) => {
-      graph.update((g) => (g ? applyGraphPatch(g, patch) : g));
-      const next = get(graph);
-      if (next) {
-        selection.update((s) => reconcileSelectionAfterPatch(s, patch, next));
-      }
+      schedulePatchFlush(patch);
     }));
 
     // Phase 16 task 16.1 agent listeners. Each handler guards
@@ -159,6 +213,15 @@
 
     return () => {
       destroyed = true;
+      if (debounceTimer !== null) {
+        clearTimeout(debounceTimer);
+        debounceTimer = null;
+      }
+      if (clearEffectsTimer !== null) {
+        clearTimeout(clearEffectsTimer);
+        clearEffectsTimer = null;
+      }
+      patchBuffer = emptyPatch();
       for (const fn of unlistens) fn();
       unsubCurrentRunId();
       pendingEvents.clear();
@@ -179,15 +242,13 @@
   // Preview Apply handler — invariant 16.1-C: Only +page.svelte writes
   // `graph` / `selection`. Preview cards without a patch (e.g. the seed
   // card) are simply removed.
+  // 16.2: flushNow() drains pending watcher buffer before applying the preview.
   function handlePreviewApply(ev) {
     const card = (ev as CustomEvent).detail;
     if (!card) return;
+    flushNow();
     if (card.patch) {
-      graph.update((g) => (g ? applyGraphPatch(g, card.patch) : g));
-      const next = get(graph);
-      if (next) {
-        selection.update((s) => reconcileSelectionAfterPatch(s, card.patch, next));
-      }
+      applyPatchAndAnimate(card.patch);
     }
     chatPreviewCards.update((arr) => arr.filter((c) => c.id !== card.id));
   }

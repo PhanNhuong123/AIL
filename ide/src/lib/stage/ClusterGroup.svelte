@@ -2,6 +2,7 @@
   import { createEventDispatcher } from 'svelte';
   import Icon from '$lib/icons/Icon.svelte';
   import ModuleCard from './ModuleCard.svelte';
+  import { patchEffects } from '$lib/patch-effects';
   import type { ClusterJson, ModuleJson } from '$lib/types';
   import type { ClusterCounts } from './stage-state';
 
@@ -11,6 +12,17 @@
   export let counts = { total: 0, failing: 0, warn: 0 } as ClusterCounts;
 
   const dispatch = createEventDispatcher();
+
+  $: addedIds    = $patchEffects.addedIds;
+  $: modifiedIds = $patchEffects.modifiedIds;
+  $: removedIds  = $patchEffects.removedIds;
+
+  function patchStateFor(id) {
+    if (addedIds.includes(id)) return 'added';
+    if (modifiedIds.includes(id)) return 'modified';
+    if (removedIds.includes(id)) return 'removed';
+    return undefined;
+  }
 
   function handleToggle() {
     dispatch('toggle', { id: cluster.id });
@@ -75,8 +87,10 @@
 
   {#if !collapsed}
     <div class="cluster-grid" data-testid="cluster-grid-{cluster.id}">
-      {#each modules as mod}
-        <ModuleCard module={mod} />
+      {#each modules as mod (mod.id)}
+        <div data-patch-state={patchStateFor(mod.id)}>
+          <ModuleCard module={mod} />
+        </div>
       {/each}
     </div>
   {/if}
