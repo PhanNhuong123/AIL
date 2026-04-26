@@ -11,6 +11,7 @@ use ail_graph::{AilGraph, GraphBackend, ValidGraph};
 ///
 /// The only way to obtain a `TypedGraph` is through [`crate::type_check`].
 /// Downstream crates (`ail-contract`) require `TypedGraph` as input.
+#[derive(Clone)]
 pub struct TypedGraph(ValidGraph);
 
 impl TypedGraph {

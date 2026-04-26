@@ -9,6 +9,7 @@ use crate::graph::{AilGraph, GraphBackend};
 /// input and cannot accept a raw `AilGraph`.
 ///
 /// The only way to obtain a `ValidGraph` is through [`crate::validate_graph`].
+#[derive(Clone)]
 pub struct ValidGraph(AilGraph);
 
 impl ValidGraph {

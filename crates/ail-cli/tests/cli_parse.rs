@@ -295,3 +295,86 @@ fn command_agent_missing_task_fails() {
         "parsing `ail agent` with no task should fail"
     );
 }
+
+// ── Phase 17 task 17.3: sheaf parse tests ────────────────────────────────────
+
+/// `ail sheaf` with no args → all fields None.
+#[test]
+fn cli_parse_sheaf_default() {
+    let cmd = parse(&["ail", "sheaf"]);
+    let Command::Sheaf {
+        node,
+        format,
+        from_db,
+    } = cmd
+    else {
+        panic!("expected Sheaf");
+    };
+    assert!(node.is_none(), "node must be None by default");
+    assert!(format.is_none(), "format must be None by default");
+    assert!(from_db.is_none(), "from_db must be None by default");
+}
+
+/// `ail sheaf --node transfer_money` → `node = Some("transfer_money")`.
+#[test]
+fn cli_parse_sheaf_with_node() {
+    let cmd = parse(&["ail", "sheaf", "--node", "transfer_money"]);
+    let Command::Sheaf { node, .. } = cmd else {
+        panic!("expected Sheaf");
+    };
+    assert_eq!(node.as_deref(), Some("transfer_money"));
+}
+
+/// `ail sheaf --format json` → `format = Some("json")`.
+#[test]
+fn cli_parse_sheaf_format_json() {
+    let cmd = parse(&["ail", "sheaf", "--format", "json"]);
+    let Command::Sheaf { format, .. } = cmd else {
+        panic!("expected Sheaf");
+    };
+    assert_eq!(format.as_deref(), Some("json"));
+}
+
+/// `ail sheaf --format text` → `format = Some("text")`.
+#[test]
+fn cli_parse_sheaf_format_text() {
+    let cmd = parse(&["ail", "sheaf", "--format", "text"]);
+    let Command::Sheaf { format, .. } = cmd else {
+        panic!("expected Sheaf");
+    };
+    assert_eq!(format.as_deref(), Some("text"));
+}
+
+/// `ail sheaf --node transfer_money --format json` → both fields set.
+#[test]
+fn cli_parse_sheaf_with_node_and_format() {
+    let cmd = parse(&[
+        "ail",
+        "sheaf",
+        "--node",
+        "transfer_money",
+        "--format",
+        "json",
+    ]);
+    let Command::Sheaf {
+        node,
+        format,
+        from_db,
+    } = cmd
+    else {
+        panic!("expected Sheaf");
+    };
+    assert_eq!(node.as_deref(), Some("transfer_money"));
+    assert_eq!(format.as_deref(), Some("json"));
+    assert!(from_db.is_none());
+}
+
+/// `ail sheaf --from-db /some/path.ail.db` → `from_db = Some(PathBuf)`.
+#[test]
+fn cli_parse_sheaf_with_from_db() {
+    let cmd = parse(&["ail", "sheaf", "--from-db", "/some/path.ail.db"]);
+    let Command::Sheaf { from_db, .. } = cmd else {
+        panic!("expected Sheaf");
+    };
+    assert_eq!(from_db, Some(PathBuf::from("/some/path.ail.db")));
+}

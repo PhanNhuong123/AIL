@@ -25,6 +25,7 @@ pub use commands::{
     run_cmd::run_run,
     search::run_search,
     serve::run_serve,
+    sheaf::{render_sheaf_output, run_sheaf, OutputFormat},
     status::run_status,
     test_cmd::run_test,
     verify::run_verify,
@@ -76,6 +77,12 @@ pub fn run() -> Result<(), CliError> {
         Command::Run => run_run(&cwd),
 
         Command::Serve => run_serve(&cwd),
+
+        Command::Sheaf {
+            node,
+            format,
+            from_db,
+        } => run_sheaf(&cwd, node, format, from_db.as_deref()),
 
         Command::Status => run_status(&cwd),
 
@@ -202,6 +209,21 @@ pub enum Command {
 
     /// Start the AIL MCP server over stdio.
     Serve,
+
+    /// Compute and display the Čech sheaf nerve and (with z3-verify) H1 obstructions.
+    Sheaf {
+        /// Limit analysis to the subtree rooted at this node (UUID or name).
+        #[arg(long, value_name = "NAME_OR_ID")]
+        node: Option<String>,
+
+        /// Output format. Accepted values: text (default), json.
+        #[arg(long, value_name = "FORMAT")]
+        format: Option<String>,
+
+        /// Load the project from this `.ail.db` instead of auto-detecting.
+        #[arg(long, value_name = "PATH")]
+        from_db: Option<PathBuf>,
+    },
 
     /// Show the highest pipeline stage reached and node/edge counts.
     Status,

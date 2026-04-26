@@ -34,12 +34,14 @@ pub mod z3_verify;
 
 pub use checks::check_static_contracts;
 pub use errors::{ContractError, ContractStageError};
-pub use sheaf::{build_nerve, CechNerve, SheafOverlap, SheafSection};
+pub use sheaf::{build_nerve, filter_to_subtree, CechNerve, SheafOverlap, SheafSection};
 pub use types::{BreakingChange, ContractRecord, ContractSummary, VerifiedGraph};
 pub use verify::verify;
 
 #[cfg(feature = "z3-verify")]
 pub use errors::{EncodeError, VerifyError};
+#[cfg(feature = "z3-verify")]
+pub use sheaf::analyze_sheaf_obstructions;
 #[cfg(feature = "z3-verify")]
 pub use z3_verify::verify_contracts;
 #[cfg(feature = "z3-verify")]

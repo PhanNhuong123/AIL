@@ -17,6 +17,7 @@ use ail_graph::{
     GraphBackend,
 };
 use ail_types::ConstraintExpr;
+use serde::{Deserialize, Serialize};
 use z3::{ast::Bool, SatResult, Solver};
 
 use crate::sheaf::{CechNerve, SheafOverlap, SheafSection};
@@ -31,7 +32,8 @@ use super::sort::sort_for_type_ref;
 /// `overlap_index` is the zero-based index in `CechNerve.overlaps`, providing
 /// a stable back-reference. `node_a` and `node_b` mirror `SheafOverlap.node_a`
 /// / `node_b` for caller convenience.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub struct ObstructionResult {
     pub overlap_index: usize,
     pub node_a: NodeId,
@@ -40,7 +42,8 @@ pub struct ObstructionResult {
 }
 
 /// Outcome of the Z3 check for one overlap.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
 pub enum ObstructionStatus {
     /// The combined constraints are jointly satisfiable.
     Consistent,
@@ -383,7 +386,9 @@ mod tests {
     use crate::sheaf::{build_nerve, CechNerve, SheafOverlap, SheafSection};
     use crate::types::VerifiedGraph;
     use crate::verify::verify;
-    use crate::z3_verify::obstruction::{detect_obstructions, ObstructionStatus};
+    use crate::z3_verify::obstruction::{
+        detect_obstructions, ObstructionResult, ObstructionStatus,
+    };
 
     // ── Fixture helpers ───────────────────────────────────────────────────────
 
@@ -1058,5 +1063,79 @@ mod tests {
                 "Bool::new_const(ctx, {name}).to_string() must equal the declared name"
             );
         }
+    }
+
+    // ── Phase 17.3: Serde tests (invariant 17.3-D) ───────────────────────────
+
+    #[test]
+    fn obstruction_status_consistent_serializes_with_kind_consistent() {
+        // Golden literal — locks invariant 17.3-D: uniform tagged-object schema.
+        let json = serde_json::to_string(&ObstructionStatus::Consistent).unwrap();
+        assert_eq!(
+            json, r#"{"kind":"consistent"}"#,
+            "Consistent must serialize as {{\"kind\":\"consistent\"}}"
+        );
+    }
+
+    #[test]
+    fn obstruction_status_contradictory_serde_roundtrip() {
+        use ail_types::parse_constraint_expr;
+
+        let ca = vec![parse_constraint_expr("amount > 10").unwrap()];
+        let cb = vec![parse_constraint_expr("amount < 5").unwrap()];
+        let status = ObstructionStatus::Contradictory {
+            conflicting_a: ca,
+            conflicting_b: cb,
+        };
+        let json = serde_json::to_string(&status).unwrap();
+        let parsed: ObstructionStatus = serde_json::from_str(&json).unwrap();
+        assert_eq!(
+            status, parsed,
+            "Contradictory status must survive roundtrip"
+        );
+    }
+
+    #[test]
+    fn obstruction_status_unknown_with_reason_roundtrip() {
+        let status = ObstructionStatus::Unknown {
+            reason: "Z3 returned Unknown (timeout or resource limit)".to_string(),
+        };
+        let json = serde_json::to_string(&status).unwrap();
+        let parsed: ObstructionStatus = serde_json::from_str(&json).unwrap();
+        assert_eq!(status, parsed, "Unknown status must survive roundtrip");
+        // Verify the reason string is preserved exactly.
+        if let ObstructionStatus::Unknown { reason } = &parsed {
+            assert!(reason.contains("timeout"), "reason must be preserved");
+        } else {
+            panic!("parsed status must be Unknown");
+        }
+    }
+
+    #[test]
+    fn obstruction_result_serde_roundtrip_full_object() {
+        use ail_types::parse_constraint_expr;
+
+        let node_a = NodeId::new();
+        let node_b = NodeId::new();
+        let ca = vec![parse_constraint_expr("amount > 10").unwrap()];
+        let cb = vec![parse_constraint_expr("amount < 5").unwrap()];
+        let result = ObstructionResult {
+            overlap_index: 3,
+            node_a,
+            node_b,
+            status: ObstructionStatus::Contradictory {
+                conflicting_a: ca,
+                conflicting_b: cb,
+            },
+        };
+        let json = serde_json::to_string_pretty(&result).unwrap();
+        let parsed: ObstructionResult = serde_json::from_str(&json).unwrap();
+        assert_eq!(
+            result, parsed,
+            "ObstructionResult must survive full roundtrip"
+        );
+        assert_eq!(parsed.overlap_index, 3);
+        assert_eq!(parsed.node_a, node_a);
+        assert_eq!(parsed.node_b, node_b);
     }
 }

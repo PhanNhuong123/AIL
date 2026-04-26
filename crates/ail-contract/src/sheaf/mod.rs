@@ -14,10 +14,18 @@
 //!    overlaps are sorted by `(node_a.to_string(), node_b.to_string())`.
 
 mod builder;
+mod scope;
 mod types;
 
 #[cfg(test)]
 mod tests;
 
+#[cfg(feature = "z3-verify")]
+mod analyze;
+
 pub use builder::build_nerve;
+pub use scope::filter_to_subtree;
 pub use types::{CechNerve, SheafOverlap, SheafSection};
+
+#[cfg(feature = "z3-verify")]
+pub use analyze::analyze_sheaf_obstructions;

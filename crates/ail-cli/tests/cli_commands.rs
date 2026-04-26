@@ -144,6 +144,99 @@ fn status_empty_project_is_raw() {
     );
 }
 
+// ── Phase 17 task 17.3: ail verify UNSAT augmentation tests ──────────────────
+
+/// When `run_verify` encounters a Z3 UNSAT error (AIL-C011 ContradictoryPreconditions),
+/// the returned `CliError::Pipeline` body must contain BOTH the original AIL-C011
+/// message verbatim AND a "Sheaf localization" suffix.
+///
+/// Gated with `#[ignore]` because Z3 is environment-sensitive.
+/// Run with: `cargo test -p ail-cli --features z3-verify -- --include-ignored`
+#[cfg(feature = "z3-verify")]
+#[test]
+#[ignore]
+fn t173_ail_verify_unsat_appends_sheaf_localization() {
+    // Write a fixture whose before-contracts are provably contradictory under Z3:
+    // `amount > 10` AND `amount < 5` cannot both hold simultaneously.
+    // Uses built-in `PositiveAmount` and `PositiveInteger` types (no define needed).
+    let tmp = tempfile::tempdir().unwrap();
+    let src = tmp.path().join("src");
+    fs::create_dir_all(&src).unwrap();
+    fs::write(
+        src.join("contradictory.ail"),
+        concat!(
+            "do transfer money\n",
+            "  from amount:PositiveAmount\n",
+            "  -> PositiveAmount\n\n",
+            "  promise before: amount > 10\n",
+            "  promise before: amount < 5\n",
+            "  promise after: amount > 0\n",
+        ),
+    )
+    .unwrap();
+
+    let result = run_verify(tmp.path(), None, None);
+    assert!(
+        result.is_err(),
+        "verify must fail on contradictory contracts"
+    );
+
+    let err_body = result.unwrap_err().to_string();
+
+    // Invariant 17.3-A: original diagnostics are the prefix.
+    assert!(
+        err_body.contains("AIL-C011") || err_body.contains("contradictory"),
+        "error body must contain the original AIL-C011 diagnostic, got:\n{err_body}"
+    );
+
+    // Invariant 17.3-A: sheaf localization is a suffix, never replaces the original.
+    assert!(
+        err_body.contains("Sheaf localization"),
+        "error body must contain 'Sheaf localization' suffix, got:\n{err_body}"
+    );
+}
+
+/// When `run_verify` encounters a Z3 error of a NON-UNSAT class (e.g. C012
+/// `PostconditionNotEntailed`), the "Sheaf localization" suffix must NOT appear.
+///
+/// Gated with `#[ignore]` because Z3 is environment-sensitive.
+/// Run with: `cargo test -p ail-cli --features z3-verify -- --include-ignored`
+#[cfg(feature = "z3-verify")]
+#[test]
+#[ignore]
+fn t173_ail_verify_non_unsat_class_does_not_augment() {
+    // Write a fixture whose postcondition is not entailed by its preconditions
+    // (AIL-C012 PostconditionNotEntailed). Uses built-in types.
+    let tmp = tempfile::tempdir().unwrap();
+    let src = tmp.path().join("src");
+    fs::create_dir_all(&src).unwrap();
+    fs::write(
+        src.join("unenforced_post.ail"),
+        concat!(
+            "do transfer money\n",
+            "  from amount:PositiveAmount\n",
+            "  -> PositiveAmount\n\n",
+            // Pre: amount > 0 (from PositiveAmount) — consistent.
+            // Post: amount > 100 — not entailed by just `amount > 0`.
+            "  promise before: amount > 0\n",
+            "  promise after: amount > 100\n",
+        ),
+    )
+    .unwrap();
+
+    let result = run_verify(tmp.path(), None, None);
+    // The project may pass or fail depending on Z3's postcondition check.
+    // If it fails, the body must NOT contain "Sheaf localization".
+    if let Err(e) = result {
+        let err_body = e.to_string();
+        assert!(
+            !err_body.contains("Sheaf localization"),
+            "non-UNSAT error must not contain 'Sheaf localization', got:\n{err_body}"
+        );
+    }
+    // If it passes, the test is vacuously OK (Z3 may accept simple post-conditions).
+}
+
 // ── helpers ───────────────────────────────────────────────────────────────────
 
 fn copy_dir_all(src: &Path, dst: &Path) -> std::io::Result<()> {

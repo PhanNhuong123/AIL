@@ -49,16 +49,17 @@ fn sat_check(solver: &Solver) -> SatResult {
 #[test]
 fn z3_encode_literal_integer_as_int() {
     let (_cfg, z3) = make_ctx();
-    let mut enc = EncodeContext::new(&z3);
-    let result = encode_value_int(&int_lit(42), &mut enc);
+    let enc = EncodeContext::new(&z3);
+    let result = encode_value_int(&int_lit(42), &enc);
     assert!(result.is_ok(), "integer literal should encode as Int");
 }
 
 #[test]
+#[allow(clippy::approx_constant)]
 fn z3_encode_literal_float_as_real() {
     let (_cfg, z3) = make_ctx();
-    let mut enc = EncodeContext::new(&z3);
-    let result = encode_value_real(&float_lit(3.14), &mut enc);
+    let enc = EncodeContext::new(&z3);
+    let result = encode_value_real(&float_lit(3.14), &enc);
     assert!(result.is_ok(), "float literal should encode as Real");
 }
 

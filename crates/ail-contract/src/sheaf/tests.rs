@@ -1,4 +1,5 @@
-//! Unit tests for Čech nerve construction (Phase 17 task 17.1).
+//! Unit tests for Čech nerve construction (Phase 17 task 17.1) and sheaf
+//! subgraph scoping + serde (Phase 17 task 17.3).
 //!
 //! Fixture helpers are re-implemented here rather than imported from
 //! `z3_verify/tests.rs` because those helpers are gated by
@@ -603,4 +604,247 @@ fn sheaf_old_ref_does_not_inflate_var_set() {
         "var set must contain `balance`; got: {:?}",
         vars
     );
+}
+
+// ─── Phase 17.3: Subgraph scoping tests ──────────────────────────────────────
+
+use crate::sheaf::filter_to_subtree;
+use crate::sheaf::{CechNerve, SheafOverlap, SheafSection};
+
+#[test]
+fn filter_to_subtree_keeps_only_descendants() {
+    // Build a 3-node tree: Describe root → Do parent → Do child
+    let mut graph = empty_describe_graph();
+    let root_id = graph.root_nodes().unwrap()[0];
+
+    let parent_id = add_do_parent(
+        &mut graph,
+        root_id,
+        "parent op",
+        "parent_op",
+        vec![param("x", "NonNegativeInteger")],
+        vec![before("x >= 0"), after("x >= 0")],
+    );
+    let child_id = add_do_child(
+        &mut graph,
+        parent_id,
+        "child op",
+        "child_op",
+        vec![param("x", "NonNegativeInteger")],
+        None,
+        vec![before("x >= 0"), after("x >= 0")],
+    );
+
+    let typed = make_typed(graph);
+    let verified = crate::verify::verify(typed).expect("test graph must verify");
+    let nerve = build_nerve(&verified);
+
+    // Filter at parent — should include parent + child, exclude root.
+    let filtered = filter_to_subtree(&nerve, parent_id, verified.graph());
+
+    assert!(
+        filtered.sections.iter().any(|s| s.node_id == parent_id),
+        "filtered nerve must include parent section"
+    );
+    assert!(
+        filtered.sections.iter().any(|s| s.node_id == child_id),
+        "filtered nerve must include child section"
+    );
+    // root_id is a Describe node — no section for it anyway, but scoping must
+    // not allow parent's section to disappear.
+    assert!(
+        !filtered.sections.iter().any(|s| s.node_id == root_id),
+        "filtered nerve must not contain root (Describe) section"
+    );
+}
+
+#[test]
+fn filter_to_subtree_excludes_cross_boundary_overlap() {
+    // Build: Describe root → Do sib_a → Do sib_b (shared var `amount`).
+    // Both siblings are direct children of root; wire Eh for sibling chain.
+    let mut graph = empty_describe_graph();
+    let root_id = graph.root_nodes().unwrap()[0];
+
+    let sib_a_id = add_do_child(
+        &mut graph,
+        root_id,
+        "sibling a",
+        "sib_a",
+        vec![param("amount", "NonNegativeInteger")],
+        None,
+        vec![before("amount >= 0"), after("amount >= 0")],
+    );
+    let sib_b_id = add_do_child(
+        &mut graph,
+        root_id,
+        "sibling b",
+        "sib_b",
+        vec![param("amount", "NonNegativeInteger")],
+        None,
+        vec![before("amount >= 0"), after("amount >= 0")],
+    );
+    graph.add_edge(sib_a_id, sib_b_id, EdgeKind::Eh).unwrap();
+
+    let typed = make_typed(graph);
+    let verified = crate::verify::verify(typed).expect("test graph must verify");
+    let nerve = build_nerve(&verified);
+
+    // Confirm that the full nerve has a sibling overlap.
+    let full_has_overlap = nerve.overlaps.iter().any(|o| {
+        (o.node_a == sib_a_id && o.node_b == sib_b_id)
+            || (o.node_a == sib_b_id && o.node_b == sib_a_id)
+    });
+    assert!(full_has_overlap, "full nerve must have sib_a/sib_b overlap");
+
+    // Filter at sib_a only — sib_b is out of scope so the overlap is dropped.
+    let filtered = filter_to_subtree(&nerve, sib_a_id, verified.graph());
+
+    assert!(
+        filtered.sections.iter().any(|s| s.node_id == sib_a_id),
+        "sib_a must remain in filtered nerve"
+    );
+    assert!(
+        !filtered.sections.iter().any(|s| s.node_id == sib_b_id),
+        "sib_b must be excluded from filtered nerve"
+    );
+    let filtered_overlap = filtered.overlaps.iter().any(|o| {
+        (o.node_a == sib_a_id && o.node_b == sib_b_id)
+            || (o.node_a == sib_b_id && o.node_b == sib_a_id)
+    });
+    assert!(
+        !filtered_overlap,
+        "cross-boundary overlap must be dropped when one endpoint is out of scope (invariant 17.3-C)"
+    );
+}
+
+#[test]
+fn filter_to_subtree_root_not_in_graph_returns_empty() {
+    // Pass a freshly generated NodeId that is not in the graph.
+    let graph = empty_describe_graph();
+    let typed = make_typed(graph);
+    let verified = crate::verify::verify(typed).expect("test graph must verify");
+    let nerve = build_nerve(&verified);
+
+    // The nerve is empty (no Do nodes), but even with a non-empty nerve the
+    // unknown root would yield no matching sections.
+    let unknown_root = NodeId::new();
+    let filtered = filter_to_subtree(&nerve, unknown_root, verified.graph());
+
+    assert!(
+        filtered.sections.is_empty(),
+        "unknown root must produce empty sections"
+    );
+    assert!(
+        filtered.overlaps.is_empty(),
+        "unknown root must produce empty overlaps"
+    );
+}
+
+#[test]
+fn filter_to_subtree_full_graph_root_round_trips() {
+    // Filter at the root of the test graph — should equal the full nerve.
+    let mut graph = empty_describe_graph();
+    let root_id = graph.root_nodes().unwrap()[0];
+
+    let parent_id = add_do_parent(
+        &mut graph,
+        root_id,
+        "parent op",
+        "parent_op",
+        vec![param("x", "NonNegativeInteger")],
+        vec![before("x >= 0"), after("x >= 0")],
+    );
+    let _child_id = add_do_child(
+        &mut graph,
+        parent_id,
+        "child op",
+        "child_op",
+        vec![param("x", "NonNegativeInteger")],
+        None,
+        vec![before("x >= 0"), after("x >= 0")],
+    );
+
+    let typed = make_typed(graph);
+    let verified = crate::verify::verify(typed).expect("test graph must verify");
+    let nerve = build_nerve(&verified);
+
+    // Filter at the Describe root — all Do nodes are descendants.
+    let filtered = filter_to_subtree(&nerve, root_id, verified.graph());
+
+    assert_eq!(
+        filtered.sections.len(),
+        nerve.sections.len(),
+        "filtering at root must preserve all sections"
+    );
+    assert_eq!(
+        filtered.overlaps.len(),
+        nerve.overlaps.len(),
+        "filtering at root must preserve all overlaps"
+    );
+}
+
+// ─── Phase 17.3: Serde roundtrip tests ───────────────────────────────────────
+
+#[test]
+fn sheaf_section_serde_roundtrip() {
+    use ail_types::parse_constraint_expr;
+
+    let c = parse_constraint_expr("x >= 0").expect("parseable");
+    let node_id = NodeId::new();
+    let s = SheafSection {
+        node_id,
+        constraints: vec![c.clone()],
+        inherited: vec![c],
+    };
+    let json = serde_json::to_string_pretty(&s).unwrap();
+    let parsed: SheafSection = serde_json::from_str(&json).unwrap();
+    assert_eq!(s, parsed, "SheafSection must survive serde roundtrip");
+}
+
+#[test]
+fn sheaf_overlap_serde_roundtrip() {
+    use ail_types::parse_constraint_expr;
+
+    let c = parse_constraint_expr("amount > 0").expect("parseable");
+    let o = SheafOverlap {
+        node_a: NodeId::new(),
+        node_b: NodeId::new(),
+        combined: vec![c],
+    };
+    let json = serde_json::to_string_pretty(&o).unwrap();
+    let parsed: SheafOverlap = serde_json::from_str(&json).unwrap();
+    assert_eq!(o, parsed, "SheafOverlap must survive serde roundtrip");
+}
+
+#[test]
+fn cech_nerve_serde_roundtrip() {
+    use ail_types::parse_constraint_expr;
+
+    let c = parse_constraint_expr("x >= 0").expect("parseable");
+    let node_a = NodeId::new();
+    let node_b = NodeId::new();
+
+    let nerve = CechNerve {
+        sections: vec![
+            SheafSection {
+                node_id: node_a,
+                constraints: vec![c.clone()],
+                inherited: vec![],
+            },
+            SheafSection {
+                node_id: node_b,
+                constraints: vec![c.clone()],
+                inherited: vec![c.clone()],
+            },
+        ],
+        overlaps: vec![SheafOverlap {
+            node_a,
+            node_b,
+            combined: vec![c],
+        }],
+    };
+
+    let json = serde_json::to_string_pretty(&nerve).unwrap();
+    let parsed: CechNerve = serde_json::from_str(&json).unwrap();
+    assert_eq!(nerve, parsed, "CechNerve must survive serde roundtrip");
 }

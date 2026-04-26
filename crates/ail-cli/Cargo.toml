@@ -16,6 +16,8 @@ path = "src/main.rs"
 # Enable `ail reindex --embeddings`: loads and runs the local ONNX model to
 # build the embedding index stored in `.ail.db`.
 embeddings = ["dep:ail-search", "ail-search/embeddings"]
+# Enable sheaf obstruction context in `ail sheaf` and `ail verify` augmentation.
+z3-verify  = ["ail-contract/z3-verify"]
 
 [dependencies]
 ail-graph    = { workspace = true }
@@ -30,6 +32,7 @@ ail-search   = { workspace = true, optional = true }
 clap         = { workspace = true }
 thiserror    = { workspace = true }
 miette       = { workspace = true }
+serde        = { workspace = true }
 serde_json   = { workspace = true }
 
 [dev-dependencies]

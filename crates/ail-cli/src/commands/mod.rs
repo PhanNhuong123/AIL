@@ -9,6 +9,7 @@ pub mod reindex;
 pub mod run_cmd;
 pub mod search;
 pub mod serve;
+pub mod sheaf;
 pub mod status;
 pub mod test_cmd;
 pub mod verify;
