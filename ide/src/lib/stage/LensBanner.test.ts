@@ -126,3 +126,38 @@ describe('LensBanner.svelte — hue and stats (task 15.5)', () => {
     unmount();
   });
 });
+
+describe('LensBanner.svelte — Phase E verifyTick refetch (task 16.3)', () => {
+  it('refetch fires when verifyTick increments independently of $graph', async () => {
+    // Import verifyTick after mocks are established.
+    const { verifyTick, resetVerifyState } = await import('$lib/verify/verify-state');
+    resetVerifyState();
+
+    const firstStats: LensStats = {
+      lens: 'verify', proven: 1, unproven: 0, counterexamples: 0,
+    };
+    const secondStats: LensStats = {
+      lens: 'verify', proven: 5, unproven: 0, counterexamples: 0,
+    };
+    invokeMock.mockResolvedValueOnce(firstStats).mockResolvedValueOnce(secondStats);
+    activeLens.set('verify');
+
+    const { container, unmount } = render(LensBanner, { props: { scopeId: null } });
+    await tick();
+    await flushMicrotasks();
+    await tick();
+
+    const statsEl = container.querySelector('[data-testid="lens-banner-stats"]');
+    expect(statsEl?.textContent?.trim()).toBe('1 proven · 0 unproven · 0 cex');
+
+    // Increment verifyTick to simulate verify-complete — should trigger refetch
+    verifyTick.update((n) => n + 1);
+    await tick();
+    await flushMicrotasks();
+    await tick();
+
+    expect(statsEl?.textContent?.trim()).toBe('5 proven · 0 unproven · 0 cex');
+
+    unmount();
+  });
+});

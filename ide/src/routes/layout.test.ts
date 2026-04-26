@@ -47,6 +47,7 @@ import {
   nodeCodeLang,
 } from '$lib/stage/node-view-state';
 import { patchEffects, clearPatchEffects } from '$lib/patch-effects';
+import { isVerifyRunning, currentVerifyRunId, verifyTick, resetVerifyState } from '$lib/verify/verify-state';
 import Page from './+page.svelte';
 
 function emptyGraph(projectId = 'p1'): GraphJson {
@@ -106,6 +107,7 @@ beforeEach(() => {
   tweaksPanelOpen.set(false);
   resetChatState();
   resetSidebarState();
+  resetVerifyState();
   sidebarActiveTab.set('chat');
   nodeViewActiveTab.set('code');
   nodeCodeLang.set('python');
@@ -908,5 +910,175 @@ describe('+page.svelte — task 16.2 debounce, merge, animation', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Phase E (16.3) — Verifier lens integration wiring
+// ---------------------------------------------------------------------------
+
+describe('+page.svelte — Phase E verifier wiring (task 16.3)', () => {
+  it('E1 — onVerifyComplete listener is registered in onMount', async () => {
+    render(Page);
+    await tick();
+    expect(listeners.has('verify-complete')).toBe(true);
+  });
+
+  it('E2 — onVerifyComplete handler with mismatched runId does NOT bump verifyTick', async () => {
+    render(Page);
+    await tick();
+    currentVerifyRunId.set('run-A');
+    const tickBefore = get(verifyTick);
+
+    const handler = listeners.get('verify-complete')!;
+    handler({
+      payload: {
+        runId: 'run-B',
+        ok: true,
+        failures: [],
+        scope: 'project',
+        nodeIds: [],
+      },
+    } as unknown as Parameters<PatchHandler>[0]);
+    await tick();
+
+    expect(get(verifyTick)).toBe(tickBefore);
+    // isVerifyRunning and currentVerifyRunId must be untouched
+    expect(get(currentVerifyRunId)).toBe('run-A');
+  });
+
+  it('E3 — onVerifyComplete handler with matching runId bumps verifyTick and clears running state', async () => {
+    render(Page);
+    await tick();
+    isVerifyRunning.set(true);
+    currentVerifyRunId.set('run-X');
+    const tickBefore = get(verifyTick);
+
+    const handler = listeners.get('verify-complete')!;
+    handler({
+      payload: {
+        runId: 'run-X',
+        ok: true,
+        failures: [],
+        scope: 'project',
+        nodeIds: [],
+      },
+    } as unknown as Parameters<PatchHandler>[0]);
+    await tick();
+
+    expect(get(isVerifyRunning)).toBe(false);
+    expect(get(currentVerifyRunId)).toBeNull();
+    expect(get(verifyTick)).toBe(tickBefore + 1);
+  });
+
+  it('E4 — onVerifyComplete handler with cancelled=true does NOT bump verifyTick', async () => {
+    render(Page);
+    await tick();
+    isVerifyRunning.set(true);
+    currentVerifyRunId.set('run-C');
+    const tickBefore = get(verifyTick);
+
+    const handler = listeners.get('verify-complete')!;
+    handler({
+      payload: {
+        runId: 'run-C',
+        ok: false,
+        failures: [],
+        scope: 'project',
+        nodeIds: [],
+        cancelled: true,
+      },
+    } as unknown as Parameters<PatchHandler>[0]);
+    await tick();
+
+    expect(get(isVerifyRunning)).toBe(false);
+    expect(get(currentVerifyRunId)).toBeNull();
+    // cancelled run must NOT bump tick
+    expect(get(verifyTick)).toBe(tickBefore);
+  });
+
+  it('E5 — onVerifyComplete handler skips getNodeDetail when payload.cancelled is true', async () => {
+    render(Page);
+    await tick();
+    isVerifyRunning.set(true);
+    currentVerifyRunId.set('run-cancel');
+
+    const getNodeDetailCalls = invoke.mock.calls.filter((c) => c[0] === 'get_node_detail').length;
+
+    const handler = listeners.get('verify-complete')!;
+    handler({
+      payload: {
+        runId: 'run-cancel',
+        ok: false,
+        failures: [],
+        scope: 'project',
+        nodeIds: ['step:s1'],
+        cancelled: true,
+      },
+    } as unknown as Parameters<PatchHandler>[0]);
+    await tick();
+
+    const getNodeDetailCallsAfter = invoke.mock.calls.filter((c) => c[0] === 'get_node_detail').length;
+    expect(getNodeDetailCallsAfter).toBe(getNodeDetailCalls);
+  });
+
+  it('E6 — applyPatchAndAnimate returns PatchEffects with addedIds after patch with added module', async () => {
+    vi.useFakeTimers();
+    try {
+      graph.set(emptyGraph());
+      render(Page);
+      await tick();
+
+      const handler = listeners.get('graph-updated')!;
+      handler({
+        payload: {
+          ...patchAddModule('m-effects-e6'),
+        },
+      } as unknown as Parameters<PatchHandler>[0]);
+
+      vi.advanceTimersByTime(250);
+
+      // After flush, patchEffects should have the added id
+      expect(get(patchEffects).addedIds).toContain('m-effects-e6');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('E7 — verify-complete handler MUST NOT write graph/selection/activeLens/chat stores', async () => {
+    graph.set(emptyGraph());
+    activeLens.set('rules');
+    chatDraft.set('untouched-draft');
+    chatMode.set('ask');
+    nodeViewActiveTab.set('proof');
+    nodeCodeLang.set('typescript');
+    const beforeChatCount = get(chatMessages).length;
+    const modulesBefore = get(graph)?.modules.length ?? 0;
+
+    render(Page);
+    await tick();
+    isVerifyRunning.set(true);
+    currentVerifyRunId.set('run-invariant');
+
+    const handler = listeners.get('verify-complete')!;
+    handler({
+      payload: {
+        runId: 'run-invariant',
+        ok: true,
+        failures: [],
+        scope: 'project',
+        nodeIds: [],
+      },
+    } as unknown as Parameters<PatchHandler>[0]);
+    await tick();
+
+    // 16.3-C: none of these may be touched by the verify-complete handler
+    expect(get(activeLens)).toBe('rules');
+    expect(get(chatDraft)).toBe('untouched-draft');
+    expect(get(chatMode)).toBe('ask');
+    expect(get(nodeViewActiveTab)).toBe('proof');
+    expect(get(nodeCodeLang)).toBe('typescript');
+    expect(get(chatMessages).length).toBe(beforeChatCount);
+    expect(get(graph)?.modules.length).toBe(modulesBefore);
   });
 });

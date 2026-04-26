@@ -2,7 +2,8 @@ import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import type {
   GraphJson, NodeDetail, FlowchartJson,
-  VerifyResultJson, GraphPatchJson, Lens, LensStats,
+  VerifyResultJson, VerifyCompletePayload, VerifyCancelResult, VerifierScopeRequest,
+  GraphPatchJson, Lens, LensStats,
   AgentRunRequest, AgentStepPayload, AgentMessagePayload,
   AgentCompletePayload, AgentCancelResult,
 } from './types';
@@ -45,6 +46,17 @@ export const runAgent = (req: AgentRunRequest) =>
 export const cancelAgentRun = (runId: string) =>
   invoke<AgentCancelResult>('cancel_agent_run', { runId });
 
+// Phase 16.3 — Verifier commands.
+// Run the verifier over the given scope. Returns a runId string that the
+// frontend must compare against incoming `verify-complete` payloads.
+export const runVerifier = (req: VerifierScopeRequest) =>
+  invoke<string>('run_verifier', { scope: req.scope, scopeId: req.scopeId ?? null, nodeIds: req.nodeIds });
+
+// Cancel the active verifier run. Resolves to `{cancelled:false}` when the
+// run is already done / never existed / superseded.
+export const cancelVerifierRun = (runId: string) =>
+  invoke<VerifyCancelResult>('cancel_verifier_run', { runId });
+
 // Events (constants mirror crates/ail-ui-bridge/src/events.rs)
 export const EVENTS = {
   GRAPH_UPDATED:     'graph-updated',
@@ -61,9 +73,9 @@ export const onGraphUpdated = (
   listen<GraphPatchJson>(EVENTS.GRAPH_UPDATED, (e) => h(e.payload));
 
 export const onVerifyComplete = (
-  h: (r: VerifyResultJson) => void,
+  h: (p: VerifyCompletePayload) => void,
 ): Promise<UnlistenFn> =>
-  listen<VerifyResultJson>(EVENTS.VERIFY_COMPLETE, (e) => h(e.payload));
+  listen<VerifyCompletePayload>(EVENTS.VERIFY_COMPLETE, (e) => h(e.payload));
 
 export const onCoverageComplete = (h: (p: unknown) => void) =>
   listen(EVENTS.COVERAGE_COMPLETE, (e) => h(e.payload));

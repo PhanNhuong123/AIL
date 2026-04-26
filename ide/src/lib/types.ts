@@ -101,6 +101,10 @@ export interface InheritedRule { text: string; from: string; }
 export interface VerificationDetail {
   ok: boolean;
   counterexample?: CounterexampleDetail;
+  /** Phase 16.3 schema lock — backend MVP always emits None; classification
+   *  is deferred to a follow-up that wires the z3-verify feature. Frontend
+   *  rendering (VerifyOutcomePill, lens.ts) is ready when the field appears. */
+  outcome?: VerifyOutcome;
 }
 
 export interface CounterexampleDetail {
@@ -140,6 +144,8 @@ export interface FlowEdgeJson {
 }
 
 // --- Verify (camelCase) ---
+export type VerifyOutcome = 'fail' | 'timeout' | 'unknown';
+
 export interface VerifyResultJson {
   ok: boolean;
   failures: VerifyFailureJson[];
@@ -151,9 +157,35 @@ export interface VerifyFailureJson {
   stage?: string;
   severity?: 'fail' | 'warn';
   source?: 'verify' | 'rule' | 'type' | 'parse';
+  /** Phase 16.3: outcome subtype. Undefined defaults to 'fail'. */
+  outcome?: VerifyOutcome;
 }
 
 export type IssueJson = VerifyFailureJson;
+
+/** Phase 16.3: payload for the `verify-complete` Tauri event (superset of VerifyResultJson). */
+export interface VerifyCompletePayload {
+  ok: boolean;
+  failures: VerifyFailureJson[];
+  runId: string;
+  /** 'project' | 'module' | 'function' | 'step' (or 'cancelled' for cancel emit) */
+  scope: string;
+  scopeId?: string;
+  nodeIds: string[];
+  cancelled?: boolean;
+}
+
+export interface VerifyCancelResult {
+  cancelled: boolean;
+}
+
+/** Phase 16.3: request shape for runVerifier. */
+export interface VerifierScopeRequest {
+  /** 'project' | 'module' | 'function' | 'step' */
+  scope: string;
+  scopeId?: string;
+  nodeIds: string[];
+}
 
 // --- Patch (camelCase; fine-grained 9-array shape) ---
 export interface FunctionPatchEntry { moduleId: string; function: FunctionJson; }

@@ -34,6 +34,8 @@ pub mod agent;
 #[cfg(feature = "tauri-commands")]
 pub mod commands;
 #[cfg(feature = "tauri-commands")]
+pub mod verifier;
+#[cfg(feature = "tauri-commands")]
 pub mod watcher;
 
 #[cfg(feature = "tauri-commands")]
@@ -63,5 +65,7 @@ pub use types::{
     },
     patch::{FunctionPatchEntry, FunctionRemoval, GraphPatchJson, StepPatchEntry, StepRemoval},
     status::Status,
-    verify_result::{VerifyFailureJson, VerifyResultJson},
+    verify_result::{
+        VerifyCancelResult, VerifyCompletePayload, VerifyFailureJson, VerifyResultJson,
+    },
 };

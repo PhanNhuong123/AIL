@@ -8,7 +8,7 @@
  * They MUST NOT call computeLensMetrics (invariant 15.6-B).
  */
 
-import type { GraphJson, ModuleJson, FunctionJson, Status, NodeDetail, RelationJson, Lens, FlowNodeJson } from '$lib/types';
+import type { GraphJson, ModuleJson, FunctionJson, Status, NodeDetail, RelationJson, Lens, FlowNodeJson, VerifyOutcome } from '$lib/types';
 
 export type PillTone = 'ok' | 'warn' | 'fail' | 'muted';
 
@@ -282,10 +282,16 @@ export function computeNodeDetailSummary(
         items.push('Scenario: ' + ce.scenario);
         items.push('Effect: ' + ce.effect);
         items.push('Violates: ' + ce.violates);
-      } else {
-        items.push('Not verified');
+        return { lens, heading: 'Verification', items, tone: 'fail' };
       }
-      return { lens, heading: 'Verification', items, tone: 'fail' };
+      const outcome = detail.verification.outcome as VerifyOutcome | undefined;
+      if (outcome === 'timeout') {
+        return { lens, heading: 'Timeout', items: ['Z3 solver timed out for this node'], tone: 'warn' };
+      }
+      if (outcome === 'unknown') {
+        return { lens, heading: 'Unknown', items: ['Encoding failed — contract not checked'], tone: 'warn' };
+      }
+      return { lens, heading: 'Verification', items: ['Not verified'], tone: 'fail' };
     }
     case 'data': {
       const recNames = detail.receives.map((r) => r.name).join(', ');

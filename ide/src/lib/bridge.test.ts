@@ -15,12 +15,15 @@ import {
   startWatchProject,
   runAgent,
   cancelAgentRun,
+  runVerifier,
+  cancelVerifierRun,
+  onVerifyComplete,
   onAgentStep,
   onAgentMessage,
   onAgentComplete,
   EVENTS,
 } from './bridge';
-import type { AgentRunRequest, FlowchartJson } from './types';
+import type { AgentRunRequest, FlowchartJson, VerifierScopeRequest, VerifyCompletePayload } from './types';
 
 describe('bridge.ts invoke wrappers', () => {
   beforeEach(() => {
@@ -90,12 +93,56 @@ describe('bridge.ts invoke wrappers', () => {
     expect(invoke).toHaveBeenCalledWith('cancel_agent_run', { runId: 'r-42' });
     expect(result).toEqual({ cancelled: true });
   });
+
+  it('runVerifier invokes run_verifier with scope/scopeId/nodeIds', async () => {
+    invoke.mockResolvedValueOnce('vr-1');
+    const req: VerifierScopeRequest = { scope: 'module', scopeId: 'module:m_wallet', nodeIds: ['module:m_wallet', 'function:fn_transfer'] };
+    const runId = await runVerifier(req);
+    expect(invoke).toHaveBeenCalledWith('run_verifier', { scope: 'module', scopeId: 'module:m_wallet', nodeIds: ['module:m_wallet', 'function:fn_transfer'] });
+    expect(runId).toBe('vr-1');
+  });
+
+  it('runVerifier maps undefined scopeId to null', async () => {
+    invoke.mockResolvedValueOnce('vr-2');
+    const req: VerifierScopeRequest = { scope: 'project', nodeIds: [] };
+    await runVerifier(req);
+    expect(invoke).toHaveBeenCalledWith('run_verifier', { scope: 'project', scopeId: null, nodeIds: [] });
+  });
+
+  it('cancelVerifierRun invokes cancel_verifier_run with runId', async () => {
+    invoke.mockResolvedValueOnce({ cancelled: true });
+    const result = await cancelVerifierRun('vr-7');
+    expect(invoke).toHaveBeenCalledWith('cancel_verifier_run', { runId: 'vr-7' });
+    expect(result).toEqual({ cancelled: true });
+  });
 });
 
 describe('bridge.ts event listeners', () => {
   beforeEach(() => {
     listen.mockReset();
     listen.mockImplementation((_event: string, _cb: unknown) => Promise.resolve(() => {}));
+  });
+
+  it('onVerifyComplete subscribes to verify-complete event and unwraps payload', async () => {
+    let captured: ((e: { payload: unknown }) => void) | null = null;
+    listen.mockImplementationOnce((_e: string, cb: (e: { payload: unknown }) => void) => {
+      captured = cb;
+      return Promise.resolve(() => {});
+    });
+    const h = vi.fn();
+    await onVerifyComplete(h);
+    expect(listen).toHaveBeenCalledWith(EVENTS.VERIFY_COMPLETE, expect.any(Function));
+    expect(captured).not.toBeNull();
+    const payload: VerifyCompletePayload = {
+      ok: true,
+      failures: [],
+      runId: 'vr-9',
+      scope: 'module',
+      scopeId: 'module:m_wallet',
+      nodeIds: ['module:m_wallet'],
+    };
+    captured!({ payload });
+    expect(h).toHaveBeenCalledWith(payload);
   });
 
   it('onAgentStep subscribes to agent-step event', async () => {

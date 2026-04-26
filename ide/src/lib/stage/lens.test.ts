@@ -239,6 +239,42 @@ describe('computeNodeDetailSummary', () => {
     }
   });
 
+  it('verify case with outcome=timeout returns tone=warn heading=Timeout', () => {
+    const base = nodeDetailFixture();
+    const detail: NodeDetail = {
+      ...base,
+      verification: { ok: false, outcome: 'timeout' },
+    };
+    const s = computeNodeDetailSummary(detail, 'verify');
+    expect(s.tone).toBe('warn');
+    expect(s.heading).toBe('Timeout');
+    expect(s.items[0]).toContain('timed out');
+  });
+
+  it('verify case with outcome=unknown returns tone=warn heading=Unknown', () => {
+    const base = nodeDetailFixture();
+    const detail: NodeDetail = {
+      ...base,
+      verification: { ok: false, outcome: 'unknown' },
+    };
+    const s = computeNodeDetailSummary(detail, 'verify');
+    expect(s.tone).toBe('warn');
+    expect(s.heading).toBe('Unknown');
+    expect(s.items[0]).toContain('Encoding failed');
+  });
+
+  it('verify case with outcome=undefined and !ok returns tone=fail heading=Verification (backward compat)', () => {
+    const base = nodeDetailFixture();
+    const detail: NodeDetail = {
+      ...base,
+      verification: { ok: false },
+    };
+    const s = computeNodeDetailSummary(detail, 'verify');
+    expect(s.tone).toBe('fail');
+    expect(s.heading).toBe('Verification');
+    expect(s.items[0]).toContain('Not verified');
+  });
+
   it('verify lens with counterexample includes scenario/effect/violates', () => {
     const base = nodeDetailFixture();
     const detail: NodeDetail = {

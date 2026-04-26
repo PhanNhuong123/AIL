@@ -7,7 +7,15 @@
   import FlowView from './FlowView.svelte';
   import NodeView from './NodeView.svelte';
   import type { ModuleJson, FunctionJson, NodeDetail, FlowchartJson } from '$lib/types';
+  type SelectedNodeDetailShape = { id: string; detail: NodeDetail } | null;
   import { flowFixture } from './fixtures';
+
+  // Phase 16.3: override prop for freshly-verified node detail. When set and
+  // its id matches the current selection, it takes precedence over the
+  // graph-derived detail so the UI shows post-verification outcomes without
+  // needing a full graph reload. Shape is { id, detail } so matching uses
+  // the real node id rather than a fictional sub-field.
+  export let selectedNodeDetail = null as SelectedNodeDetailShape;
 
   function findModule(g, id) {
     const graphVal = g as import('$lib/types').GraphJson | null;
@@ -54,11 +62,17 @@
   $: stageKey = kind ?? 'none';
   $: activeModule         = findModule($graph, $selection.id);
   $: activeFunction       = findFunction($graph, $selection.id);
-  $: activeDetail         = findStepDetail($graph, $selection.id);
+  $: graphDetail          = findStepDetail($graph, $selection.id);
   $: activeFlowchart      = activeFunction ? resolveFlowchart(activeFunction.id) : null;
   $: activeFunctionDetail = activeFunction
       ? ($graph?.detail[activeFunction.id] as NodeDetail | undefined) ?? null
       : null;
+
+  // Phase 16.3: prefer selectedNodeDetail when its id matches the current
+  // selection. Uses the paired { id, detail } shape for a direct id compare.
+  $: overrideMatchesSelection = selectedNodeDetail !== null && selectedNodeDetail.id === ($selection.id ?? '');
+  $: activeDetail = overrideMatchesSelection && selectedNodeDetail !== null ? selectedNodeDetail.detail : graphDetail;
+
   // Banner scope tracks the selected id for module/function/step so the stats
   // stay aligned with the user's selection even when the entity lookup fails
   // ("not found" placeholder) — invariant 15.5-B. Other kinds (project, type,

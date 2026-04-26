@@ -23,4 +23,6 @@ pub use node_detail::{
 };
 pub use patch::{FunctionPatchEntry, FunctionRemoval, GraphPatchJson, StepPatchEntry, StepRemoval};
 pub use status::Status;
-pub use verify_result::{VerifyFailureJson, VerifyResultJson};
+pub use verify_result::{
+    VerifyCancelResult, VerifyCompletePayload, VerifyFailureJson, VerifyResultJson,
+};

@@ -33,6 +33,7 @@ pub fn collect_issues(detail: &BTreeMap<String, NodeDetail>) -> Vec<IssueJson> {
                 stage: None,
                 severity: Some("fail".to_string()),
                 source: Some("verify".to_string()),
+                outcome: None,
             });
         }
     }

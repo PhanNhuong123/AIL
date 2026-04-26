@@ -1,12 +1,9 @@
 <script lang="ts">
   import type { NodeDetail } from '$lib/types';
+  import VerifyOutcomePill from './VerifyOutcomePill.svelte';
 
   export let detail = null as NodeDetail | null;
   export let stepId = '' as string;
-
-  $: verificationBadge = detail?.verification?.ok === true ? 'ok'
-                       : detail?.verification?.ok === false ? 'fail'
-                       : 'warn';
 </script>
 
 <div class="node-detail-card" data-testid="node-view-detail">
@@ -85,9 +82,7 @@
 
     <div class="node-detail-card-section">
       <span class="node-detail-card-label">Verification</span>
-      <span class="node-detail-card-badge badge-{verificationBadge}">
-        {#if detail.verification.ok}✓ verified{:else}✗ failing{/if}
-      </span>
+      <VerifyOutcomePill ok={detail.verification.ok} outcome={detail.verification.outcome} />
     </div>
   {:else}
     <div class="node-detail-empty">No details for <code>{stepId}</code>.</div>

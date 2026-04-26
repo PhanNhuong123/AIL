@@ -87,7 +87,26 @@ fn fresh_inner(nonce: u64) -> BridgeStateInner {
         agent_run: None,
         agent_run_seq: 0,
         agent_id_nonce: nonce,
+        verifier_run: None,
+        verifier_cancelled: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
+        verifier_run_seq: 0,
+        verifier_id_nonce: 0,
     }
+}
+
+#[test]
+fn test_fresh_inner_has_verifier_fields() {
+    let inner = fresh_inner(0xDEAD_BEEF_CAFE_1234);
+    assert!(inner.verifier_run.is_none());
+    assert_eq!(inner.verifier_run_seq, 0);
+    assert!(
+        !inner
+            .verifier_cancelled
+            .load(std::sync::atomic::Ordering::SeqCst),
+        "verifier_cancelled fence must start false"
+    );
+    // verifier_id_nonce is non-deterministic in production; here we passed 0
+    // explicitly to keep the test deterministic.
 }
 
 #[test]

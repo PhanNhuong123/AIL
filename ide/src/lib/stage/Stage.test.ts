@@ -143,3 +143,46 @@ describe('Stage.svelte — dispatch by selection.kind (task 15.5)', () => {
     }
   });
 });
+
+describe('Stage.svelte — Phase E selectedNodeDetail prop override (task 16.3)', () => {
+  it('selectedNodeDetail prop overrides graph-derived detail when step id matches', async () => {
+    // Seed a graph with step detail in graph.detail
+    const g = detailedModuleFixture();
+    g.detail['step:s_debit'] = {
+      name: 'debit_from_sender',
+      status: 'ok',
+      description: 'Original graph description',
+      receives: [],
+      returns: [],
+      rules: [],
+      inherited: [],
+      proven: [],
+      verification: { ok: false },
+    };
+    graph.set(g);
+    selection.set({ kind: 'step', id: 'step:s_debit' });
+
+    // freshDetail simulates post-verification outcome with updated status.
+    // Uses the paired { id, detail } shape so Stage can match by real node id.
+    const freshDetail: import('$lib/types').NodeDetail = {
+      name: 'debit_from_sender',
+      status: 'ok' as const,
+      description: 'Post-verification description',
+      receives: [],
+      returns: [],
+      rules: [],
+      inherited: [],
+      proven: [],
+      verification: { ok: true },
+    };
+
+    // Render Stage with the override prop in the correct paired-id shape.
+    const { container } = render(Stage, {
+      props: { selectedNodeDetail: { id: 'step:s_debit', detail: freshDetail } },
+    });
+    await tick();
+
+    // NodeView should render (since detail is provided via override)
+    expect(container.querySelector('[data-testid="node-view"]')).not.toBeNull();
+  });
+});

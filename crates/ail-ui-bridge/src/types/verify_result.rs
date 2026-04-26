@@ -29,4 +29,41 @@ pub struct VerifyFailureJson {
     /// used as `IssueJson`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub source: Option<String>,
+    /// Verification outcome subtype: `"fail"` (hard counterexample, default
+    /// when None), `"timeout"` (Z3 solver timeout, AIL-C013), or `"unknown"`
+    /// (encoding failed, AIL-C014). Phase 16.3 schema lock: backend MVP always
+    /// emits None; classification logic deferred to a future task that wires
+    /// the `z3-verify` feature flag.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub outcome: Option<String>,
+}
+
+/// Payload emitted on the `verify-complete` Tauri event after a `run_verifier`
+/// run terminates (done, error, or cancelled). Strict superset of
+/// `VerifyResultJson`: any consumer reading only `ok`/`failures` continues to
+/// work without changes.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VerifyCompletePayload {
+    pub ok: bool,
+    pub failures: Vec<VerifyFailureJson>,
+    pub run_id: String,
+    /// Scope of the verification: `'project'` | `'module'` | `'function'` | `'step'`
+    pub scope: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub scope_id: Option<String>,
+    pub node_ids: Vec<String>,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub cancelled: bool,
+}
+
+fn is_false(b: &bool) -> bool {
+    !*b
+}
+
+/// Result returned by `cancel_verifier_run`.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VerifyCancelResult {
+    pub cancelled: bool,
 }

@@ -44,6 +44,7 @@ fn test_issues_roundtrip_hand_built() {
         stage: None,
         severity: Some("warn".to_string()),
         source: Some("rule".to_string()),
+        outcome: None,
     };
 
     let json = serde_json::to_string(&issue).expect("serialize");
@@ -72,6 +73,7 @@ fn test_graph_json_with_issues_roundtrips() {
         stage: None,
         severity: Some("fail".to_string()),
         source: Some("verify".to_string()),
+        outcome: None,
     };
     let issue_warn = IssueJson {
         node_id: "mod1.fn2".to_string(),
@@ -79,6 +81,7 @@ fn test_graph_json_with_issues_roundtrips() {
         stage: None,
         severity: Some("warn".to_string()),
         source: Some("rule".to_string()),
+        outcome: None,
     };
 
     let graph = GraphJson {

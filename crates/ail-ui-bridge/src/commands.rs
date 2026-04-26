@@ -43,6 +43,11 @@ use crate::watcher;
 /// `agent_run_seq` and `agent_id_nonce` combine to produce string-serialized
 /// run ids that are unique across the process lifetime. See
 /// [`crate::agent::next_run_id_string`].
+///
+/// `verifier_run` holds the active verifier task handle (Phase 16.3).
+/// `load_project` cancels any in-flight verifier run before loading a new
+/// project. `verifier_cancelled` is the per-process AtomicBool fence.
+/// `verifier_run_seq` and `verifier_id_nonce` produce string run ids.
 pub struct BridgeStateInner {
     pub project_path: Option<PathBuf>,
     pub graph_json: Option<GraphJson>,
@@ -51,6 +56,10 @@ pub struct BridgeStateInner {
     pub agent_run: Option<crate::agent::RunHandle>,
     pub agent_run_seq: u64,
     pub agent_id_nonce: u64,
+    pub verifier_run: Option<tokio::task::JoinHandle<()>>,
+    pub verifier_cancelled: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    pub verifier_run_seq: u64,
+    pub verifier_id_nonce: u64,
 }
 
 /// Mutex-wrapped bridge state managed by Tauri.
@@ -66,6 +75,10 @@ pub fn new_bridge_state() -> BridgeState {
         agent_run: None,
         agent_run_seq: 0,
         agent_id_nonce: crate::agent::seed_nonce(),
+        verifier_run: None,
+        verifier_cancelled: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
+        verifier_run_seq: 0,
+        verifier_id_nonce: crate::verifier::seed_verifier_nonce(),
     })
 }
 
@@ -116,6 +129,16 @@ pub fn load_project(path: String, state: State<'_, BridgeState>) -> Result<Graph
     if let Some(old) = inner.watcher.take() {
         drop(old);
     }
+    // Phase 16.3: cancel any in-flight verifier run before loading new project.
+    inner
+        .verifier_cancelled
+        .store(true, std::sync::atomic::Ordering::SeqCst);
+    if let Some(handle) = inner.verifier_run.take() {
+        handle.abort();
+    }
+    inner
+        .verifier_cancelled
+        .store(false, std::sync::atomic::Ordering::SeqCst);
     inner.load_generation = inner.load_generation.wrapping_add(1);
     inner.project_path = Some(root);
     inner.graph_json = Some(graph_json.clone());
@@ -316,5 +339,7 @@ pub fn get_handler<R: tauri::Runtime>(
         start_watch_project,
         crate::agent::run_agent,
         crate::agent::cancel_agent_run,
+        crate::verifier::run_verifier,
+        crate::verifier::cancel_verifier_run,
     ]
 }

@@ -11,18 +11,23 @@
   import {
     onGraphUpdated, startWatchProject,
     onAgentStep, onAgentMessage, onAgentComplete,
+    onVerifyComplete, runVerifier, cancelVerifierRun, getNodeDetail,
   } from '$lib/bridge';
   import type {
     AgentStepPayload, AgentMessagePayload, AgentCompletePayload,
   } from '$lib/types';
-  import type { GraphPatchJson } from '$lib/types';
+  import type { GraphPatchJson, NodeDetail } from '$lib/types';
+  type SelectedNodeDetailShape = { id: string; detail: NodeDetail } | null;
   import { graph, selection } from '$lib/stores';
   import {
     chatMessages, chatPreviewCards, currentRunId, isAgentRunning,
   } from '$lib/chat/chat-state';
   import { applyGraphPatch, reconcileSelectionAfterPatch } from '$lib/graph-patch';
-  import { mergePatches, isEmptyPatch, emptyPatch } from '$lib/patch-merge';
+  import { mergePatches, isEmptyPatch } from '$lib/patch-merge';
   import { patchEffects, clearPatchEffects, computePatchEffects, CLEAR_DELAY_MS } from '$lib/patch-effects';
+  import type { PatchEffects } from '$lib/patch-effects';
+  import { isVerifyRunning, currentVerifyRunId, verifyTick } from '$lib/verify/verify-state';
+  import { scheduleVerify, reset as resetScheduler } from '$lib/verify/verifier-scheduler';
   import '../styles/tokens.css';
   import '../styles/chrome.css';
   import '../styles/stage.css';
@@ -46,11 +51,18 @@
 
   // Debounce state for graph-updated patches (task 16.2).
   // `destroyed` is hoisted to module-level so flushPatch can read it safely.
-  let patchBuffer = emptyPatch();
+  // patchBuffer is null when no patches are buffered (enables flushNow to
+  // return null rather than non-null empty-patch effects).
+  let patchBuffer = null as GraphPatchJson | null;
   let debounceTimer = null as ReturnType<typeof setTimeout> | null;
   let clearEffectsTimer = null as ReturnType<typeof setTimeout> | null;
   const DEBOUNCE_MS = 250;
   let destroyed = false;
+
+  // Phase 16.3 — lazy node detail for currently-selected node after verify.
+  // Paired-id shape: { id, detail } so Stage can match by real node id.
+  let selectedNodeDetail = null as SelectedNodeDetailShape;
+  let lastDetailReqSeq = 0;
 
   function bufferEvent(runId, event) {
     const arr = pendingEvents.get(runId) ?? [];
@@ -114,48 +126,87 @@
     }
   });
 
+  // Reset selectedNodeDetail when selection changes to avoid stale overrides
+  // carrying to a different node. Uses the paired-id shape for a direct compare.
+  const unsubSelection = selection.subscribe((s) => {
+    if (selectedNodeDetail !== null && selectedNodeDetail.id !== s.id) {
+      selectedNodeDetail = null;
+    }
+  });
+
   // ---------------------------------------------------------------------------
-  // Patch debounce helpers (task 16.2)
+  // Patch debounce helpers (task 16.2, updated 16.3)
   // ---------------------------------------------------------------------------
 
+  // applyPatchAndAnimate is the SOLE writer of graph + selection + patchEffects
+  // (invariant 16.2-A). Returns the computed PatchEffects so callers can pass
+  // addedIds + modifiedIds to the verifier scheduler (16.3).
+  // Note: no parameter/return type annotations — esrap rejects them (16.2-E).
   function applyPatchAndAnimate(patch) {
     graph.update((g) => (g ? applyGraphPatch(g, patch) : g));
     const next = get(graph);
+    const effects = computePatchEffects(patch);
     if (next) {
       selection.update((s) => reconcileSelectionAfterPatch(s, patch, next));
-      // Only set effects when graph was non-null (fixes I4 too).
-      patchEffects.set(computePatchEffects(patch));
+      patchEffects.set(effects);
       if (clearEffectsTimer !== null) clearTimeout(clearEffectsTimer);
       clearEffectsTimer = setTimeout(() => {
         clearPatchEffects();
         clearEffectsTimer = null;
       }, CLEAR_DELAY_MS);
     }
+    return effects;
   }
 
   function schedulePatchFlush(patch) {
-    patchBuffer = mergePatches(patchBuffer, patch);
+    patchBuffer = patchBuffer !== null ? mergePatches(patchBuffer, patch) : patch;
     if (debounceTimer !== null) clearTimeout(debounceTimer);
     debounceTimer = setTimeout(flushPatch, DEBOUNCE_MS);
   }
 
+  // flushPatch — debounce timer callback; calls scheduleVerify after apply.
   function flushPatch() {
-    if (destroyed) return;
+    if (destroyed || patchBuffer === null) return;
     const merged = patchBuffer;
-    patchBuffer = emptyPatch();
+    patchBuffer = null;
     debounceTimer = null;
     if (isEmptyPatch(merged)) return;
-    applyPatchAndAnimate(merged);
+    const effects = applyPatchAndAnimate(merged);
+    const affectedIds = [...effects.addedIds, ...effects.modifiedIds];
+    if (affectedIds.length > 0) scheduleVerify(affectedIds, runVerifyNow);
   }
 
+  // flushNow — synchronous drain; returns PatchEffects or null when no patch.
   function flushNow() {
+    if (patchBuffer === null) return null as PatchEffects | null;
+    const merged = patchBuffer;
+    patchBuffer = null;
     if (debounceTimer !== null) {
       clearTimeout(debounceTimer);
       debounceTimer = null;
     }
-    const merged = patchBuffer;
-    patchBuffer = emptyPatch();
-    if (!isEmptyPatch(merged)) applyPatchAndAnimate(merged);
+    if (isEmptyPatch(merged)) return null as PatchEffects | null;
+    return applyPatchAndAnimate(merged);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Phase 16.3 — Verifier helpers
+  // ---------------------------------------------------------------------------
+
+  // runVerifyNow is the callback passed to scheduleVerify. It cancels any
+  // in-flight verifier run, then kicks off a fresh one for the affected ids.
+  // Note: no parameter/return type annotations — esrap rejects them (16.2-E).
+  async function runVerifyNow(nodeIds) {
+    const prevId = get(currentVerifyRunId);
+    isVerifyRunning.set(true);  // set BEFORE first await — no visual flash
+    if (prevId) await cancelVerifierRun(prevId).catch(() => {});
+    try {
+      const runId = await runVerifier({ scope: 'project', nodeIds });
+      currentVerifyRunId.set(runId);
+    } catch {
+      isVerifyRunning.set(false);
+      currentVerifyRunId.set(null);
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -211,6 +262,40 @@
       }
     }));
 
+    // Phase 16.3 — verify-complete listener (invariant 16.3-C):
+    // Only writes currentVerifyRunId, isVerifyRunning, verifyTick, and
+    // script-scoped selectedNodeDetail. MUST NOT write graph/selection/
+    // patchEffects/activeLens/chat stores/node-view stores/flow stores.
+    register(onVerifyComplete(async (payload) => {
+      try {
+        // Layer 4 guard: drop events from superseded or unknown runs.
+        if (payload.runId !== get(currentVerifyRunId)) return;
+        isVerifyRunning.set(false);
+        currentVerifyRunId.set(null);
+        if (payload.cancelled) return;
+
+        // Bump verifyTick so LensBanner refetches metrics.
+        verifyTick.update((n) => n + 1);
+
+        // Lazy detail re-fetch for currently-selected node if it was affected.
+        const sel = get(selection);
+        if (
+          (sel.kind === 'step' || sel.kind === 'function') &&
+          sel.id !== null &&
+          payload.nodeIds.includes(sel.id)
+        ) {
+          const seq = ++lastDetailReqSeq;
+          const selId = sel.id;  // capture BEFORE await for closure stability
+          try {
+            const fresh = await getNodeDetail(selId);
+            if (seq === lastDetailReqSeq) selectedNodeDetail = { id: selId, detail: fresh };
+          } catch { /* ignore — getNodeDetail failed; UI keeps stale detail */ }
+        }
+      } catch (err) {
+        console.warn('[verifier] onVerifyComplete handler failed:', err);
+      }
+    }));
+
     return () => {
       destroyed = true;
       if (debounceTimer !== null) {
@@ -221,9 +306,11 @@
         clearTimeout(clearEffectsTimer);
         clearEffectsTimer = null;
       }
-      patchBuffer = emptyPatch();
+      patchBuffer = null;
+      resetScheduler();
       for (const fn of unlistens) fn();
       unsubCurrentRunId();
+      unsubSelection();
       pendingEvents.clear();
     };
   });
@@ -243,13 +330,17 @@
   // `graph` / `selection`. Preview cards without a patch (e.g. the seed
   // card) are simply removed.
   // 16.2: flushNow() drains pending watcher buffer before applying the preview.
+  // 16.3: combines watcher + preview affectedIds for scheduleVerify.
   function handlePreviewApply(ev) {
     const card = (ev as CustomEvent).detail;
     if (!card) return;
-    flushNow();
-    if (card.patch) {
-      applyPatchAndAnimate(card.patch);
-    }
+    const watcherEffects = flushNow();
+    const previewEffects = card.patch ? applyPatchAndAnimate(card.patch) : null;
+    const affectedIds = [
+      ...(watcherEffects?.addedIds ?? []), ...(watcherEffects?.modifiedIds ?? []),
+      ...(previewEffects?.addedIds ?? []), ...(previewEffects?.modifiedIds ?? []),
+    ];
+    if (affectedIds.length > 0) scheduleVerify(affectedIds, runVerifyNow);
     chatPreviewCards.update((arr) => arr.filter((c) => c.id !== card.id));
   }
 
@@ -263,7 +354,7 @@
 <div class="app-root" data-testid="app-root">
   <TitleBar />
   <Outline />
-  <main class="region-stage" data-testid="region-stage"><Stage /></main>
+  <main class="region-stage" data-testid="region-stage"><Stage {selectedNodeDetail} /></main>
   <RightSidebar
     on:previewapply={handlePreviewApply}
     on:previewdismiss={handlePreviewDismiss}

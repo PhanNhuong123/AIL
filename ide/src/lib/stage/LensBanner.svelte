@@ -2,6 +2,7 @@
   import { onDestroy } from 'svelte';
   import { activeLens, graph } from '$lib/stores';
   import { computeLensMetrics } from '$lib/bridge';
+  import { verifyTick } from '$lib/verify/verify-state';
   import type { LensStats } from '$lib/types';
   import {
     LENS_LABEL,
@@ -20,10 +21,12 @@
 
   // `$graph` is added as a reactive dependency so that a watcher-driven
   // patch update triggers a fresh metrics fetch (fix 15.11 MED staleness).
-  // The body ignores the graph value — it's a trigger only.
-  $: void refetch($activeLens, scopeId, $graph);
+  // `$verifyTick` is added as a reactive dependency so that a verify-complete
+  // event triggers a fresh metrics fetch (Phase 16.3).
+  // Neither value is used in the body — they are triggers only.
+  $: void refetch($activeLens, scopeId, $graph, $verifyTick);
 
-  async function refetch(lens, scope, _g) {
+  async function refetch(lens, scope, _g, _tick) {
     const lensVal = lens as import('$lib/types').Lens;
     const scopeVal = scope as string | null;
     const reqId = ++lastRequest;
