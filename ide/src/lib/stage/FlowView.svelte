@@ -5,6 +5,7 @@
   import FlowSwim from './FlowSwim.svelte';
   import FlowchartCanvas from './FlowchartCanvas.svelte';
   import FlowCode from './FlowCode.svelte';
+  import FlowMinimap from './FlowMinimap.svelte';
   import Icon from '$lib/icons/Icon.svelte';
 
   export let fn        = null as FunctionJson | null;
@@ -79,6 +80,9 @@
       <FlowchartCanvas flowchart={flowchart ?? { nodes: [], edges: [] }} />
     {:else}
       <FlowCode {fn} {detail} />
+    {/if}
+    {#if $flowMode === 'Swim'}
+      <FlowMinimap flowchart={flowchart} selectedId={$flowSelectedNodeId} />
     {/if}
   </div>
 </div>

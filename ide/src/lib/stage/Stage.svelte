@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { graph, selection } from '$lib/stores';
+  import { graph, selection, density } from '$lib/stores';
   import StageTabStrip from './StageTabStrip.svelte';
   import LensBanner from './LensBanner.svelte';
   import SystemView from './SystemView.svelte';
@@ -46,6 +46,12 @@
   }
 
   $: kind                 = $selection.kind;
+  $: stagePad = $density === 'compact'
+    ? '16px 20px 60px'
+    : $density === 'cozy'
+    ? '24px 28px 80px'
+    : '32px 36px 100px'; // 'comfortable' (default)
+  $: stageKey = kind ?? 'none';
   $: activeModule         = findModule($graph, $selection.id);
   $: activeFunction       = findFunction($graph, $selection.id);
   $: activeDetail         = findStepDetail($graph, $selection.id);
@@ -65,25 +71,29 @@
 <div class="stage-root" data-testid="stage-root">
   <StageTabStrip />
   <div class="stage-body">
-    {#if !$graph}
-      <div class="stage-placeholder" data-testid="stage-empty">No project loaded.</div>
-    {:else}
-      <LensBanner {scopeId} />
-      {#if kind === 'module' && activeModule}
-        <ModuleView module={activeModule} />
-      {:else if kind === 'module'}
-        <div class="stage-placeholder" data-testid="stage-module-missing">Module not found.</div>
-      {:else if kind === 'function' && activeFunction}
-        <FlowView fn={activeFunction} flowchart={activeFlowchart} detail={activeFunctionDetail} />
-      {:else if kind === 'function'}
-        <div class="stage-placeholder" data-testid="stage-flow-missing">Function not found.</div>
-      {:else if kind === 'step' && activeDetail && $selection.id}
-        <NodeView stepId={$selection.id} detail={activeDetail} />
-      {:else if kind === 'step'}
-        <div class="stage-placeholder" data-testid="stage-node-missing">Node detail not found.</div>
-      {:else}
-        <SystemView graph={$graph} />
-      {/if}
-    {/if}
+    {#key stageKey}
+      <div class="stage-inner" style="padding: {stagePad};" data-testid="stage-inner">
+        {#if !$graph}
+          <div class="stage-placeholder" data-testid="stage-empty">No project loaded.</div>
+        {:else}
+          <LensBanner {scopeId} />
+          {#if kind === 'module' && activeModule}
+            <ModuleView module={activeModule} />
+          {:else if kind === 'module'}
+            <div class="stage-placeholder" data-testid="stage-module-missing">Module not found.</div>
+          {:else if kind === 'function' && activeFunction}
+            <FlowView fn={activeFunction} flowchart={activeFlowchart} detail={activeFunctionDetail} />
+          {:else if kind === 'function'}
+            <div class="stage-placeholder" data-testid="stage-flow-missing">Function not found.</div>
+          {:else if kind === 'step' && activeDetail && $selection.id}
+            <NodeView stepId={$selection.id} detail={activeDetail} />
+          {:else if kind === 'step'}
+            <div class="stage-placeholder" data-testid="stage-node-missing">Node detail not found.</div>
+          {:else}
+            <SystemView graph={$graph} />
+          {/if}
+        {/if}
+      </div>
+    {/key}
   </div>
 </div>

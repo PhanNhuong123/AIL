@@ -1,7 +1,11 @@
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterEach, test } from 'vitest';
 import { render } from '@testing-library/svelte';
 import { tick } from 'svelte';
+import { get } from 'svelte/store';
 import { patchEffects, clearPatchEffects } from '$lib/patch-effects';
+import { density, selection, activeLens } from '$lib/stores';
+import { chatDraft } from '$lib/chat/chat-state';
+import { flowMode, flowSelectedNodeId } from '$lib/stage/flow-state';
 import SystemGrid from './SystemGrid.svelte';
 import type { GraphJson } from '$lib/types';
 
@@ -23,4 +27,31 @@ describe('SystemGrid — task 16.2 patch-state binding', () => {
     const addedWrapper = container.querySelector('[data-patch-state="added"]');
     expect(addedWrapper).not.toBeNull();
   });
+});
+
+test('density change does not reset selection/lens/chat/flow stores', () => {
+  // Snapshot initial state
+  selection.set({ kind: 'module', id: 'module:m_billing' });
+  activeLens.set('verify');
+  chatDraft.set('hello');
+  flowMode.set('Swim');
+  flowSelectedNodeId.set('step:foo');
+
+  const before = {
+    selection: get(selection),
+    activeLens: get(activeLens),
+    chatDraft: get(chatDraft),
+    flowMode: get(flowMode),
+    flowSelectedNodeId: get(flowSelectedNodeId),
+  };
+
+  // Mutate density
+  density.set('compact');
+
+  // Assert nothing else changed
+  expect(get(selection)).toEqual(before.selection);
+  expect(get(activeLens)).toBe(before.activeLens);
+  expect(get(chatDraft)).toBe(before.chatDraft);
+  expect(get(flowMode)).toBe(before.flowMode);
+  expect(get(flowSelectedNodeId)).toBe(before.flowSelectedNodeId);
 });
