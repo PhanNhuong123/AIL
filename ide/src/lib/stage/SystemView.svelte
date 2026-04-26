@@ -3,7 +3,7 @@
   import { systemMode } from './stage-state';
   import SystemClusters from './SystemClusters.svelte';
   import SystemGrid from './SystemGrid.svelte';
-  import SystemGraphPlaceholder from './SystemGraphPlaceholder.svelte';
+  import SystemGraph from './SystemGraph.svelte';
   import { computeSystemHeadSummary } from './lens';
   import type { GraphJson } from '$lib/types';
   import type { SystemMode } from './stage-state';
@@ -45,7 +45,7 @@
   {:else if $systemMode === 'Grid'}
     <SystemGrid {graph} />
   {:else}
-    <SystemGraphPlaceholder />
+    <SystemGraph {graph} />
   {/if}
 </section>
 
