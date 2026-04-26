@@ -48,6 +48,13 @@ use crate::watcher;
 /// `load_project` cancels any in-flight verifier run before loading a new
 /// project. `verifier_cancelled` is the per-process AtomicBool fence.
 /// `verifier_run_seq` and `verifier_id_nonce` produce string run ids.
+///
+/// `sheaf_run` holds the active sheaf analysis task handle (Phase 17.4).
+/// `load_project` aborts any in-flight sheaf run (silently — no
+/// `sheaf-complete` emit from `load_project`). The frontend must call
+/// `cancelSheafAnalysis` before `loadProject` if it needs the
+/// `sheaf-complete{cancelled:true}` signal. `sheaf_cancelled` is the fence.
+/// `sheaf_run_seq` and `sheaf_id_nonce` produce string run ids.
 pub struct BridgeStateInner {
     pub project_path: Option<PathBuf>,
     pub graph_json: Option<GraphJson>,
@@ -60,6 +67,11 @@ pub struct BridgeStateInner {
     pub verifier_cancelled: std::sync::Arc<std::sync::atomic::AtomicBool>,
     pub verifier_run_seq: u64,
     pub verifier_id_nonce: u64,
+    // Phase 17.4 — sheaf analysis scheduling/cancellation.
+    pub sheaf_run: Option<tokio::task::JoinHandle<()>>,
+    pub sheaf_cancelled: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    pub sheaf_run_seq: u64,
+    pub sheaf_id_nonce: u64,
 }
 
 /// Mutex-wrapped bridge state managed by Tauri.
@@ -79,6 +91,10 @@ pub fn new_bridge_state() -> BridgeState {
         verifier_cancelled: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
         verifier_run_seq: 0,
         verifier_id_nonce: crate::verifier::seed_verifier_nonce(),
+        sheaf_run: None,
+        sheaf_cancelled: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
+        sheaf_run_seq: 0,
+        sheaf_id_nonce: crate::sheaf::seed_sheaf_nonce(),
     })
 }
 
@@ -138,6 +154,19 @@ pub fn load_project(path: String, state: State<'_, BridgeState>) -> Result<Graph
     }
     inner
         .verifier_cancelled
+        .store(false, std::sync::atomic::Ordering::SeqCst);
+    // Phase 17.4: abort any in-flight sheaf analysis run before loading new project.
+    // NOTE: no `sheaf-complete` event is emitted here. The frontend must call
+    // `cancelSheafAnalysis` before `loadProject` if it needs the cancelled signal
+    // (invariant 17.4-F: cancel_sheaf_analysis owns the emit; load_project is silent).
+    inner
+        .sheaf_cancelled
+        .store(true, std::sync::atomic::Ordering::SeqCst);
+    if let Some(handle) = inner.sheaf_run.take() {
+        handle.abort();
+    }
+    inner
+        .sheaf_cancelled
         .store(false, std::sync::atomic::Ordering::SeqCst);
     inner.load_generation = inner.load_generation.wrapping_add(1);
     inner.project_path = Some(root);
@@ -341,5 +370,7 @@ pub fn get_handler<R: tauri::Runtime>(
         crate::agent::cancel_agent_run,
         crate::verifier::run_verifier,
         crate::verifier::cancel_verifier_run,
+        crate::sheaf::run_sheaf_analysis,
+        crate::sheaf::cancel_sheaf_analysis,
     ]
 }

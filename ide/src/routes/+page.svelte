@@ -12,6 +12,7 @@
     onGraphUpdated, startWatchProject,
     onAgentStep, onAgentMessage, onAgentComplete,
     onVerifyComplete, runVerifier, cancelVerifierRun, getNodeDetail,
+    onSheafComplete, runSheafAnalysis, cancelSheafAnalysis,
   } from '$lib/bridge';
   import type {
     AgentStepPayload, AgentMessagePayload, AgentCompletePayload,
@@ -28,6 +29,9 @@
   import type { PatchEffects } from '$lib/patch-effects';
   import { isVerifyRunning, currentVerifyRunId, verifyTick } from '$lib/verify/verify-state';
   import { scheduleVerify, reset as resetScheduler } from '$lib/verify/verifier-scheduler';
+  import { isSheafRunning, currentSheafRunId, sheafConflicts, resetSheafState } from '$lib/sheaf/sheaf-state';
+  import { scheduleSheaf, cancelSheafPending } from '$lib/sheaf/sheaf-scheduler';
+  import { hasSheafTriggerFailure } from '$lib/sheaf/trigger-predicate';
   import '../styles/tokens.css';
   import '../styles/chrome.css';
   import '../styles/stage.css';
@@ -210,6 +214,25 @@
   }
 
   // ---------------------------------------------------------------------------
+  // Phase 17.4 — Sheaf helpers
+  // ---------------------------------------------------------------------------
+
+  // runSheafNow — kicks off a new sheaf analysis, cancelling any in-flight run.
+  // Mirror of runVerifyNow above. No param/return type annotations (16.2-E).
+  async function runSheafNow(nodeId) {
+    const prevId = get(currentSheafRunId);
+    isSheafRunning.set(true);
+    if (prevId) await cancelSheafAnalysis(prevId).catch(() => {});
+    try {
+      const runId = await runSheafAnalysis({ nodeId: nodeId as string | undefined });
+      currentSheafRunId.set(runId);
+    } catch {
+      isSheafRunning.set(false);
+      currentSheafRunId.set(null);
+    }
+  }
+
+  // ---------------------------------------------------------------------------
   // onMount: event subscriptions
   // ---------------------------------------------------------------------------
 
@@ -277,6 +300,13 @@
         // Bump verifyTick so LensBanner refetches metrics.
         verifyTick.update((n) => n + 1);
 
+        // Phase 17.4 — auto-trigger sheaf analysis on any non-cancelled verify
+        // failure. Invariant 17.4-B: this handler MUST NOT write sheaf stores
+        // directly; only schedule.
+        if (hasSheafTriggerFailure(payload)) {
+          scheduleSheaf(undefined, runSheafNow);
+        }
+
         // Lazy detail re-fetch for currently-selected node if it was affected.
         const sel = get(selection);
         if (
@@ -296,6 +326,20 @@
       }
     }));
 
+    // Phase 17.4 — sheaf-complete listener. Writes only sheaf stores.
+    // Invariant 17.4-B: this handler MUST NOT write graph/selection/
+    // patchEffects/activeLens/chat stores/node-view stores/flow stores.
+    register(onSheafComplete((payload) => {
+      if (payload.runId !== get(currentSheafRunId)) return;
+      isSheafRunning.set(false);
+      currentSheafRunId.set(null);
+      if (payload.cancelled) {
+        sheafConflicts.set([]);
+        return;
+      }
+      sheafConflicts.set(payload.conflicts);
+    }));
+
     return () => {
       destroyed = true;
       if (debounceTimer !== null) {
@@ -308,6 +352,8 @@
       }
       patchBuffer = null;
       resetScheduler();
+      cancelSheafPending();
+      resetSheafState();
       for (const fn of unlistens) fn();
       unsubCurrentRunId();
       unsubSelection();
@@ -317,10 +363,20 @@
 
   // Start the watcher once a project becomes loaded. Tracks project id to
   // support re-load: on a new project the id changes and we start again.
+  // Phase 17.4: cancel any in-flight sheaf run BEFORE the new project's state
+  // takes over — backend load_project does not emit sheaf-complete on teardown.
   $: {
     const g = $graph;
     const newId = g?.project.id ?? null;
     if (newId && newId !== watchedProjectId) {
+      // Cancel sheaf before accepting the new project id so stale sheaf-complete
+      // events from the previous project cannot write sheafConflicts.
+      const prevSheafId = get(currentSheafRunId);
+      if (prevSheafId) {
+        cancelSheafAnalysis(prevSheafId).catch(() => {});
+      }
+      cancelSheafPending();
+      resetSheafState();
       watchedProjectId = newId;
       startWatchProject().catch((e) => console.warn('[watcher] start failed', e));
     }

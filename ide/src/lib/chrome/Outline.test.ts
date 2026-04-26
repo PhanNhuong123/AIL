@@ -7,6 +7,7 @@ import { tweaksPanelOpen } from '$lib/stores';
 import { expanded, filterTerm } from './outline-state';
 import { zoomLevel } from './toolbar-state';
 import { walletFixture, walletFixtureWithFail } from './fixtures';
+import { sheafConflicts, resetSheafState } from '$lib/sheaf/sheaf-state';
 import Outline from './Outline.svelte';
 
 beforeEach(() => {
@@ -18,6 +19,7 @@ beforeEach(() => {
   filterTerm.set('');
   zoomLevel.set(0);
   history.set({ back: [], forward: [] });
+  resetSheafState();
 });
 
 describe('Outline.svelte', () => {
@@ -296,5 +298,98 @@ describe('Outline.svelte', () => {
     const h = get(history);
     expect(h.back.length).toBe(0);
     expect(h.forward.length).toBe(0);
+  });
+
+  it('OL1: when sheafConflicts contains a step id, the step wrapper has data-conflict="true"', async () => {
+    const { container } = render(Outline);
+    graph.set(walletFixture());
+    // Expand to show steps
+    expanded.update((s) => {
+      const n = new Set(s);
+      n.add('module:m_wallet');
+      n.add('function:fn_transfer');
+      return n;
+    });
+    await tick();
+
+    // Set a conflict for debit step
+    sheafConflicts.set([{
+      overlapIndex: 0,
+      nodeA: 'step:s_debit',
+      nodeB: 'step:s_credit',
+      conflictingA: ['x > 0'],
+      conflictingB: ['x <= 0'],
+    }]);
+    await tick();
+
+    // Find all wrappers with data-conflict — should be on the step wrappers only
+    const conflictDivs = container.querySelectorAll('[data-conflict="true"]');
+    expect(conflictDivs.length).toBeGreaterThanOrEqual(1);
+
+    // Both step:s_debit and step:s_credit wrappers should have data-conflict
+    // (wrapper contains the OutlineRow which has data-kind="step")
+    let foundConflictOnStep = false;
+    for (const div of conflictDivs) {
+      const row = div.querySelector('[data-kind="step"]');
+      if (row) foundConflictOnStep = true;
+    }
+    expect(foundConflictOnStep).toBe(true);
+  });
+
+  it('OL2: module wrapper does NOT have data-conflict attribute even when its child step is conflicting', async () => {
+    const { container } = render(Outline);
+    graph.set(walletFixture());
+    expanded.update((s) => {
+      const n = new Set(s);
+      n.add('module:m_wallet');
+      n.add('function:fn_transfer');
+      return n;
+    });
+    await tick();
+
+    sheafConflicts.set([{
+      overlapIndex: 0,
+      nodeA: 'step:s_debit',
+      nodeB: 'step:s_credit',
+      conflictingA: ['x > 0'],
+      conflictingB: ['x <= 0'],
+    }]);
+    await tick();
+
+    // Module wrappers: these contain [data-kind="module"] rows but should not have data-conflict
+    // Find all divs that directly contain a module row
+    const moduleRows = container.querySelectorAll('[data-kind="module"]');
+    for (const row of moduleRows) {
+      const wrapper = row.parentElement;
+      expect(wrapper?.getAttribute('data-conflict')).toBeNull();
+    }
+  });
+
+  it('OL3: function wrapper does NOT have data-conflict attribute even when its child step is conflicting', async () => {
+    const { container } = render(Outline);
+    graph.set(walletFixture());
+    expanded.update((s) => {
+      const n = new Set(s);
+      n.add('module:m_wallet');
+      n.add('function:fn_transfer');
+      return n;
+    });
+    await tick();
+
+    sheafConflicts.set([{
+      overlapIndex: 0,
+      nodeA: 'step:s_debit',
+      nodeB: 'step:s_credit',
+      conflictingA: ['x > 0'],
+      conflictingB: ['x <= 0'],
+    }]);
+    await tick();
+
+    // Function wrappers: these contain [data-kind="function"] rows but should not have data-conflict
+    const functionRows = container.querySelectorAll('[data-kind="function"]');
+    for (const row of functionRows) {
+      const wrapper = row.parentElement;
+      expect(wrapper?.getAttribute('data-conflict')).toBeNull();
+    }
   });
 });

@@ -10,6 +10,7 @@ import {
   nodeTestResult,
   HISTORY_FIXTURE,
 } from './node-view-state';
+import { sheafConflicts, resetSheafState } from '$lib/sheaf/sheaf-state';
 import { nodeDetailFixture } from './fixtures';
 import NodeView from './NodeView.svelte';
 
@@ -23,6 +24,7 @@ beforeEach(() => {
   nodeCodeLang.set('python');
   nodeTestResult.set(null);
   activeLens.set('verify');
+  resetSheafState();
 });
 
 describe('NodeView.svelte', () => {
@@ -248,5 +250,59 @@ describe('NodeView.svelte', () => {
         expect(container.querySelector('[data-testid="node-tab-' + other + '"]')).toBeNull();
       }
     }
+  });
+
+  it('NV5: when $activeLens !== "verify", conflict section NOT in DOM', async () => {
+    sheafConflicts.set([{
+      overlapIndex: 0,
+      nodeA: 'step:s_transfer',
+      nodeB: 'step:s_other',
+      conflictingA: ['x > 0'],
+      conflictingB: ['x <= 0'],
+    }]);
+    activeLens.set('structure');
+    const detail = nodeDetailFixture();
+    const { container } = render(NodeView, {
+      props: { stepId: 'step:s_transfer', detail },
+    });
+    await tick();
+
+    expect(container.querySelector('[data-testid="node-view-conflict-section"]')).toBeNull();
+  });
+
+  it('NV6: when $activeLens === "verify" and sheafConflicts has matching entry, conflict section IS in DOM', async () => {
+    sheafConflicts.set([{
+      overlapIndex: 0,
+      nodeA: 'step:s_transfer',
+      nodeB: 'step:s_other',
+      conflictingA: ['balance >= 0'],
+      conflictingB: ['balance < 0'],
+    }]);
+    activeLens.set('verify');
+    const detail = nodeDetailFixture();
+    const { container } = render(NodeView, {
+      props: { stepId: 'step:s_transfer', detail },
+    });
+    await tick();
+
+    expect(container.querySelector('[data-testid="node-view-conflict-section"]')).not.toBeNull();
+  });
+
+  it('NV7: when $activeLens === "verify" but sheafConflicts has no matching entry, conflict section NOT in DOM', async () => {
+    sheafConflicts.set([{
+      overlapIndex: 0,
+      nodeA: 'step:s_unrelated-a',
+      nodeB: 'step:s_unrelated-b',
+      conflictingA: ['x > 0'],
+      conflictingB: ['x <= 0'],
+    }]);
+    activeLens.set('verify');
+    const detail = nodeDetailFixture();
+    const { container } = render(NodeView, {
+      props: { stepId: 'step:s_transfer', detail },
+    });
+    await tick();
+
+    expect(container.querySelector('[data-testid="node-view-conflict-section"]')).toBeNull();
   });
 });

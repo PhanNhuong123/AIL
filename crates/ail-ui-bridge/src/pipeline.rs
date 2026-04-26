@@ -10,6 +10,49 @@ use ail_contract::VerifiedGraph;
 
 use crate::errors::BridgeError;
 
+/// Run the 3-stage AIL pipeline (parse → validate → type_check) without the
+/// contract verification step.
+///
+/// This is used by the sheaf analysis path (Phase 17.4) which needs a
+/// `TypedGraph` without consuming it via `verify`. The caller is responsible
+/// for not relying on `VerifiedGraph` stage-gate semantics when using the
+/// returned graph.
+///
+/// Returns `Err(BridgeError::ProjectNotFound)` if `path` is not a directory.
+pub fn load_typed_from_path(path: &Path) -> Result<ail_types::TypedGraph, BridgeError> {
+    if !path.is_dir() {
+        return Err(BridgeError::ProjectNotFound {
+            path: path.display().to_string(),
+        });
+    }
+
+    // ── 1. Parse ──────────────────────────────────────────────────────────────
+    let graph = parse_directory(path).map_err(|e| BridgeError::PipelineError {
+        stage: "parse".to_string(),
+        detail: e.to_string(),
+    })?;
+
+    // ── 2. Validate ───────────────────────────────────────────────────────────
+    let valid = validate_graph(graph).map_err(|errs| BridgeError::PipelineError {
+        stage: "validate".to_string(),
+        detail: errs
+            .iter()
+            .map(|e| e.to_string())
+            .collect::<Vec<_>>()
+            .join("; "),
+    })?;
+
+    // ── 3. Type-check (no contract verification) ──────────────────────────────
+    type_check(valid, &[]).map_err(|errs| BridgeError::PipelineError {
+        stage: "type_check".to_string(),
+        detail: errs
+            .iter()
+            .map(|e| e.to_string())
+            .collect::<Vec<_>>()
+            .join("; "),
+    })
+}
+
 /// Run the full 4-stage AIL pipeline over a project directory.
 ///
 /// Stages: `parse_directory → validate_graph → type_check → verify`.

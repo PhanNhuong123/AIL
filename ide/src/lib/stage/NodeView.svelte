@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { createEventDispatcher } from 'svelte';
   import type { NodeDetail } from '$lib/types';
   import { activeLens } from '$lib/stores';
   import {
@@ -9,15 +10,19 @@
   import type { NodeTab } from './node-view-state';
   import NodeDetailCard from './NodeDetailCard.svelte';
   import NodeDetailLensSection from './NodeDetailLensSection.svelte';
+  import NodeViewConflictSection from './NodeViewConflictSection.svelte';
   import NodeTabCode from './NodeTabCode.svelte';
   import NodeTabProof from './NodeTabProof.svelte';
   import NodeTabTypes from './NodeTabTypes.svelte';
   import NodeTabRules from './NodeTabRules.svelte';
   import NodeTabTest from './NodeTabTest.svelte';
   import NodeTabHistory from './NodeTabHistory.svelte';
+  import { sheafConflicts } from '$lib/sheaf/sheaf-state';
 
   export let stepId = '' as string;
   export let detail = null as NodeDetail | null;
+
+  const dispatch = createEventDispatcher();
 
   const TABS = [
     { id: 'code',    label: 'Code'    },
@@ -35,14 +40,29 @@
       resetTestResultForStep(stepId);
     }
   }
+
+  $: nodeConflicts = $sheafConflicts.filter(
+    (c) => c.nodeA === stepId || c.nodeB === stepId
+  );
+
+  function handleJump(peerId) {
+    dispatch('jumptonode', { peerId });
+  }
 </script>
 
 <div class="node-view" data-testid="node-view">
   <div class="node-view-layout">
     <!-- Left: detail card -->
-    <div class="node-view-detail">
+    <div class="node-view-detail" data-testid="node-view-detail">
       <NodeDetailCard {detail} {stepId} />
       <NodeDetailLensSection lens={$activeLens} {detail} />
+      {#if $activeLens === 'verify'}
+        <NodeViewConflictSection
+          conflicts={nodeConflicts}
+          currentNodeId={stepId}
+          onJump={handleJump}
+        />
+      {/if}
     </div>
 
     <!-- Right: tabs -->

@@ -6,6 +6,7 @@ import type {
   GraphPatchJson, Lens, LensStats,
   AgentRunRequest, AgentStepPayload, AgentMessagePayload,
   AgentCompletePayload, AgentCancelResult,
+  SheafCompletePayload, SheafCancelResult,
 } from './types';
 
 // Commands
@@ -65,6 +66,7 @@ export const EVENTS = {
   AGENT_STEP:        'agent-step',
   AGENT_MESSAGE:     'agent-message',
   AGENT_COMPLETE:    'agent-complete',
+  SHEAF_COMPLETE:    'sheaf-complete',
 } as const;
 
 export const onGraphUpdated = (
@@ -94,3 +96,25 @@ export const onAgentComplete = (
   h: (p: AgentCompletePayload) => void,
 ): Promise<UnlistenFn> =>
   listen<AgentCompletePayload>(EVENTS.AGENT_COMPLETE, (e) => h(e.payload));
+
+// Phase 17.4 — Sheaf analysis commands and event listener.
+// Mirror runVerifier / cancelVerifierRun / onVerifyComplete patterns.
+
+export interface SheafRequest {
+  nodeId?: string;
+}
+
+// Run sheaf analysis over the current project. Returns the runId (string on
+// the wire — same JS number-precision guard as agent/verifier run ids).
+export const runSheafAnalysis = (req: SheafRequest = {}): Promise<string> =>
+  invoke<string>('run_sheaf_analysis', { nodeId: req.nodeId ?? null });
+
+// Cancel a sheaf analysis run. Resolves to `{cancelled:false}` when the run
+// is already done / never existed / superseded.
+export const cancelSheafAnalysis = (runId: string): Promise<SheafCancelResult> =>
+  invoke<SheafCancelResult>('cancel_sheaf_analysis', { runId });
+
+export const onSheafComplete = (
+  handler: (payload: SheafCompletePayload) => void,
+): Promise<UnlistenFn> =>
+  listen<SheafCompletePayload>(EVENTS.SHEAF_COMPLETE, (e) => handler(e.payload));

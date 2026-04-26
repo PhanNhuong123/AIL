@@ -275,3 +275,36 @@ export interface AgentCompletePayload {
 export interface AgentCancelResult {
   cancelled: boolean;
 }
+
+// --- Sheaf (Phase 17.4) ---
+// Mirrors crates/ail-ui-bridge/src/types/sheaf.rs. camelCase wire format.
+// `runId` stays as string on the wire (JS number precision guard).
+
+/** One contradictory overlap pair in the Čech nerve. */
+export interface SheafConflictEntry {
+  overlapIndex: number;
+  /** Path-like step ID (e.g. "wallet_service.src.transfer.s1") matching StepJson.id in GraphJson */
+  nodeA: string;
+  /** Path-like step ID (e.g. "wallet_service.src.transfer.s1") matching StepJson.id in GraphJson */
+  nodeB: string;
+  /** Minimized UNSAT-core constraints attributed to nodeA */
+  conflictingA: string[];
+  /** Minimized UNSAT-core constraints attributed to nodeB */
+  conflictingB: string[];
+}
+
+/** Payload emitted on the `sheaf-complete` Tauri event. */
+export interface SheafCompletePayload {
+  runId: string;
+  ok: boolean;
+  /** false when the z3-verify feature is absent in the production IDE build */
+  z3Available: boolean;
+  /** Empty when: z3 absent, pipeline failed, or run cancelled */
+  conflicts: SheafConflictEntry[];
+  cancelled?: boolean;
+  error?: string;
+}
+
+export interface SheafCancelResult {
+  cancelled: boolean;
+}

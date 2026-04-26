@@ -1,5 +1,7 @@
 <script lang="ts">
+  import { get } from 'svelte/store';
   import { graph, selection, density } from '$lib/stores';
+  import { navigateTo } from '$lib/chrome/toolbar-state';
   import StageTabStrip from './StageTabStrip.svelte';
   import LensBanner from './LensBanner.svelte';
   import SystemView from './SystemView.svelte';
@@ -80,6 +82,26 @@
   $: scopeId = kind === 'module' || kind === 'function' || kind === 'step'
       ? $selection.id
       : null;
+
+  // Phase 17.4 — Jump to a peer step from the conflict section in NodeView.
+  // Walks the graph to find the module and function ancestors of the peer step,
+  // then calls navigateTo with the correct 3-segment path. If the peer is absent
+  // (removed by the watcher between the sheaf run and the jump click), no-op.
+  export function handleStepJump(peerId) {
+    const g = get(graph);
+    if (!g) return;
+    for (const mod of g.modules) {
+      for (const fn_ of mod.functions) {
+        const step = (fn_.steps ?? []).find((s) => s.id === peerId);
+        if (step) {
+          const newPath = [mod.id, fn_.id, peerId];
+          navigateTo(newPath, 'step', peerId, 4);
+          return;
+        }
+      }
+    }
+    // R3 mitigation: peer absent (removed by watcher). No-op silently.
+  }
 </script>
 
 <div class="stage-root" data-testid="stage-root">
@@ -100,7 +122,7 @@
           {:else if kind === 'function'}
             <div class="stage-placeholder" data-testid="stage-flow-missing">Function not found.</div>
           {:else if kind === 'step' && activeDetail && $selection.id}
-            <NodeView stepId={$selection.id} detail={activeDetail} />
+            <NodeView stepId={$selection.id} detail={activeDetail} on:jumptonode={(e) => handleStepJump(e.detail.peerId)} />
           {:else if kind === 'step'}
             <div class="stage-placeholder" data-testid="stage-node-missing">Node detail not found.</div>
           {:else}

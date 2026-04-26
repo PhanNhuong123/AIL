@@ -903,3 +903,18 @@ html.sb-collapsed .app-root { --sb-w: 44px; }
   font-size: 11px;
   color: var(--ink);
 }
+
+/* ============================================================
+ * Phase 17.4 — Sheaf conflict marker on Outline step rows.
+ * Invariant 17.4-C: data-conflict MUST appear ONLY on step wrappers.
+ * Uses a lower percentage (18%) than the selection tint (18% accent)
+ * so it is visible but does not clobber the selection ring. When both
+ * selected and conflicting, the wrapper background (this rule) sits
+ * behind the OutlineRow's `.nav-row.selected` ring naturally because
+ * the wrapper is the parent element — no specificity battle needed.
+ * Follows the same bare-attribute pattern as [data-patch-state] in
+ * stage.css so the selector targets the wrapper div directly.
+ * ============================================================ */
+[data-conflict="true"] {
+  background: color-mix(in srgb, var(--warn) 18%, transparent);
+}

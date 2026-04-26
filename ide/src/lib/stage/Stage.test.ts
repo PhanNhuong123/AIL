@@ -9,6 +9,7 @@ vi.mock('@tauri-apps/api/event', () => ({ listen: vi.fn() }));
 
 import { render } from '@testing-library/svelte';
 import { tick } from 'svelte';
+import { get } from 'svelte/store';
 import { graph, selection, path, history, activeLens } from '$lib/stores';
 import { zoomLevel } from '$lib/chrome/toolbar-state';
 import { walletFixture } from '$lib/chrome/fixtures';
@@ -141,6 +142,52 @@ describe('Stage.svelte — dispatch by selection.kind (task 15.5)', () => {
 
       unmount();
     }
+  });
+});
+
+describe('handleStepJump (Phase 17.4)', () => {
+  it('SJ1: navigates to peer step path when peer step exists in graph', async () => {
+    // walletFixture contains module:m_wallet → function:fn_transfer → step:s_debit
+    graph.set(walletFixture());
+    // Start from a sibling step; history must be non-empty for pushHistory to record
+    path.set(['module:m_wallet', 'function:fn_transfer', 'step:s_credit']);
+    selection.set({ kind: 'step', id: 'step:s_credit' });
+
+    const { component } = render(Stage);
+    await tick();
+
+    // Invoke the exported handler directly with the peer step id
+    (component as unknown as { handleStepJump: (id: string) => void }).handleStepJump('step:s_debit');
+
+    // navigateTo writes path, selection, and zoomLevel — assert on those store values
+    expect(get(path)).toEqual(['module:m_wallet', 'function:fn_transfer', 'step:s_debit']);
+    expect(get(selection)).toEqual({ kind: 'step', id: 'step:s_debit' });
+    expect(get(zoomLevel)).toBe(4);
+  });
+
+  it('SJ2: no-op when peer step is absent from graph (R3 mitigation)', async () => {
+    // walletFixture does NOT contain step:s_nonexistent_peer
+    graph.set(walletFixture());
+    path.set(['module:m_wallet', 'function:fn_transfer', 'step:s_credit']);
+    selection.set({ kind: 'step', id: 'step:s_credit' });
+
+    const { component } = render(Stage);
+    await tick();
+
+    // Capture pre-call store state
+    const pathBefore = get(path);
+    const selBefore = get(selection);
+
+    // Should silently no-op without throwing
+    expect(() => {
+      (component as unknown as { handleStepJump: (id: string) => void }).handleStepJump(
+        'step:s_nonexistent_peer',
+      );
+    }).not.toThrow();
+
+    // path and selection must remain unchanged
+    expect(get(path)).toEqual(pathBefore);
+    expect(get(selection)).toEqual(selBefore);
   });
 });
 

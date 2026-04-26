@@ -7,6 +7,7 @@ edition = "2021"
 [features]
 default = []
 tauri-commands = ["dep:tauri", "dep:notify-debouncer-full", "dep:notify", "dep:log", "dep:tokio"]
+z3-verify = ["ail-contract/z3-verify"]
 
 [dependencies]
 serde        = { workspace = true }

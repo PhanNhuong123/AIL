@@ -34,3 +34,8 @@ pub const AGENT_MESSAGE: &str = "agent-message";
 ///
 /// Payload: [`crate::types::agent::AgentCompletePayload`]
 pub const AGENT_COMPLETE: &str = "agent-complete";
+
+/// Emitted when a sheaf analysis pass completes (Phase 17.4).
+///
+/// Payload: [`crate::types::sheaf::SheafCompletePayload`]
+pub const SHEAF_COMPLETE: &str = "sheaf-complete";

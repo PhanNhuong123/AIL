@@ -5,6 +5,7 @@
   import { filterTree, isVisible, ALL } from './filter';
   import { zoomLevel, stageLevelForKind } from './toolbar-state';
   import { patchEffects } from '$lib/patch-effects';
+  import { sheafConflicts } from '$lib/sheaf/sheaf-state';
   import OutlineRow from './OutlineRow.svelte';
   import OutlineSection from './OutlineSection.svelte';
 
@@ -34,6 +35,14 @@
 
   function isOpen(key) {
     return filtering || $expanded.has(key);
+  }
+
+  $: conflictIds = new Set(
+    $sheafConflicts.flatMap((c) => [c.nodeA, c.nodeB])
+  );
+
+  function conflictFor(id) {
+    return conflictIds.has(id) ? true : undefined;
   }
 </script>
 
@@ -98,7 +107,7 @@
                     {#if isOpen(fn_.id)}
                       {#each fn_.steps || [] as step (step.id)}
                         {#if isVisible(visible, step.id)}
-                          <div data-patch-state={patchStateFor(step.id)}>
+                          <div data-patch-state={patchStateFor(step.id)} data-conflict={conflictFor(step.id)}>
                             <OutlineRow
                               kind="step"
                               name={step.name}
