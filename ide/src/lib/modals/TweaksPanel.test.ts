@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi, test } from 'vitest';
 import { render, fireEvent } from '@testing-library/svelte';
 import { tick } from 'svelte';
 import { get } from 'svelte/store';
@@ -76,35 +76,59 @@ describe('TweaksPanel.svelte', () => {
     expect(get(tweaksPanelOpen)).toBe(false);
   });
 
-  it('backdrop click closes; click inside panel does not', async () => {
-    tweaksPanelOpen.set(true);
-    const { container } = render(TweaksPanel);
-    await tick();
+  // -------------------------------------------------------------------------
+  // Invariant 15.11-B + 15.12-E: ESC listener uses document, not window
+  // -------------------------------------------------------------------------
 
-    const backdrop = container.querySelector('[data-testid="tweaks-backdrop"]')!;
-    await fireEvent.click(backdrop);
-    await tick();
-
-    expect(get(tweaksPanelOpen)).toBe(false);
-
-    tweaksPanelOpen.set(true);
-    await tick();
-
-    const panel = container.querySelector('[data-testid="tweaks-panel"]');
-    expect(panel).not.toBeNull();
-    await fireEvent.click(panel!);
-    await tick();
-    expect(get(tweaksPanelOpen)).toBe(true);
-  });
-
-  it('invariant 15.11-B: does not register a global keydown listener', async () => {
-    const spy = vi.spyOn(window, 'addEventListener');
+  it('does not register window keydown but registers document keydown', () => {
+    const winSpy = vi.spyOn(window, 'addEventListener');
+    const docSpy = vi.spyOn(document, 'addEventListener');
     tweaksPanelOpen.set(true);
     render(TweaksPanel);
-    await tick();
-
-    const keydownCalls = spy.mock.calls.filter((c) => c[0] === 'keydown');
-    expect(keydownCalls).toHaveLength(0);
-    spy.mockRestore();
+    // Existing 15.11-B assertion: no window keydown
+    const windowKeydownCalls = winSpy.mock.calls.filter((c) => c[0] === 'keydown');
+    expect(windowKeydownCalls).toHaveLength(0);
+    // New 15.12-E assertion: exactly one document keydown registered
+    const docKeydownCalls = docSpy.mock.calls.filter((c) => c[0] === 'keydown');
+    expect(docKeydownCalls).toHaveLength(1);
+    winSpy.mockRestore();
+    docSpy.mockRestore();
   });
+});
+
+// -------------------------------------------------------------------------
+// 15.12-E: outside-click + floating card tests
+// -------------------------------------------------------------------------
+
+test('outside-click on document closes the panel', async () => {
+  tweaksPanelOpen.set(true);
+  render(TweaksPanel);
+  await tick();
+  // Dispatch a mousedown event outside the panel
+  document.body.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+  await tick();
+  expect(get(tweaksPanelOpen)).toBe(false);
+});
+
+test('panel stays open immediately after opening (no same-tick close)', async () => {
+  tweaksPanelOpen.set(true);
+  render(TweaksPanel);
+  // No mousedown dispatched; panel must still be open after a tick
+  await tick();
+  expect(get(tweaksPanelOpen)).toBe(true);
+});
+
+test('outside-click skips when target is the TitleBar gear button (clean toggle)', async () => {
+  tweaksPanelOpen.set(true);
+  render(TweaksPanel);
+  await tick();
+  // Synthesize a gear button outside the panel
+  const fakeGear = document.createElement('button');
+  fakeGear.setAttribute('data-testid', 'tweaks-toggle-btn');
+  document.body.appendChild(fakeGear);
+  fakeGear.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+  await tick();
+  // Panel must still be open — TitleBar's click handler will toggle it
+  expect(get(tweaksPanelOpen)).toBe(true);
+  document.body.removeChild(fakeGear);
 });

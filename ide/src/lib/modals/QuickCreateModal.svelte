@@ -2,6 +2,9 @@
   import { quickCreateModalOpen } from '$lib/stores';
 
   // Component-local form state — reset on every close
+  type QcKind = 'module' | 'function' | 'rule' | 'test';
+  let kind = 'module' as QcKind;
+  const KINDS = ['module', 'function', 'rule', 'test'] as QcKind[];
   let name = '';
   let description = '';
 
@@ -12,6 +15,7 @@
   function close() {
     name = '';
     description = '';
+    kind = 'module';
     quickCreateModalOpen.set(false);
   }
 
@@ -21,12 +25,12 @@
   }
 
   function handleCreate() {
-    console.info('[phase-17-stub] quick-create: create', { name, description });
+    console.info('[phase-17-stub] quick-create', { kind, name, description });
     close();
   }
 
   function handleCreateAI() {
-    console.info('[phase-17-stub] quick-create: create-with-ai', { name, description });
+    console.info('[phase-17-stub] quick-create-ai', { kind, name, description });
     close();
   }
 
@@ -64,6 +68,18 @@
       </header>
 
       <div class="qc-form">
+        <div class="qc-kind-row" data-testid="qc-kind-row" role="group" aria-label="Kind">
+          {#each KINDS as k}
+            <button
+              type="button"
+              class="qc-kind-btn"
+              class:active={kind === k}
+              aria-pressed={kind === k}
+              data-testid="qc-kind-btn-{k}"
+              on:click={() => (kind = k)}
+            >{k}</button>
+          {/each}
+        </div>
         <label>
           Name
           <input
