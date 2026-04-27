@@ -1,0 +1,114 @@
+THIRD-PARTY NOTICES — AIL (AI Language)
+========================================
+
+This file lists major runtime dependencies used by AIL and their licenses.
+For a complete transitive dependency enumeration, run:
+
+  cargo license --manifest-path Cargo.toml
+
+or install cargo-about and run `cargo about generate`.
+
+--------------------------------------------------------------------------------
+serde
+  Version: 1.x
+  License: MIT OR Apache-2.0
+  Repository: https://github.com/serde-rs/serde
+
+serde_json
+  Version: 1.x
+  License: MIT OR Apache-2.0
+  Repository: https://github.com/serde-rs/json
+
+tokio
+  Version: 1.x
+  License: MIT
+  Repository: https://github.com/tokio-rs/tokio
+
+thiserror
+  Version: 1.x
+  License: MIT OR Apache-2.0
+  Repository: https://github.com/dtolnay/thiserror
+
+clap
+  Version: 4.x
+  License: MIT OR Apache-2.0
+  Repository: https://github.com/clap-rs/clap
+
+miette
+  Version: 7.x
+  License: Apache-2.0
+  Repository: https://github.com/zkat/miette
+
+tauri
+  Version: 2.x
+  License: MIT OR Apache-2.0
+  Repository: https://github.com/tauri-apps/tauri
+
+tauri-plugin-shell
+  Version: 2.x
+  License: MIT OR Apache-2.0
+  Repository: https://github.com/tauri-apps/plugins-workspace
+
+notify
+  Version: 6.x
+  License: CC0-1.0 OR Artistic-2.0
+  Repository: https://github.com/notify-rs/notify
+
+notify-debouncer-full
+  Version: 0.x
+  License: CC0-1.0 OR Artistic-2.0
+  Repository: https://github.com/notify-rs/notify
+
+log
+  Version: 0.4.x
+  License: MIT OR Apache-2.0
+  Repository: https://github.com/rust-lang/log
+
+z3 (optional — feature "z3-verify" only)
+  Version: 0.12.x
+  License: MIT
+  Repository: https://github.com/prove-rs/z3.rs
+  Note: The z3 solver itself is licensed under the MIT License by Microsoft
+  Research. See https://github.com/Z3Prover/z3 for full license details.
+
+ort / ndarray (optional — feature "embeddings" only)
+  ort (ONNX Runtime Rust bindings):
+    Version: 2.x
+    License: MIT OR Apache-2.0
+    Repository: https://github.com/pykeio/ort
+  ndarray:
+    Version: 0.15.x
+    License: MIT OR Apache-2.0
+    Repository: https://github.com/rust-ndarray/ndarray
+  Note: The ONNX Runtime library itself is copyright Microsoft Corporation,
+  licensed under the MIT License. See https://github.com/microsoft/onnxruntime.
+
+--------------------------------------------------------------------------------
+Python dependencies (agents/ package — ail_agent)
+
+langgraph
+  Version: 1.1.8
+  License: MIT
+  Repository: https://github.com/langchain-ai/langgraph
+
+langchain-core
+  Version: 1.3.0
+  License: MIT
+  Repository: https://github.com/langchain-ai/langchain
+
+mcp
+  Version: 1.9.2
+  License: MIT
+  Repository: https://github.com/modelcontextprotocol/python-sdk
+
+anthropic (optional)
+  License: MIT
+  Repository: https://github.com/anthropics/anthropic-sdk-python
+
+openai (optional)
+  License: Apache-2.0
+  Repository: https://github.com/openai/openai-python
+
+--------------------------------------------------------------------------------
+This list is hand-maintained. It covers major runtime dependencies only.
+Run `cargo license` or `pip-licenses` for a full transitive list.

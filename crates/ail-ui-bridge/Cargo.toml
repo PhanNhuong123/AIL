@@ -6,7 +6,7 @@ edition = "2021"
 
 [features]
 default = []
-tauri-commands = ["dep:tauri", "dep:notify-debouncer-full", "dep:notify", "dep:log", "dep:tokio"]
+tauri-commands = ["dep:tauri", "dep:tauri-plugin-shell", "dep:notify-debouncer-full", "dep:notify", "dep:log", "dep:tokio"]
 z3-verify = ["ail-contract/z3-verify"]
 embeddings = ["dep:ail-coverage", "dep:ail-search", "ail-search/embeddings"]
 
@@ -21,6 +21,7 @@ ail-types    = { workspace = true }
 ail-coverage = { workspace = true, optional = true }
 ail-search   = { workspace = true, optional = true }
 tauri        = { version = "2", optional = true }
+tauri-plugin-shell = { version = "2.2.0", optional = true }
 notify-debouncer-full = { version = "0.3", optional = true }
 notify       = { version = "6", optional = true }
 log          = { version = "0.4", optional = true }

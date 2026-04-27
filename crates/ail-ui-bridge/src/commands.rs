@@ -96,6 +96,14 @@ pub struct BridgeStateInner {
     pub reviewer_provider_cell: std::sync::Arc<
         std::sync::OnceLock<Option<std::sync::Arc<ail_search::OnnxEmbeddingProvider>>>,
     >,
+    // Phase 16.5 — sidecar health-check sequence/nonce.
+    //
+    // `sidecar_health_seq` is a monotonic counter incremented on every health
+    // check call. `sidecar_id_nonce` is seeded once at process start.
+    // Health checks are stateless (no persistent handle), so `load_project`
+    // does NOT touch these fields.
+    pub sidecar_health_seq: u64,
+    pub sidecar_id_nonce: u64,
 }
 
 /// Mutex-wrapped bridge state managed by Tauri.
@@ -129,6 +137,8 @@ pub fn new_bridge_state() -> BridgeState {
         reviewer_id_nonce: crate::reviewer::seed_reviewer_nonce(),
         #[cfg(all(feature = "tauri-commands", feature = "embeddings"))]
         reviewer_provider_cell: std::sync::Arc::new(std::sync::OnceLock::new()),
+        sidecar_health_seq: 0,
+        sidecar_id_nonce: crate::sidecar::seed_sidecar_nonce(),
     })
 }
 
@@ -426,6 +436,8 @@ pub fn get_handler<R: tauri::Runtime>(
         crate::verifier::cancel_verifier_run,
         crate::sheaf::run_sheaf_analysis,
         crate::sheaf::cancel_sheaf_analysis,
+        crate::sidecar::health_check_core,
+        crate::sidecar::health_check_agent,
     ]
 }
 
@@ -448,5 +460,7 @@ pub fn get_handler<R: tauri::Runtime>(
         crate::sheaf::cancel_sheaf_analysis,
         crate::reviewer::run_reviewer,
         crate::reviewer::cancel_reviewer_run,
+        crate::sidecar::health_check_core,
+        crate::sidecar::health_check_agent,
     ]
 }

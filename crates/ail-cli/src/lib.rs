@@ -129,7 +129,11 @@ pub fn run() -> Result<(), CliError> {
 // ── Clap types ────────────────────────────────────────────────────────────────
 
 #[derive(Parser)]
-#[command(name = "ail", about = "AIL compiler and toolchain")]
+#[command(
+    name = "ail",
+    version = env!("CARGO_PKG_VERSION"),
+    about = "AIL compiler and toolchain"
+)]
 pub struct Cli {
     #[command(subcommand)]
     pub command: Command,

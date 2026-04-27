@@ -207,9 +207,7 @@ pub async fn run_reviewer<R: Runtime>(
     }
 
     // Phase 1b: clone provider cell Arc under brief lock, then get_or_init OFF-LOCK.
-    let cell_arc: Arc<
-        std::sync::OnceLock<Option<Arc<ail_search::OnnxEmbeddingProvider>>>,
-    > = {
+    let cell_arc: Arc<std::sync::OnceLock<Option<Arc<ail_search::OnnxEmbeddingProvider>>>> = {
         let inner = state.lock().map_err(|_| BridgeError::InvalidInput {
             reason: "state lock poisoned".to_string(),
         })?;

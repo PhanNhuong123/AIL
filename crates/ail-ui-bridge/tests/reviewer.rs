@@ -35,7 +35,11 @@ fn reviewer_run_id_format_is_correct() {
     );
     // Format is "reviewer-{seq_hex}-{nonce_hex}"
     let parts: Vec<&str> = id.splitn(3, '-').collect();
-    assert_eq!(parts.len(), 3, "run id must have 3 '-'-separated parts: {id}");
+    assert_eq!(
+        parts.len(),
+        3,
+        "run id must have 3 '-'-separated parts: {id}"
+    );
     assert_eq!(parts[0], "reviewer");
     // Both seq and nonce parts must be valid hex.
     u64::from_str_radix(parts[1], 16).expect("seq must be hex");
@@ -268,14 +272,10 @@ fn load_project_aborts_reviewer_and_resets_fence() {
     );
     assert!(inner.reviewer_run.is_none(), "reviewer_run must start None");
     // Simulate what load_project does: set fence, take handle, reset fence.
-    inner
-        .reviewer_cancelled
-        .store(true, Ordering::SeqCst);
+    inner.reviewer_cancelled.store(true, Ordering::SeqCst);
     // take() on None is fine.
     let _ = inner.reviewer_run;
-    inner
-        .reviewer_cancelled
-        .store(false, Ordering::SeqCst);
+    inner.reviewer_cancelled.store(false, Ordering::SeqCst);
     assert!(
         !inner.reviewer_cancelled.load(Ordering::SeqCst),
         "fence must be false after reset"
@@ -364,11 +364,26 @@ fn project_to_coverage_payload_truncates_missing_concepts_to_three() {
         status: CoverageStatus::Weak,
         child_contributions: vec![],
         missing_aspects: vec![
-            MissingAspectInfo { concept: "error handling".to_string(), similarity: 0.9 },
-            MissingAspectInfo { concept: "retry logic".to_string(), similarity: 0.85 },
-            MissingAspectInfo { concept: "logging".to_string(), similarity: 0.8 },
-            MissingAspectInfo { concept: "auth".to_string(), similarity: 0.75 },
-            MissingAspectInfo { concept: "timeout".to_string(), similarity: 0.7 },
+            MissingAspectInfo {
+                concept: "error handling".to_string(),
+                similarity: 0.9,
+            },
+            MissingAspectInfo {
+                concept: "retry logic".to_string(),
+                similarity: 0.85,
+            },
+            MissingAspectInfo {
+                concept: "logging".to_string(),
+                similarity: 0.8,
+            },
+            MissingAspectInfo {
+                concept: "auth".to_string(),
+                similarity: 0.75,
+            },
+            MissingAspectInfo {
+                concept: "timeout".to_string(),
+                similarity: 0.7,
+            },
         ],
         empty_parent: false,
         degenerate_basis_fallback: false,
@@ -534,5 +549,7 @@ fn fresh_inner() -> BridgeStateInner {
         reviewer_run_seq: 0,
         reviewer_id_nonce: 0,
         reviewer_provider_cell: std::sync::Arc::new(std::sync::OnceLock::new()),
+        sidecar_health_seq: 0,
+        sidecar_id_nonce: 0,
     }
 }

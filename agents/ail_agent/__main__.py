@@ -85,6 +85,12 @@ def _build_parser() -> argparse.ArgumentParser:
             "when --json-events is set. Default: 0"
         ),
     )
+    import ail_agent
+    parser.add_argument(
+        "--version",
+        action="version",
+        version=f"ail_agent {ail_agent.__version__}",
+    )
     return parser
 
 

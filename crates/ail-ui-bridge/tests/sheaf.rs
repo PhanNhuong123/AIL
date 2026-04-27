@@ -198,6 +198,8 @@ fn test_fresh_inner_has_sheaf_fields() {
         sheaf_cancelled: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
         sheaf_run_seq: 0,
         sheaf_id_nonce: 42,
+        sidecar_health_seq: 0,
+        sidecar_id_nonce: 0,
     };
 
     assert!(inner.sheaf_run.is_none(), "sheaf_run must start as None");

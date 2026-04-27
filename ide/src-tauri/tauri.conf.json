@@ -27,6 +27,14 @@
   "bundle": {
     "active": true,
     "targets": "all",
-    "icon": ["icons/icon.png", "icons/icon.ico"]
+    "icon": ["icons/icon.png", "icons/icon.ico"],
+    "externalBin": ["binaries/ail"],
+    "resources": [
+      "../../LICENSE",
+      "../../NOTICE",
+      "../../THIRD-PARTY-NOTICES.txt",
+      "binaries/ail-agent.cmd",
+      "binaries/ail-agent.sh"
+    ]
   }
 }

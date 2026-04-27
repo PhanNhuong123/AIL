@@ -143,13 +143,30 @@ pub fn build_request_env(req: &AgentRunRequest) -> Vec<(String, String)> {
     ]
 }
 
-/// Spawn the `python -m ail_agent` subprocess with JSON-events mode.
+/// Spawn the agent subprocess with JSON-events mode.
+///
+/// Dev mode (`AIL_DEV=1`): invokes `python -m ail_agent` directly.
+/// Bundle mode: invokes the wrapper script resolved by
+/// [`crate::sidecar::resolve_agent_wrapper_path`] (invariant 16.5-D).
+///
 /// `spawn()` is synchronous on `tokio::process::Command` — no `.await`.
-fn spawn_agent_child(req: &AgentRunRequest, run_id: &str) -> Result<Child, BridgeError> {
-    let mut cmd = Command::new("python");
-    cmd.arg("-m")
-        .arg("ail_agent")
-        .arg(&req.text)
+/// The 16.1-B four-layer cancel guard is unchanged: `RunHandle`, `AtomicBool`
+/// fence, oneshot, and reader_loop operate on the returned `Child` regardless
+/// of which spawn path was taken.
+fn spawn_agent_child<R: Runtime>(
+    req: &AgentRunRequest,
+    run_id: &str,
+    app: &AppHandle<R>,
+) -> Result<Child, BridgeError> {
+    let mut cmd = if crate::sidecar::parse_ail_dev_mode() {
+        let mut c = Command::new("python");
+        c.arg("-m").arg("ail_agent");
+        c
+    } else {
+        let wrapper = crate::sidecar::resolve_agent_wrapper_path(app)?;
+        Command::new(wrapper)
+    };
+    cmd.arg(&req.text)
         .arg("--json-events")
         .arg("--run-id")
         .arg(run_id);
@@ -345,7 +362,24 @@ pub async fn run_agent<R: Runtime>(
     };
 
     // Phase 2: spawn child + reader task OFF-LOCK.
-    let mut child = spawn_agent_child(&req, &run_id)?;
+    // On spawn failure, emit a synthetic AGENT_COMPLETE{status:"error"} so the
+    // frontend `isAgentRunning` / `currentRunId` stores reset, then return
+    // Ok(run_id) — the emitted event is the single signal source (C2 fix).
+    // Returning Err here would create two simultaneous signals (rejected promise
+    // + event), and if the promise rejection races ahead of the event listener
+    // binding, `isAgentRunning` stays true permanently.
+    let mut child = match spawn_agent_child(&req, &run_id, &app) {
+        Ok(c) => c,
+        Err(e) => {
+            let payload = AgentCompletePayload {
+                run_id: run_id.clone(),
+                status: "error".to_string(),
+                error: Some(format!("spawn failed: {e}")),
+            };
+            let _ = app.emit(AGENT_COMPLETE, &payload);
+            return Ok(run_id);
+        }
+    };
     let stdout = child
         .stdout
         .take()

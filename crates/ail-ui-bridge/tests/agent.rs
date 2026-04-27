@@ -95,6 +95,8 @@ fn fresh_inner(nonce: u64) -> BridgeStateInner {
         sheaf_cancelled: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
         sheaf_run_seq: 0,
         sheaf_id_nonce: 0,
+        sidecar_health_seq: 0,
+        sidecar_id_nonce: 0,
     }
 }
 

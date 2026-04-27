@@ -330,3 +330,24 @@ export interface CoverageCompletePayload {
 
 export interface ReviewerCancelResult { cancelled: boolean; runId: string; }
 export interface ReviewerScopeRequest { nodeId?: string; }
+
+// === Phase 16.5 — Sidecar health checks ===
+// Mirror of crates/ail-ui-bridge/src/types/sidecar_result.rs.
+// camelCase wire format.
+
+/** Whether the sidecar binary was resolved from the bundle or dev-mode path. */
+export type SidecarMode = 'bundled' | 'dev';
+
+/** Result returned by `healthCheckCore` and `healthCheckAgent`. */
+export interface HealthCheckPayload {
+  /** Sidecar component name: `"ail-core"` or `"ail-agent"`. */
+  component: string;
+  /** `true` if the binary was found and `--version` parsed successfully. */
+  ok: boolean;
+  /** Bundle path vs dev-mode resolution. */
+  mode: SidecarMode;
+  /** Parsed version string. Absent when `ok` is `false`. */
+  version?: string;
+  /** Human-readable error. Absent when `ok` is `true`. */
+  error?: string;
+}

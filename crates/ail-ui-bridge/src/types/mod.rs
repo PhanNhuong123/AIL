@@ -6,6 +6,7 @@ pub mod node_detail;
 pub mod patch;
 pub mod reviewer_result;
 pub mod sheaf;
+pub mod sidecar_result;
 pub mod status;
 pub mod verify_result;
 
@@ -26,6 +27,7 @@ pub use node_detail::{
 pub use patch::{FunctionPatchEntry, FunctionRemoval, GraphPatchJson, StepPatchEntry, StepRemoval};
 pub use reviewer_result::{CoverageCompletePayload, ReviewerCancelResult};
 pub use sheaf::{SheafCancelResult, SheafCompletePayload, SheafConflictEntry};
+pub use sidecar_result::{HealthCheckPayload, SidecarMode};
 pub use status::Status;
 pub use verify_result::{
     VerifyCancelResult, VerifyCompletePayload, VerifyFailureJson, VerifyResultJson,

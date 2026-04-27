@@ -8,6 +8,7 @@ import type {
   AgentCompletePayload, AgentCancelResult,
   SheafCompletePayload, SheafCancelResult,
   CoverageCompletePayload, ReviewerCancelResult, ReviewerScopeRequest,
+  HealthCheckPayload,
 } from './types';
 
 // Commands
@@ -128,3 +129,15 @@ export const runReviewer = (req: ReviewerScopeRequest): Promise<string> =>
 
 export const cancelReviewerRun = (runId: string): Promise<ReviewerCancelResult> =>
   invoke<ReviewerCancelResult>('cancel_reviewer_run', { runId });
+
+// Phase 16.5 — Sidecar health checks.
+// Both commands are zero-arg from the frontend perspective; all state is held
+// in BridgeStateInner (sidecar_health_seq / sidecar_id_nonce).
+
+/** Check the ail-cli sidecar health by invoking `ail --version`. */
+export const healthCheckCore = (): Promise<HealthCheckPayload> =>
+  invoke<HealthCheckPayload>('health_check_core');
+
+/** Check the ail-agent sidecar health by invoking `--version`. */
+export const healthCheckAgent = (): Promise<HealthCheckPayload> =>
+  invoke<HealthCheckPayload>('health_check_agent');

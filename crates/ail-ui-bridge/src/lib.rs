@@ -38,6 +38,8 @@ pub mod reviewer;
 #[cfg(feature = "tauri-commands")]
 pub mod sheaf;
 #[cfg(feature = "tauri-commands")]
+pub mod sidecar;
+#[cfg(feature = "tauri-commands")]
 pub mod verifier;
 #[cfg(feature = "tauri-commands")]
 pub mod watcher;
@@ -70,6 +72,7 @@ pub use types::{
     patch::{FunctionPatchEntry, FunctionRemoval, GraphPatchJson, StepPatchEntry, StepRemoval},
     reviewer_result::{CoverageCompletePayload, ReviewerCancelResult},
     sheaf::{SheafCancelResult, SheafCompletePayload, SheafConflictEntry},
+    sidecar_result::{HealthCheckPayload, SidecarMode},
     status::Status,
     verify_result::{
         VerifyCancelResult, VerifyCompletePayload, VerifyFailureJson, VerifyResultJson,
