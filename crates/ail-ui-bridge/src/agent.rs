@@ -146,8 +146,8 @@ pub fn build_request_env(req: &AgentRunRequest) -> Vec<(String, String)> {
 /// Spawn the agent subprocess with JSON-events mode.
 ///
 /// Dev mode (`AIL_DEV=1`): invokes `python -m ail_agent` directly.
-/// Bundle mode: invokes the wrapper script resolved by
-/// [`crate::sidecar::resolve_agent_wrapper_path`] (invariant 16.5-D).
+/// Bundle mode: invokes the frozen binary resolved by
+/// [`crate::sidecar::resolve_agent_binary_path`] (Phase 16.6; invariant 16.5-D).
 ///
 /// `spawn()` is synchronous on `tokio::process::Command` — no `.await`.
 /// The 16.1-B four-layer cancel guard is unchanged: `RunHandle`, `AtomicBool`
@@ -163,7 +163,7 @@ fn spawn_agent_child<R: Runtime>(
         c.arg("-m").arg("ail_agent");
         c
     } else {
-        let wrapper = crate::sidecar::resolve_agent_wrapper_path(app)?;
+        let wrapper = crate::sidecar::resolve_agent_binary_path(app)?;
         Command::new(wrapper)
     };
     cmd.arg(&req.text)

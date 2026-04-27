@@ -1,10 +1,10 @@
-//! Sidecar path resolution and health-check commands — Phase 16.5.
+//! Sidecar path resolution and health-check commands — Phase 16.5 / 16.6.
 //!
 //! This module exposes:
 //!
 //! - Pure helpers (`seed_sidecar_nonce`, `next_sidecar_run_id_string`,
-//!   `parse_ail_dev_mode`, `parse_version_line`) — no I/O beyond `env::var`,
-//!   no locks (invariant 16.5-A).
+//!   `parse_ail_dev_mode`, `parse_version_line`, `agent_artifact_basename`) —
+//!   no I/O beyond `env::var`, no locks (invariant 16.5-A).
 //! - Dev-mode path resolver (`resolve_core_binary_path_dev`) — walks
 //!   `target/debug` then `target/release`; used only when `AIL_DEV=1`.
 //! - Bundle-mode core resolution via `tauri-plugin-shell` `ShellExt::sidecar`
@@ -12,8 +12,11 @@
 //!   `ail-x86_64-pc-windows-msvc.exe`) — the old `resolve_core_binary_path`
 //!   using `app.path().resolve("binaries/ail", …)` was incorrect because
 //!   Tauri 2 `externalBin` bundles binaries WITH the triple suffix (C1 fix).
-//! - `resolve_agent_wrapper_path` — bundle-mode wrapper script resolver
-//!   (unchanged; wrapper scripts are NOT Tauri sidecars so they keep flat names).
+//! - `resolve_agent_binary_path` — bundle-mode frozen-binary resolver for the
+//!   `ail-agent` sidecar (Phase 16.6: replaces wrapper-script resolver).
+//!   The frozen binary ships as a flat `bundle.resources` file with the
+//!   platform-correct name: `binaries/ail-agent.exe` on Windows,
+//!   `binaries/ail-agent` on POSIX.
 //! - `health_check_core` and `health_check_agent` Tauri commands — two-phase
 //!   lock (seq reserved → lock released → spawn) so `BridgeState` is never
 //!   held across subprocess I/O (invariant 16.5-C).
@@ -22,7 +25,7 @@
 //!
 //! When `AIL_DEV` equals `"1"` (and only `"1"` — invariant 16.5-H):
 //! - `resolve_core_binary_path_dev` walks `target/debug` then `target/release`.
-//! - `resolve_agent_wrapper_path` returns `Err` (caller uses
+//! - `resolve_agent_binary_path` returns `Err` (caller uses
 //!   `python -m ail_agent` directly via `spawn_python_agent_version`).
 //! - Both health commands adapt accordingly.
 
@@ -84,6 +87,23 @@ pub fn parse_version_line(stdout: &str) -> Option<String> {
     Some(ver.to_string())
 }
 
+/// Return the platform-correct frozen-binary filename for `ail-agent`.
+///
+/// `target_os` is a short OS string: pass `"windows"` for Windows targets,
+/// anything else for POSIX targets.
+///
+/// - `"windows"` → `"ail-agent.exe"`
+/// - anything else → `"ail-agent"`
+///
+/// Pure function; no I/O (invariant 16.5-A).
+pub fn agent_artifact_basename(target_os: &str) -> &'static str {
+    if target_os == "windows" {
+        "ail-agent.exe"
+    } else {
+        "ail-agent"
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Path resolvers
 // ---------------------------------------------------------------------------
@@ -122,13 +142,19 @@ pub(crate) fn resolve_core_binary_path_dev() -> Result<PathBuf, BridgeError> {
     })
 }
 
-/// Resolve the `ail-agent` wrapper script path.
+/// Resolve the frozen `ail-agent` binary path.
 ///
 /// Dev mode (`AIL_DEV=1`): returns `Err` — the caller should use
 /// `python -m ail_agent` directly (via `spawn_python_agent_version`).
-/// Bundle mode: resolves `binaries/ail-agent.cmd` (Windows) or
-/// `binaries/ail-agent.sh` (POSIX) via Tauri's `PathResolver`.
-pub(crate) fn resolve_agent_wrapper_path<R: Runtime>(
+/// Bundle mode (Phase 16.6): resolves the frozen binary
+/// `binaries/ail-agent.exe` (Windows) or `binaries/ail-agent` (POSIX)
+/// via Tauri's `PathResolver`.  The binary is shipped as a flat
+/// `bundle.resources` resource (not a Tauri `externalBin`) so it keeps a
+/// flat name without the target-triple suffix.
+///
+/// `cfg!(windows)` is correct here — this is runtime code executing on the
+/// bundled binary's host; the host IS the target.
+pub(crate) fn resolve_agent_binary_path<R: Runtime>(
     app: &AppHandle<R>,
 ) -> Result<PathBuf, BridgeError> {
     if parse_ail_dev_mode() {
@@ -136,10 +162,10 @@ pub(crate) fn resolve_agent_wrapper_path<R: Runtime>(
             reason: "AIL_DEV: ail-agent uses python -m ail_agent directly (no wrapper)".into(),
         });
     }
-    let suffix = if cfg!(windows) { ".cmd" } else { ".sh" };
+    let basename = agent_artifact_basename(if cfg!(windows) { "windows" } else { "unix" });
     app.path()
         .resolve(
-            format!("binaries/ail-agent{suffix}"),
+            format!("binaries/{basename}"),
             tauri::path::BaseDirectory::Resource,
         )
         .map_err(|e| BridgeError::InvalidInput {
@@ -200,7 +226,8 @@ pub async fn health_check_core<R: Runtime>(
 /// Health-check the `ail-agent` sidecar by invoking `--version`.
 ///
 /// Dev mode: runs `python -m ail_agent --version`.
-/// Bundle mode: runs the wrapper script `--version`.
+/// Bundle mode: runs the frozen binary `--version` (Phase 16.6 — replaced
+/// wrapper-script invocation with direct frozen binary invocation).
 ///
 /// Follows the two-phase lock pattern (invariant 16.5-C).
 #[tauri::command]
@@ -225,7 +252,7 @@ pub async fn health_check_agent<R: Runtime>(
     if dev {
         return spawn_python_agent_version("ail-agent", mode).await;
     }
-    match resolve_agent_wrapper_path(&app) {
+    match resolve_agent_binary_path(&app) {
         Ok(path) => spawn_and_parse_version(&path, "ail-agent", mode).await,
         Err(e) => Ok(HealthCheckPayload {
             component: "ail-agent".into(),

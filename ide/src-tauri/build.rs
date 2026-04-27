@@ -8,20 +8,19 @@ fn main() {
     tauri_build::build();
 }
 
-/// Copy built sidecar binaries into `binaries/` with Tauri target-triple suffix.
+/// Copy built sidecar binaries into `binaries/` before Tauri bundles.
 ///
 /// This runs at build time. When source files are absent (clean checkout, CI
-/// without a prior `cargo build --release -p ail-cli`), the function is a
-/// no-op — `cargo check` stays clean (invariant 16.5-F).
+/// without prior build steps), the function is a no-op — `cargo check` stays
+/// clean (invariant 16.5-F / 16.6-B).
 ///
 /// `rerun-if-changed` directives are emitted OUTSIDE the `if src.exists()`
 /// guards so cargo re-runs this script when source files are added or deleted
 /// later — not just when they change (I1 fix).
 ///
-/// Both `ail-agent.cmd` and `ail-agent.sh` are always copied regardless of
-/// build triple: the files are tiny and `bundle.resources` references both
-/// paths, so the bundler never warns about a missing resource on any platform
-/// (M2 fix).
+/// Platform determination uses `env::var("TARGET")` (the cargo TARGET triple),
+/// NOT `cfg!(windows)` — `cfg!` returns HOST, not TARGET, and would silently
+/// mis-resolve under cross-compilation (invariant 16.6-E).
 fn materialize_sidecars() -> Result<(), Box<dyn std::error::Error>> {
     let triple = env::var("TARGET")?;
     let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR")?);
@@ -40,7 +39,7 @@ fn materialize_sidecars() -> Result<(), Box<dyn std::error::Error>> {
         ""
     };
 
-    // Copy ail-cli binary.
+    // Copy ail-cli binary (Tauri externalBin — triple-suffix naming).
     let src_ail = workspace_root
         .join("target")
         .join("release")
@@ -53,29 +52,19 @@ fn materialize_sidecars() -> Result<(), Box<dyn std::error::Error>> {
         std::fs::copy(&src_ail, &dst_ail)?;
     }
 
-    // Copy ail-agent wrapper scripts.
-    // The agent wrapper is NOT a Tauri sidecar (no triple-suffix naming) —
-    // it is invoked via raw tokio::process::Command in agent.rs (D1 decision).
-    // Both .cmd and .sh are always copied regardless of build triple so
-    // bundle.resources references to both always succeed (M2 fix).
-    let src_agent_cmd = workspace_root
+    // Copy frozen ail-agent binary built by `agents/scripts/build_sidecar.{sh,ps1}`.
+    // Source path is platform-specific: agents/dist/ail-agent[.exe].
+    // Dest is the platform-correct flat name in binaries/ — Tauri bundles it
+    // via the `bundle.resources` glob `"binaries/ail-agent*"`. Single file per
+    // platform; no doubling (invariant 16.6-E / D10).
+    let src_agent_frozen = workspace_root
         .join("agents")
-        .join("scripts")
-        .join("ail-agent.cmd");
-    let src_agent_sh = workspace_root
-        .join("agents")
-        .join("scripts")
-        .join("ail-agent.sh");
-
-    // Rerun directives outside the exists() guards (I1 fix).
-    println!("cargo:rerun-if-changed={}", src_agent_cmd.display());
-    println!("cargo:rerun-if-changed={}", src_agent_sh.display());
-
-    if src_agent_cmd.exists() {
-        std::fs::copy(&src_agent_cmd, binaries_dir.join("ail-agent.cmd"))?;
-    }
-    if src_agent_sh.exists() {
-        std::fs::copy(&src_agent_sh, binaries_dir.join("ail-agent.sh"))?;
+        .join("dist")
+        .join(format!("ail-agent{exe_suffix}"));
+    let dst_agent_frozen = binaries_dir.join(format!("ail-agent{exe_suffix}"));
+    println!("cargo:rerun-if-changed={}", src_agent_frozen.display());
+    if src_agent_frozen.exists() {
+        std::fs::copy(&src_agent_frozen, &dst_agent_frozen)?;
     }
 
     Ok(())

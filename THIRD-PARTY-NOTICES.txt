@@ -96,18 +96,63 @@ langchain-core
   License: MIT
   Repository: https://github.com/langchain-ai/langchain
 
+langchain-mcp-adapters
+  Version: 0.2.2
+  License: MIT
+  Repository: https://github.com/langchain-ai/langchain-mcp-adapters
+
 mcp
   Version: 1.9.2
   License: MIT
   Repository: https://github.com/modelcontextprotocol/python-sdk
 
+typing-extensions
+  Version: 4.14.0
+  License: PSF-2.0
+  Repository: https://github.com/python/typing_extensions
+
 anthropic (optional)
+  Version: 0.96.0
   License: MIT
   Repository: https://github.com/anthropics/anthropic-sdk-python
 
 openai (optional)
+  Version: 2.32.0
   License: Apache-2.0
   Repository: https://github.com/openai/openai-python
+
+httpx (optional — ollama extra)
+  Version: 0.28.1
+  License: BSD-3-Clause
+  Repository: https://github.com/encode/httpx
+
+--------------------------------------------------------------------------------
+Python frozen binary dependencies (agents/ — ail-agent frozen)
+
+CPython
+  Version: 3.11+
+  License: PSF-2.0
+  Repository: https://github.com/python/cpython
+  Note: The Python interpreter and standard library are embedded in the frozen
+  binary. CPython is licensed under the Python Software Foundation License
+  Version 2 (PSF-2.0). See https://docs.python.org/3/license.html.
+
+PyInstaller
+  Version: 6.x
+  License: GPL-2.0-or-later with Bootloader Exception
+  Repository: https://github.com/pyinstaller/pyinstaller
+  Note: PyInstaller itself is GPL-2.0-or-later and is used only as a build
+  tool. The resulting frozen binary is covered by the PyInstaller Bootloader
+  Exception, which explicitly permits distribution of compiled programs
+  without the GPL propagating to the application code. See
+  https://pyinstaller.org/en/stable/license.html for the full exception text.
+
+certifi
+  Version: current
+  License: MPL-2.0
+  Repository: https://github.com/certifi/python-certifi
+  Note: Mozilla CA certificate bundle (cacert.pem) is bundled via PyInstaller
+  datas so HTTPS connections to provider APIs verify correctly.
 
 --------------------------------------------------------------------------------
 This list is hand-maintained. It covers major runtime dependencies only.

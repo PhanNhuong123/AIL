@@ -33,8 +33,7 @@
       "../../LICENSE",
       "../../NOTICE",
       "../../THIRD-PARTY-NOTICES.txt",
-      "binaries/ail-agent.cmd",
-      "binaries/ail-agent.sh"
+      "binaries/ail-agent*"
     ]
   }
 }

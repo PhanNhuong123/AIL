@@ -17,7 +17,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest]
+        os: [ubuntu-latest, windows-latest, macos-latest]
 
     steps:
       - uses: actions/checkout@v4
@@ -52,12 +52,14 @@ jobs:
         run: cargo build
 
       - name: Build ail-contract with Z3
+        if: matrix.os != 'macos-latest'
         run: cargo build -p ail-contract --features z3-verify
 
       - name: Test (workspace, no features)
         run: cargo test
 
       - name: Test ail-contract with Z3
+        if: matrix.os != 'macos-latest'
         run: cargo test -p ail-contract --features z3-verify
 
       - name: Clippy
@@ -65,3 +67,86 @@ jobs:
 
       - name: Format check
         run: cargo fmt --all -- --check
+
+      # ---------------------------------------------------------------------------
+      # Python freeze pipeline — Phase 16.6
+      # ---------------------------------------------------------------------------
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install agent and freeze dependencies
+        run: pip install -e agents[all,freeze]
+
+      - name: Run Python tests (non-integration)
+        run: python -m pytest agents/tests/ -v --ignore=agents/tests/test_integration_live.py -m "not integration"
+
+      - name: Build frozen ail-agent sidecar (Linux/macOS)
+        if: matrix.os != 'windows-latest'
+        shell: bash
+        run: bash agents/scripts/build_sidecar.sh
+
+      - name: Build frozen ail-agent sidecar (Windows)
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: pwsh agents/scripts/build_sidecar.ps1
+
+      - name: Smoke test frozen binary --version (Linux/macOS)
+        if: matrix.os != 'windows-latest'
+        shell: bash
+        run: ./agents/dist/ail-agent --version
+
+      - name: Smoke test frozen binary --version (Windows)
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: .\agents\dist\ail-agent.exe --version
+
+      - name: Smoke test frozen binary --json-events (Linux/macOS)
+        if: matrix.os != 'windows-latest'
+        shell: bash
+        continue-on-error: true
+        run: ./agents/dist/ail-agent "smoke" --json-events --run-id ci-smoke
+
+      - name: Smoke test frozen binary --json-events (Windows)
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        continue-on-error: true
+        run: .\agents\dist\ail-agent.exe "smoke" --json-events --run-id ci-smoke
+
+      - name: Run gated frozen-binary tests (Linux/macOS)
+        if: matrix.os != 'windows-latest'
+        shell: bash
+        run: |
+          AIL_FROZEN_BIN="$PWD/agents/dist/ail-agent" \
+            python -m pytest agents/tests/test_frozen_binary_smoke.py -v -m integration
+
+      - name: Run gated frozen-binary tests (Windows)
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: |
+          $env:AIL_FROZEN_BIN = "$PWD\agents\dist\ail-agent.exe"
+          python -m pytest agents/tests/test_frozen_binary_smoke.py -v -m integration
+
+      - name: Check bundle size cap 350 MB (Linux/macOS)
+        if: matrix.os != 'windows-latest'
+        shell: bash
+        run: |
+          size=$(stat -c%s agents/dist/ail-agent 2>/dev/null || stat -f%z agents/dist/ail-agent)
+          echo "ail-agent frozen binary size: ${size} bytes"
+          if [ "$size" -gt 367001600 ]; then
+            echo "ERROR: Bundle exceeds 350 MB hard cap (${size} > 367001600)" >&2
+            exit 1
+          fi
+
+      - name: Check bundle size cap 350 MB (Windows)
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: |
+          $size = (Get-Item "agents\dist\ail-agent.exe").Length
+          Write-Host "ail-agent frozen binary size: $size bytes"
+          if ($size -gt 367001600) {
+            Write-Error "Bundle exceeds 350 MB hard cap ($size > 367001600)"
+            exit 1
+          }

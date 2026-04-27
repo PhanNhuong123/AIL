@@ -1,4 +1,4 @@
-//! Unit tests for Phase 16.5 sidecar helpers and DTOs (SC1–SC12).
+//! Unit tests for Phase 16.5 / 16.6 sidecar helpers and DTOs (SC1–SC14).
 //!
 //! Covers pure helpers only — `health_check_core` / `health_check_agent`
 //! require a live `tauri::AppHandle` which cannot be constructed outside a
@@ -13,7 +13,8 @@
 use std::sync::{Mutex, OnceLock};
 
 use ail_ui_bridge::sidecar::{
-    next_sidecar_run_id_string, parse_ail_dev_mode, parse_version_line, seed_sidecar_nonce,
+    agent_artifact_basename, next_sidecar_run_id_string, parse_ail_dev_mode, parse_version_line,
+    seed_sidecar_nonce,
 };
 use ail_ui_bridge::types::sidecar_result::{HealthCheckPayload, SidecarMode};
 use ail_ui_bridge::BridgeStateInner;
@@ -255,5 +256,41 @@ fn bridge_state_inner_has_sidecar_fields() {
     assert_eq!(
         inner.sidecar_id_nonce, 42,
         "sidecar_id_nonce must match what was set"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// SC13 — agent_artifact_basename returns .exe for windows
+// ---------------------------------------------------------------------------
+
+#[test]
+fn agent_artifact_basename_windows() {
+    assert_eq!(
+        agent_artifact_basename("windows"),
+        "ail-agent.exe",
+        "Windows target must use .exe extension"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// SC14 — agent_artifact_basename returns no extension for non-windows targets
+// ---------------------------------------------------------------------------
+
+#[test]
+fn agent_artifact_basename_unix() {
+    assert_eq!(
+        agent_artifact_basename("linux"),
+        "ail-agent",
+        "Linux target must have no extension"
+    );
+    assert_eq!(
+        agent_artifact_basename("macos"),
+        "ail-agent",
+        "macOS target must have no extension"
+    );
+    assert_eq!(
+        agent_artifact_basename("anything-else"),
+        "ail-agent",
+        "Unknown target must have no extension (non-windows fallback)"
     );
 }
