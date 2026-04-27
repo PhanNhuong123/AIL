@@ -308,3 +308,25 @@ export interface SheafCompletePayload {
 export interface SheafCancelResult {
   cancelled: boolean;
 }
+
+// === Phase 16.4 — Reviewer (coverage scoring) ===
+// Mirror of crates/ail-ui-bridge/src/types/reviewer_result.rs.
+// camelCase wire format. runId is string (precision-safe).
+
+export type CoverageStatus = 'Full' | 'Partial' | 'Weak' | 'N/A' | 'Unavailable';
+
+export interface CoverageCompletePayload {
+  runId: string;
+  ok: boolean;
+  status: CoverageStatus;
+  score?: number;
+  /** PATH-LIKE node id. Empty for cancel emits. Invariant 16.4-R. */
+  nodeId: string;
+  missingConcepts: string[];
+  emptyParent: boolean;
+  degenerateBasisFallback: boolean;
+  cancelled?: boolean;
+}
+
+export interface ReviewerCancelResult { cancelled: boolean; runId: string; }
+export interface ReviewerScopeRequest { nodeId?: string; }

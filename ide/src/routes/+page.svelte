@@ -13,6 +13,7 @@
     onAgentStep, onAgentMessage, onAgentComplete,
     onVerifyComplete, runVerifier, cancelVerifierRun, getNodeDetail,
     onSheafComplete, runSheafAnalysis, cancelSheafAnalysis,
+    runReviewer, cancelReviewerRun, onCoverageComplete,
   } from '$lib/bridge';
   import type {
     AgentStepPayload, AgentMessagePayload, AgentCompletePayload,
@@ -32,6 +33,17 @@
   import { isSheafRunning, currentSheafRunId, sheafConflicts, resetSheafState } from '$lib/sheaf/sheaf-state';
   import { scheduleSheaf, cancelSheafPending } from '$lib/sheaf/sheaf-scheduler';
   import { hasSheafTriggerFailure } from '$lib/sheaf/trigger-predicate';
+  import {
+    isReviewerRunning, currentReviewerRunId,
+    updateLastReviewed, getLastReviewedStatus, resetReviewerState,
+  } from '$lib/reviewer/reviewer-state';
+  import {
+    scheduleReview, cancelReviewerPending,
+    reset as resetReviewerScheduler,
+  } from '$lib/reviewer/reviewer-scheduler';
+  import {
+    hasReviewerTrigger, hasMaterialStatusChange,
+  } from '$lib/reviewer/trigger-predicate';
   import '../styles/tokens.css';
   import '../styles/chrome.css';
   import '../styles/stage.css';
@@ -233,6 +245,44 @@
   }
 
   // ---------------------------------------------------------------------------
+  // Phase 16.4 — Reviewer helpers
+  // ---------------------------------------------------------------------------
+
+  // runReviewerNow — kicks off a new reviewer run, cancelling any in-flight
+  // run. Mirror of runSheafNow above. No param/return type annotations (16.2-E).
+  async function runReviewerNow(nodeId) {
+    const prevId = get(currentReviewerRunId);
+    isReviewerRunning.set(true);                                  // BEFORE first await
+    if (prevId) await cancelReviewerRun(prevId).catch(() => {});
+    try {
+      const runId = await runReviewer({ nodeId });
+      currentReviewerRunId.set(runId);
+    } catch {
+      isReviewerRunning.set(false);
+      currentReviewerRunId.set(null);
+    }
+  }
+
+  // resolveReviewerNodeId — returns the module id for the current selection,
+  // or null if selection is project/type/error/none. Used to derive the
+  // reviewer scope (module-level). No TS type annotations (16.2-E).
+  function resolveReviewerNodeId(sel, g) {
+    if (!g || !sel || sel.id === null) return null;
+    if (sel.kind === 'module') return sel.id;
+    if (sel.kind === 'function' || sel.kind === 'step') {
+      for (const mod of g.modules) {
+        for (const fn_ of mod.functions) {
+          if (fn_.id === sel.id) return mod.id;
+          for (const step of (fn_.steps ?? [])) {
+            if (step.id === sel.id) return mod.id;
+          }
+        }
+      }
+    }
+    return null;
+  }
+
+  // ---------------------------------------------------------------------------
   // onMount: event subscriptions
   // ---------------------------------------------------------------------------
 
@@ -307,6 +357,16 @@
           scheduleSheaf(undefined, runSheafNow);
         }
 
+        // 16.4 — Schedule reviewer run when verify SUCCEEDS (mutually exclusive with sheaf).
+        if (hasReviewerTrigger(payload)) {
+          const sel = get(selection);
+          const g   = get(graph);
+          const moduleId = resolveReviewerNodeId(sel, g);
+          if (moduleId) {
+            scheduleReview(moduleId, runReviewerNow);
+          }
+        }
+
         // Lazy detail re-fetch for currently-selected node if it was affected.
         const sel = get(selection);
         if (
@@ -340,6 +400,61 @@
       sheafConflicts.set(payload.conflicts);
     }));
 
+    // Phase 16.4 — coverage-complete listener.
+    // Writes: isReviewerRunning, currentReviewerRunId, lastReviewedStatus (via
+    // updateLastReviewed), and chatMessages (insight only). MUST NOT write
+    // graph/selection/patchEffects/activeLens/sheaf stores/node-view stores/
+    // flow stores. Invariant 16.4-B.
+    register(onCoverageComplete((payload) => {
+      // Layer 0 — clear running flag if matching runId
+      if (get(currentReviewerRunId) === payload.runId) {
+        isReviewerRunning.set(false);
+        currentReviewerRunId.set(null);
+      } else {
+        // Layer 1 — runId guard: superseded payload, ignore everything below
+        return;
+      }
+
+      // Layer 2 — cancelled guard
+      if (payload.cancelled) return;
+
+      // Capture priorStatus BEFORE Layer 3 write
+      const priorStatus = getLastReviewedStatus(payload.nodeId);
+
+      // Layer 3 — write map
+      updateLastReviewed(payload.nodeId, payload.status);
+
+      // Layer 4 — Guards A and C suppress insight
+      if (payload.emptyParent || payload.degenerateBasisFallback) return;
+
+      // Layer 5 — selection-match guard
+      const sel = get(selection);
+      const selModuleId = resolveReviewerNodeId(sel, get(graph));
+      if (selModuleId !== payload.nodeId) return;
+
+      // Layer 6 — material status change check
+      if (!hasMaterialStatusChange(priorStatus, payload.status)) return;
+
+      // Layer 7 — emit chat insight
+      if (!payload.ok) return;
+
+      const topConcept = payload.missingConcepts[0] ?? 'coverage gaps';
+      const fromLabel = priorStatus ?? 'baseline';
+      const text = priorStatus === null
+        ? `Coverage for \`${payload.nodeId}\` is **${payload.status}**. Top gap: ${topConcept}.`
+        : `Coverage for \`${payload.nodeId}\` dropped from **${fromLabel}** to **${payload.status}**. Top gap: ${topConcept}.`;
+
+      chatMessages.update(arr => [
+        ...arr,
+        {
+          id: `review-${payload.runId}-${++routeMsgSeq}`,
+          role: 'assistant',
+          text,
+          ts: Date.now(),
+        },
+      ]);
+    }));
+
     return () => {
       destroyed = true;
       if (debounceTimer !== null) {
@@ -354,6 +469,8 @@
       resetScheduler();
       cancelSheafPending();
       resetSheafState();
+      cancelReviewerPending();
+      resetReviewerState();
       for (const fn of unlistens) fn();
       unsubCurrentRunId();
       unsubSelection();
@@ -377,6 +494,8 @@
       }
       cancelSheafPending();
       resetSheafState();
+      cancelReviewerPending();
+      resetReviewerState();
       watchedProjectId = newId;
       startWatchProject().catch((e) => console.warn('[watcher] start failed', e));
     }

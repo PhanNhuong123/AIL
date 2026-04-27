@@ -177,7 +177,9 @@ name = "ail-ui-bridge"
 version = "0.1.0"
 dependencies = [
  "ail-contract",
+ "ail-coverage",
  "ail-graph",
+ "ail-search",
  "ail-text",
  "ail-types",
  "log",

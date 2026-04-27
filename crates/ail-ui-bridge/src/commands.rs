@@ -72,6 +72,30 @@ pub struct BridgeStateInner {
     pub sheaf_cancelled: std::sync::Arc<std::sync::atomic::AtomicBool>,
     pub sheaf_run_seq: u64,
     pub sheaf_id_nonce: u64,
+    // Phase 16.4 — reviewer (coverage scoring) scheduling/cancellation.
+    //
+    // `reviewer_run` holds the active reviewer task handle. `load_project` cancels
+    // any in-flight run before loading a new project. `reviewer_cancelled` is the
+    // per-process AtomicBool fence (separate from verifier and sheaf fences so all
+    // three analyses may legitimately overlap — invariant 16.4-A).
+    // `reviewer_run_seq` and `reviewer_id_nonce` produce string run ids.
+    //
+    // `reviewer_provider_cell` is project-agnostic (invariant 16.4-B): the ONNX
+    // model load is expensive and reusable across project reloads. It is an
+    // `Arc<OnceLock<...>>` that lives OUTSIDE the bridge mutex — callers clone the
+    // Arc under a brief lock, then call `get_or_init` off-lock (invariant 16.4-I).
+    #[cfg(all(feature = "tauri-commands", feature = "embeddings"))]
+    pub reviewer_run: Option<tokio::task::JoinHandle<()>>,
+    #[cfg(all(feature = "tauri-commands", feature = "embeddings"))]
+    pub reviewer_cancelled: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    #[cfg(all(feature = "tauri-commands", feature = "embeddings"))]
+    pub reviewer_run_seq: u64,
+    #[cfg(all(feature = "tauri-commands", feature = "embeddings"))]
+    pub reviewer_id_nonce: u64,
+    #[cfg(all(feature = "tauri-commands", feature = "embeddings"))]
+    pub reviewer_provider_cell: std::sync::Arc<
+        std::sync::OnceLock<Option<std::sync::Arc<ail_search::OnnxEmbeddingProvider>>>,
+    >,
 }
 
 /// Mutex-wrapped bridge state managed by Tauri.
@@ -95,6 +119,16 @@ pub fn new_bridge_state() -> BridgeState {
         sheaf_cancelled: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
         sheaf_run_seq: 0,
         sheaf_id_nonce: crate::sheaf::seed_sheaf_nonce(),
+        #[cfg(all(feature = "tauri-commands", feature = "embeddings"))]
+        reviewer_run: None,
+        #[cfg(all(feature = "tauri-commands", feature = "embeddings"))]
+        reviewer_cancelled: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
+        #[cfg(all(feature = "tauri-commands", feature = "embeddings"))]
+        reviewer_run_seq: 0,
+        #[cfg(all(feature = "tauri-commands", feature = "embeddings"))]
+        reviewer_id_nonce: crate::reviewer::seed_reviewer_nonce(),
+        #[cfg(all(feature = "tauri-commands", feature = "embeddings"))]
+        reviewer_provider_cell: std::sync::Arc::new(std::sync::OnceLock::new()),
     })
 }
 
@@ -168,6 +202,21 @@ pub fn load_project(path: String, state: State<'_, BridgeState>) -> Result<Graph
     inner
         .sheaf_cancelled
         .store(false, std::sync::atomic::Ordering::SeqCst);
+    // Phase 16.4: abort any in-flight reviewer run before loading new project.
+    // NOTE: reviewer_provider_cell is intentionally NOT cleared — it is project-agnostic
+    // (invariant 16.4-B). The model load is expensive and reusable across projects.
+    #[cfg(all(feature = "tauri-commands", feature = "embeddings"))]
+    {
+        inner
+            .reviewer_cancelled
+            .store(true, std::sync::atomic::Ordering::SeqCst);
+        if let Some(handle) = inner.reviewer_run.take() {
+            handle.abort();
+        }
+        inner
+            .reviewer_cancelled
+            .store(false, std::sync::atomic::Ordering::SeqCst);
+    }
     inner.load_generation = inner.load_generation.wrapping_add(1);
     inner.project_path = Some(root);
     inner.graph_json = Some(graph_json.clone());
@@ -356,6 +405,11 @@ pub fn save_flowchart(
 /// this up with a concrete runtime. The signature follows the Tauri 2 public
 /// `InvokeHandler<R>` alias:
 /// `pub type InvokeHandler<R> = dyn Fn(Invoke<R>) -> bool + Send + Sync + 'static`
+///
+/// Two variants are compiled depending on feature flags:
+/// - With `embeddings`: includes `run_reviewer` / `cancel_reviewer_run`.
+/// - Without `embeddings`: excludes the reviewer commands.
+#[cfg(not(feature = "embeddings"))]
 pub fn get_handler<R: tauri::Runtime>(
 ) -> impl Fn(tauri::ipc::Invoke<R>) -> bool + Send + Sync + 'static {
     tauri::generate_handler![
@@ -372,5 +426,27 @@ pub fn get_handler<R: tauri::Runtime>(
         crate::verifier::cancel_verifier_run,
         crate::sheaf::run_sheaf_analysis,
         crate::sheaf::cancel_sheaf_analysis,
+    ]
+}
+
+#[cfg(feature = "embeddings")]
+pub fn get_handler<R: tauri::Runtime>(
+) -> impl Fn(tauri::ipc::Invoke<R>) -> bool + Send + Sync + 'static {
+    tauri::generate_handler![
+        load_project,
+        get_node_detail,
+        get_flowchart,
+        verify_project,
+        save_flowchart,
+        compute_lens_metrics,
+        start_watch_project,
+        crate::agent::run_agent,
+        crate::agent::cancel_agent_run,
+        crate::verifier::run_verifier,
+        crate::verifier::cancel_verifier_run,
+        crate::sheaf::run_sheaf_analysis,
+        crate::sheaf::cancel_sheaf_analysis,
+        crate::reviewer::run_reviewer,
+        crate::reviewer::cancel_reviewer_run,
     ]
 }

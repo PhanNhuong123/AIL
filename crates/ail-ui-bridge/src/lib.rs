@@ -33,6 +33,8 @@ pub mod types;
 pub mod agent;
 #[cfg(feature = "tauri-commands")]
 pub mod commands;
+#[cfg(all(feature = "tauri-commands", feature = "embeddings"))]
+pub mod reviewer;
 #[cfg(feature = "tauri-commands")]
 pub mod sheaf;
 #[cfg(feature = "tauri-commands")]
@@ -66,6 +68,7 @@ pub use types::{
         RuleEntry, RuleSource, VerificationDetail,
     },
     patch::{FunctionPatchEntry, FunctionRemoval, GraphPatchJson, StepPatchEntry, StepRemoval},
+    reviewer_result::{CoverageCompletePayload, ReviewerCancelResult},
     sheaf::{SheafCancelResult, SheafCompletePayload, SheafConflictEntry},
     status::Status,
     verify_result::{

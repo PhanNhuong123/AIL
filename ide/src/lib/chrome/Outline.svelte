@@ -1,11 +1,12 @@
 <script lang="ts">
-  import { graph, selection, path } from '$lib/stores';
+  import { graph, selection, path, activeLens } from '$lib/stores';
   import type { SelectionKind } from '$lib/stores';
   import { expanded, filterTerm, toggleExpanded } from './outline-state';
   import { filterTree, isVisible, ALL } from './filter';
   import { zoomLevel, stageLevelForKind } from './toolbar-state';
   import { patchEffects } from '$lib/patch-effects';
   import { sheafConflicts } from '$lib/sheaf/sheaf-state';
+  import { getLastReviewedStatus, coverageVersion } from '$lib/reviewer/reviewer-state';
   import OutlineRow from './OutlineRow.svelte';
   import OutlineSection from './OutlineSection.svelte';
 
@@ -44,6 +45,18 @@
   function conflictFor(id) {
     return conflictIds.has(id) ? true : undefined;
   }
+
+  $: showCoverageMarkers = $activeLens === 'tests' || $activeLens === 'rules';
+  // Reactive lookup function. References $coverageVersion so Svelte re-derives
+  // the closure whenever the Map is mutated (Map itself is not a Writable store;
+  // coverageVersion provides the reactive invalidation signal — invariant 16.4-Q).
+  // The comma-expr (_v, cond) evaluates to cond while establishing a reactive
+  // dependency on _v at the outer reactive-assignment level.
+  $: coverageMarkerFor = (() => {
+    const _v = $coverageVersion;
+    const _show = showCoverageMarkers;
+    return (id) => (_v >= 0 && _show) ? getLastReviewedStatus(id) : null;
+  })();
 </script>
 
 <aside class="region-outline" data-testid="region-outline">
@@ -75,7 +88,8 @@
 
       {#each g.modules as mod (mod.id)}
         {#if isVisible(visible, mod.id)}
-          <div data-patch-state={patchStateFor(mod.id)}>
+          <div data-patch-state={patchStateFor(mod.id)}
+               data-coverage-status={coverageMarkerFor(mod.id) ?? undefined}>
             <OutlineRow
               kind="module"
               name={mod.name}

@@ -7,6 +7,7 @@ import type {
   AgentRunRequest, AgentStepPayload, AgentMessagePayload,
   AgentCompletePayload, AgentCancelResult,
   SheafCompletePayload, SheafCancelResult,
+  CoverageCompletePayload, ReviewerCancelResult, ReviewerScopeRequest,
 } from './types';
 
 // Commands
@@ -79,8 +80,10 @@ export const onVerifyComplete = (
 ): Promise<UnlistenFn> =>
   listen<VerifyCompletePayload>(EVENTS.VERIFY_COMPLETE, (e) => h(e.payload));
 
-export const onCoverageComplete = (h: (p: unknown) => void) =>
-  listen(EVENTS.COVERAGE_COMPLETE, (e) => h(e.payload));
+export const onCoverageComplete = (
+  h: (p: CoverageCompletePayload) => void,
+): Promise<UnlistenFn> =>
+  listen<CoverageCompletePayload>(EVENTS.COVERAGE_COMPLETE, (e) => h(e.payload));
 
 export const onAgentStep = (
   h: (p: AgentStepPayload) => void,
@@ -118,3 +121,10 @@ export const onSheafComplete = (
   handler: (payload: SheafCompletePayload) => void,
 ): Promise<UnlistenFn> =>
   listen<SheafCompletePayload>(EVENTS.SHEAF_COMPLETE, (e) => handler(e.payload));
+
+// Phase 16.4 — Reviewer (coverage scoring) commands.
+export const runReviewer = (req: ReviewerScopeRequest): Promise<string> =>
+  invoke<string>('run_reviewer', { nodeId: req.nodeId ?? null });
+
+export const cancelReviewerRun = (runId: string): Promise<ReviewerCancelResult> =>
+  invoke<ReviewerCancelResult>('cancel_reviewer_run', { runId });

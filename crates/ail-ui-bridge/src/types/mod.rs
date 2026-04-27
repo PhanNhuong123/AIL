@@ -4,6 +4,7 @@ pub mod graph_json;
 pub mod lens_stats;
 pub mod node_detail;
 pub mod patch;
+pub mod reviewer_result;
 pub mod sheaf;
 pub mod status;
 pub mod verify_result;
@@ -23,6 +24,7 @@ pub use node_detail::{
     RuleEntry, RuleSource, VerificationDetail,
 };
 pub use patch::{FunctionPatchEntry, FunctionRemoval, GraphPatchJson, StepPatchEntry, StepRemoval};
+pub use reviewer_result::{CoverageCompletePayload, ReviewerCancelResult};
 pub use sheaf::{SheafCancelResult, SheafCompletePayload, SheafConflictEntry};
 pub use status::Status;
 pub use verify_result::{
