@@ -357,10 +357,11 @@
           scheduleSheaf(undefined, runSheafNow);
         }
 
+        const sel = get(selection);
+
         // 16.4 — Schedule reviewer run when verify SUCCEEDS (mutually exclusive with sheaf).
         if (hasReviewerTrigger(payload)) {
-          const sel = get(selection);
-          const g   = get(graph);
+          const g = get(graph);
           const moduleId = resolveReviewerNodeId(sel, g);
           if (moduleId) {
             scheduleReview(moduleId, runReviewerNow);
@@ -368,7 +369,6 @@
         }
 
         // Lazy detail re-fetch for currently-selected node if it was affected.
-        const sel = get(selection);
         if (
           (sel.kind === 'step' || sel.kind === 'function') &&
           sel.id !== null &&

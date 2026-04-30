@@ -6,7 +6,7 @@
 /// Tests validate that encoding is structurally correct (SAT/UNSAT outcomes match
 /// expectations) and that unsupported variants produce the right error variant.
 use ail_types::{ArithOp, BuiltinSemanticType, CompareOp, ConstraintExpr, LiteralValue, ValueExpr};
-use z3::{Config, Context, SatResult, Solver};
+use z3::{SatResult, Solver};
 
 use crate::errors::EncodeError;
 
@@ -17,12 +17,10 @@ use super::{
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-
-fn make_ctx() -> (Config, Context) {
-    let cfg = Config::new();
-    let ctx = Context::new(&cfg);
-    (cfg, ctx)
-}
+//
+// z3 0.20: Z3 AST construction draws from an implicit thread-local Context.
+// No fixture helper is needed — `Solver::new()`, `Int::new_const(name)`,
+// `Bool::new_const(name)`, etc. all use the active thread-local context.
 
 fn ref_expr(path: &[&str]) -> ValueExpr {
     ValueExpr::Ref(path.iter().map(|s| s.to_string()).collect())
@@ -48,8 +46,7 @@ fn sat_check(solver: &Solver) -> SatResult {
 
 #[test]
 fn z3_encode_literal_integer_as_int() {
-    let (_cfg, z3) = make_ctx();
-    let enc = EncodeContext::new(&z3);
+    let enc = EncodeContext::new();
     let result = encode_value_int(&int_lit(42), &enc);
     assert!(result.is_ok(), "integer literal should encode as Int");
 }
@@ -57,8 +54,7 @@ fn z3_encode_literal_integer_as_int() {
 #[test]
 #[allow(clippy::approx_constant)]
 fn z3_encode_literal_float_as_real() {
-    let (_cfg, z3) = make_ctx();
-    let enc = EncodeContext::new(&z3);
+    let enc = EncodeContext::new();
     let result = encode_value_real(&float_lit(3.14), &enc);
     assert!(result.is_ok(), "float literal should encode as Real");
 }
@@ -67,11 +63,10 @@ fn z3_encode_literal_float_as_real() {
 
 #[test]
 fn z3_encode_ref_from_context() {
-    let (_cfg, z3) = make_ctx();
-    let mut enc = EncodeContext::new(&z3);
+    let mut enc = EncodeContext::new();
     enc.add_int_var("x");
 
-    let solver = Solver::new(&z3);
+    let solver = Solver::new();
     let expr = ConstraintExpr::Compare {
         op: CompareOp::Gt,
         left: Box::new(ref_expr(&["x"])),
@@ -84,11 +79,10 @@ fn z3_encode_ref_from_context() {
 
 #[test]
 fn z3_encode_old_ref_from_context() {
-    let (_cfg, z3) = make_ctx();
-    let mut enc = EncodeContext::new(&z3);
+    let mut enc = EncodeContext::new();
     enc.add_old_int_var("balance");
 
-    let solver = Solver::new(&z3);
+    let solver = Solver::new();
     let expr = ConstraintExpr::Compare {
         op: CompareOp::Gte,
         left: Box::new(old_ref_expr(&["balance"])),
@@ -104,11 +98,10 @@ fn z3_encode_old_ref_from_context() {
 
 #[test]
 fn z3_encode_compare_gte_sat() {
-    let (_cfg, z3) = make_ctx();
-    let mut enc = EncodeContext::new(&z3);
+    let mut enc = EncodeContext::new();
     enc.add_int_var("x");
 
-    let solver = Solver::new(&z3);
+    let solver = Solver::new();
     let gte = ConstraintExpr::Compare {
         op: CompareOp::Gte,
         left: Box::new(ref_expr(&["x"])),
@@ -126,11 +119,10 @@ fn z3_encode_compare_gte_sat() {
 
 #[test]
 fn z3_encode_compare_gte_unsat() {
-    let (_cfg, z3) = make_ctx();
-    let mut enc = EncodeContext::new(&z3);
+    let mut enc = EncodeContext::new();
     enc.add_int_var("x");
 
-    let solver = Solver::new(&z3);
+    let solver = Solver::new();
     // x >= 10 AND x <= 5 → UNSAT
     solver.assert(
         &encode_constraint(
@@ -161,11 +153,10 @@ fn z3_encode_compare_gte_unsat() {
 
 #[test]
 fn z3_encode_and_conjunction() {
-    let (_cfg, z3) = make_ctx();
-    let mut enc = EncodeContext::new(&z3);
+    let mut enc = EncodeContext::new();
     enc.add_int_var("x");
 
-    let solver = Solver::new(&z3);
+    let solver = Solver::new();
     // x >= 0 and x < 100
     let expr = ConstraintExpr::And(vec![
         ConstraintExpr::Compare {
@@ -185,11 +176,10 @@ fn z3_encode_and_conjunction() {
 
 #[test]
 fn z3_encode_or_disjunction() {
-    let (_cfg, z3) = make_ctx();
-    let mut enc = EncodeContext::new(&z3);
+    let mut enc = EncodeContext::new();
     enc.add_int_var("x");
 
-    let solver = Solver::new(&z3);
+    let solver = Solver::new();
     // x > 5 or x < 0  — satisfiable (e.g. x = 10)
     let expr = ConstraintExpr::Or(vec![
         ConstraintExpr::Compare {
@@ -209,11 +199,10 @@ fn z3_encode_or_disjunction() {
 
 #[test]
 fn z3_encode_not_negation() {
-    let (_cfg, z3) = make_ctx();
-    let mut enc = EncodeContext::new(&z3);
+    let mut enc = EncodeContext::new();
     enc.add_int_var("x");
 
-    let solver = Solver::new(&z3);
+    let solver = Solver::new();
     // not (x == 0) → x can be anything non-zero
     let expr = ConstraintExpr::Not(Box::new(ConstraintExpr::Compare {
         op: CompareOp::Eq,
@@ -229,13 +218,12 @@ fn z3_encode_not_negation() {
 #[test]
 fn z3_encode_arithmetic_sub() {
     // new_balance == old(balance) - amount
-    let (_cfg, z3) = make_ctx();
-    let mut enc = EncodeContext::new(&z3);
+    let mut enc = EncodeContext::new();
     enc.add_int_var("new_balance");
     enc.add_int_var("amount");
     enc.add_old_int_var("balance");
 
-    let solver = Solver::new(&z3);
+    let solver = Solver::new();
     let expr = ConstraintExpr::Compare {
         op: CompareOp::Eq,
         left: Box::new(ref_expr(&["new_balance"])),
@@ -253,11 +241,10 @@ fn z3_encode_arithmetic_sub() {
 #[test]
 fn z3_encode_arithmetic_promotes_to_real() {
     // balance >= 0.0  — float literal promotes both sides to Real
-    let (_cfg, z3) = make_ctx();
-    let mut enc = EncodeContext::new(&z3);
+    let mut enc = EncodeContext::new();
     enc.add_real_var("balance");
 
-    let solver = Solver::new(&z3);
+    let solver = Solver::new();
     let expr = ConstraintExpr::Compare {
         op: CompareOp::Gte,
         left: Box::new(ref_expr(&["balance"])),
@@ -270,11 +257,10 @@ fn z3_encode_arithmetic_promotes_to_real() {
 
 #[test]
 fn z3_encode_contradictory_unsat() {
-    let (_cfg, z3) = make_ctx();
-    let mut enc = EncodeContext::new(&z3);
+    let mut enc = EncodeContext::new();
     enc.add_int_var("x");
 
-    let solver = Solver::new(&z3);
+    let solver = Solver::new();
     // x > 5 and x < 3 → UNSAT
     let expr = ConstraintExpr::And(vec![
         ConstraintExpr::Compare {
@@ -296,11 +282,10 @@ fn z3_encode_contradictory_unsat() {
 
 #[test]
 fn z3_encode_in_literal_set() {
-    let (_cfg, z3) = make_ctx();
-    let mut enc = EncodeContext::new(&z3);
+    let mut enc = EncodeContext::new();
     enc.add_int_var("status_code");
 
-    let solver = Solver::new(&z3);
+    let solver = Solver::new();
     // status_code in {200, 201, 204}
     let expr = ConstraintExpr::In {
         value: Box::new(ref_expr(&["status_code"])),
@@ -319,8 +304,7 @@ fn z3_encode_in_literal_set() {
 
 #[test]
 fn z3_encode_mod_on_real_unsupported() {
-    let (_cfg, z3) = make_ctx();
-    let mut enc = EncodeContext::new(&z3);
+    let mut enc = EncodeContext::new();
     enc.add_real_var("x");
 
     // Mod with a float literal forces Real path → Mod-on-Real
@@ -347,8 +331,7 @@ fn z3_encode_mod_on_real_unsupported() {
 
 #[test]
 fn z3_encode_nothing_literal_unsupported() {
-    let (_cfg, z3) = make_ctx();
-    let enc = EncodeContext::new(&z3);
+    let enc = EncodeContext::new();
 
     let expr = ConstraintExpr::Compare {
         op: CompareOp::Is,
@@ -367,8 +350,7 @@ fn z3_encode_nothing_literal_unsupported() {
 
 #[test]
 fn z3_encode_unsupported_matches() {
-    let (_cfg, z3) = make_ctx();
-    let enc = EncodeContext::new(&z3);
+    let enc = EncodeContext::new();
 
     let expr = ConstraintExpr::Matches {
         value: Box::new(ref_expr(&["email"])),
@@ -386,8 +368,7 @@ fn z3_encode_unsupported_matches() {
 
 #[test]
 fn z3_encode_unsupported_forall() {
-    let (_cfg, z3) = make_ctx();
-    let enc = EncodeContext::new(&z3);
+    let enc = EncodeContext::new();
 
     let expr = ConstraintExpr::ForAll {
         variable: "item".to_string(),
@@ -412,14 +393,13 @@ fn z3_encode_unsupported_forall() {
 
 #[test]
 fn z3_encode_type_constraint_positive_int() {
-    let (_cfg, z3) = make_ctx();
-    let mut enc = EncodeContext::new(&z3);
+    let mut enc = EncodeContext::new();
     let x = enc.add_int_var("amount");
 
-    let solver = Solver::new(&z3);
+    let solver = Solver::new();
     let dyn_x = z3::ast::Dynamic::from_ast(&x);
     let assertions =
-        encode_type_constraint(BuiltinSemanticType::PositiveInteger, &dyn_x, &z3).unwrap();
+        encode_type_constraint(BuiltinSemanticType::PositiveInteger, &dyn_x).unwrap();
     for a in &assertions {
         solver.assert(a);
     }
@@ -428,51 +408,48 @@ fn z3_encode_type_constraint_positive_int() {
 
 #[test]
 fn z3_encode_type_constraint_nonneg_int() {
-    let (_cfg, z3) = make_ctx();
-    let mut enc = EncodeContext::new(&z3);
+    let mut enc = EncodeContext::new();
     let x = enc.add_int_var("count");
 
     // Adding count == 0 should still be SAT (non-negative includes 0)
-    let solver = Solver::new(&z3);
+    let solver = Solver::new();
     use z3::ast::Ast;
     let dyn_x = z3::ast::Dynamic::from_ast(&x);
     let assertions =
-        encode_type_constraint(BuiltinSemanticType::NonNegativeInteger, &dyn_x, &z3).unwrap();
+        encode_type_constraint(BuiltinSemanticType::NonNegativeInteger, &dyn_x).unwrap();
     for a in &assertions {
         solver.assert(a);
     }
-    let zero = z3::ast::Int::from_i64(&z3, 0);
-    solver.assert(&x._eq(&zero));
+    let zero = z3::ast::Int::from_i64(0);
+    solver.assert(&x.eq(&zero));
     assert_eq!(sat_check(&solver), SatResult::Sat);
 }
 
 #[test]
 fn z3_encode_type_constraint_percentage() {
-    let (_cfg, z3) = make_ctx();
-    let mut enc = EncodeContext::new(&z3);
+    let mut enc = EncodeContext::new();
     let p = enc.add_real_var("rate");
 
-    let solver = Solver::new(&z3);
+    let solver = Solver::new();
     use z3::ast::Ast;
     let dyn_p = z3::ast::Dynamic::from_ast(&p);
-    let assertions = encode_type_constraint(BuiltinSemanticType::Percentage, &dyn_p, &z3).unwrap();
+    let assertions = encode_type_constraint(BuiltinSemanticType::Percentage, &dyn_p).unwrap();
     for a in &assertions {
         solver.assert(a);
     }
     // rate = 50.0 should be SAT
-    let fifty = z3::ast::Real::from_real(&z3, 50, 1);
-    solver.assert(&p._eq(&fifty));
+    let fifty = z3::ast::Real::from_rational(50, 1);
+    solver.assert(&p.eq(&fifty));
     assert_eq!(sat_check(&solver), SatResult::Sat);
 }
 
 #[test]
 fn z3_encode_type_constraint_text_unsupported() {
-    let (_cfg, z3) = make_ctx();
-    let mut enc = EncodeContext::new(&z3);
+    let mut enc = EncodeContext::new();
     let v = enc.add_bool_var("email"); // sort doesn't matter — type check happens first
 
     let dyn_v = z3::ast::Dynamic::from_ast(&v);
-    let err = encode_type_constraint(BuiltinSemanticType::NonEmptyText, &dyn_v, &z3).unwrap_err();
+    let err = encode_type_constraint(BuiltinSemanticType::NonEmptyText, &dyn_v).unwrap_err();
     assert!(
         matches!(
             err,
@@ -501,27 +478,24 @@ fn z3_encode_type_constraint_text_unsupported() {
 ///   - new_balance >= 0         (the candidate property — part of the SAT witness)
 #[test]
 fn z3_encode_wallet_transfer_full_packet() {
-    let (_cfg, z3) = make_ctx();
-    let mut enc = EncodeContext::new(&z3);
+    let mut enc = EncodeContext::new();
 
     let balance = enc.add_int_var("sender.balance");
     let amount = enc.add_int_var("amount");
     let new_balance = enc.add_int_var("new_balance");
     let _old_balance = enc.add_old_int_var("sender.balance");
 
-    let solver = Solver::new(&z3);
+    let solver = Solver::new();
     use z3::ast::{Dynamic, Int};
 
     // Type constraints
     let dyn_balance = Dynamic::from_ast(&balance);
     let dyn_amount = Dynamic::from_ast(&amount);
-    for a in
-        encode_type_constraint(BuiltinSemanticType::NonNegativeInteger, &dyn_balance, &z3).unwrap()
+    for a in encode_type_constraint(BuiltinSemanticType::NonNegativeInteger, &dyn_balance).unwrap()
     {
         solver.assert(&a);
     }
-    for a in encode_type_constraint(BuiltinSemanticType::PositiveInteger, &dyn_amount, &z3).unwrap()
-    {
+    for a in encode_type_constraint(BuiltinSemanticType::PositiveInteger, &dyn_amount).unwrap() {
         solver.assert(&a);
     }
 
@@ -546,7 +520,7 @@ fn z3_encode_wallet_transfer_full_packet() {
     solver.assert(&encode_constraint(&post, &enc).unwrap());
 
     // Prove new_balance >= 0
-    let zero = Int::from_i64(&z3, 0);
+    let zero = Int::from_i64(0);
     solver.assert(&new_balance.ge(&zero));
 
     assert_eq!(

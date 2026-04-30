@@ -3,7 +3,7 @@ use ail_graph::{
     GraphBackend,
 };
 use ail_types::{parse_constraint_expr, ConstraintExpr};
-use z3::{SatResult, Solver};
+use z3::{Params, SatResult, Solver};
 
 use crate::errors::VerifyError;
 use crate::z3_encode::{
@@ -36,18 +36,20 @@ pub(super) fn verify_do_node(
     graph: &dyn GraphBackend,
     child_posts: &[ConstraintExpr],
     promoted_facts: &[ParsedPromotedFact],
-    z3_ctx: &z3::Context,
 ) -> Vec<VerifyError> {
     let mut errors: Vec<VerifyError> = Vec::new();
     let node_id = node.id;
 
     // ── Build encoding context ────────────────────────────────────────────────
-    let enc = build_encode_context(node, graph, z3_ctx);
+    let enc = build_encode_context(node, graph);
 
-    // ── Create solver ─────────────────────────────────────────────────────────
-    // Timeout is configured on the Z3 Context via Config in verify_contracts.
-    // Per-node timeout enforcement is at the context level (30 s per call).
-    let solver = Solver::new(z3_ctx);
+    // ── Create solver with 30-second per-node timeout ─────────────────────────
+    // z3 0.20 exposes per-Solver `Params`, so each Do-node verification gets its
+    // own 30 000 ms budget independently of other nodes.
+    let solver = Solver::new();
+    let mut params = Params::new();
+    params.set_u32("timeout", 30_000);
+    solver.set_params(&params);
 
     // ── Step 3: Assert type constraints ───────────────────────────────────────
     let type_constraints = collect_param_type_constraints(node, graph);
@@ -56,7 +58,7 @@ pub(super) fn verify_do_node(
         let Some(dyn_var) = enc.get_var(&path) else {
             continue; // variable was not registered (Uninterpreted sort)
         };
-        match encode_type_constraint(*builtin, dyn_var, z3_ctx) {
+        match encode_type_constraint(*builtin, dyn_var) {
             Ok(assertions) => {
                 for a in &assertions {
                     solver.assert(a);
@@ -225,11 +227,11 @@ pub(super) fn verify_do_node(
 
 /// Parse an AIL constraint expression string and encode it into a Z3 `Bool`.
 /// Produces a [`VerifyError::EncodingFailed`] on parse or encode failure.
-fn parse_and_encode<'ctx>(
+fn parse_and_encode(
     expr_text: &str,
-    enc: &EncodeContext<'ctx>,
+    enc: &EncodeContext,
     node_id: ail_graph::types::NodeId,
-) -> Result<z3::ast::Bool<'ctx>, VerifyError> {
+) -> Result<z3::ast::Bool, VerifyError> {
     let constraint = parse_constraint_expr(expr_text).map_err(|e| VerifyError::EncodingFailed {
         node_id,
         inner: crate::errors::EncodeError::UnboundVariable {
@@ -244,7 +246,7 @@ fn parse_and_encode<'ctx>(
 /// Format all registered variables in the Z3 model as a human-readable string.
 ///
 /// Output: `"var1 = val1, var2 = val2, …"` sorted by name.
-fn format_counterexample(model: &z3::Model<'_>, enc: &EncodeContext<'_>) -> String {
+fn format_counterexample(model: &z3::Model, enc: &EncodeContext) -> String {
     let pairs = enc.format_model(model);
     if pairs.is_empty() {
         return "<empty model>".to_string();

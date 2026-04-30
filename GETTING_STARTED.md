@@ -18,11 +18,14 @@ This guide walks you from installation through your first verified AIL function.
 
 Optional — for Z3 formal verification:
 
-```bash
-# Linux / macOS
-sudo apt install z3   # or: brew install z3
+`z3 0.20+` (used by `ail-contract --features z3-verify`) bundles Z3 4.16 source
+via the `z3-src` crate and ships static FFI bindings, so `libclang`/`LLVM` is
+**no longer required**. A working C++ toolchain (MSVC on Windows, gcc/clang on
+Linux/macOS) plus CMake is all you need:
 
-# Windows — set LIBCLANG_PATH to your LLVM bin folder before building
+```bash
+# Build with formal verification enabled
+cargo build --release --features z3-verify
 ```
 
 ---

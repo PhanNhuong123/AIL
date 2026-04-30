@@ -21,22 +21,29 @@ use crate::errors::EncodeError;
 /// `"old__{path}"` key. Register them with `add_old_*_var` before encoding
 /// postconditions.
 ///
+/// # z3 0.20 thread-local context
+///
+/// As of z3 0.20, AST construction draws from a thread-local Z3 context that is
+/// initialized lazily by the first AST/Solver call on the thread. `EncodeContext`
+/// no longer holds an explicit `Context` reference; the `'ctx` lifetime parameter
+/// has been removed.
+///
+/// Per-solver timeouts are set via `Params::set_u32("timeout", ms)` passed to
+/// `Solver::set_params(&params)` — see `verify_do_node` and `check_overlap`.
+///
 /// [`encode_constraint`]: super::encoder::encode_constraint
-pub struct EncodeContext<'ctx> {
-    /// The Z3 context used for all AST node construction.
-    pub z3: &'ctx z3::Context,
-    vars: HashMap<String, Dynamic<'ctx>>,
-    old_vars: HashMap<String, Dynamic<'ctx>>,
+#[derive(Default)]
+pub struct EncodeContext {
+    vars: HashMap<String, Dynamic>,
+    old_vars: HashMap<String, Dynamic>,
 }
 
-impl<'ctx> EncodeContext<'ctx> {
-    /// Create an empty encoding context backed by `z3`.
-    pub fn new(z3: &'ctx z3::Context) -> Self {
-        Self {
-            z3,
-            vars: HashMap::new(),
-            old_vars: HashMap::new(),
-        }
+impl EncodeContext {
+    /// Create an empty encoding context. Z3 AST construction uses the active
+    /// thread-local context (set by [`z3::with_z3_config`] when a custom Config
+    /// is required).
+    pub fn new() -> Self {
+        Self::default()
     }
 
     // ── Current-state registration ───────────────────────────────────────────
@@ -45,22 +52,22 @@ impl<'ctx> EncodeContext<'ctx> {
     ///
     /// Returns the Z3 `Int` constant so the caller can assert additional
     /// constraints on it directly.
-    pub fn add_int_var(&mut self, name: &str) -> Int<'ctx> {
-        let v = Int::new_const(self.z3, name);
+    pub fn add_int_var(&mut self, name: &str) -> Int {
+        let v = Int::new_const(name);
         self.vars.insert(name.to_owned(), Dynamic::from_ast(&v));
         v
     }
 
     /// Register a real-number variable under `name`.
-    pub fn add_real_var(&mut self, name: &str) -> Real<'ctx> {
-        let v = Real::new_const(self.z3, name);
+    pub fn add_real_var(&mut self, name: &str) -> Real {
+        let v = Real::new_const(name);
         self.vars.insert(name.to_owned(), Dynamic::from_ast(&v));
         v
     }
 
     /// Register a boolean variable under `name`.
-    pub fn add_bool_var(&mut self, name: &str) -> Bool<'ctx> {
-        let v = Bool::new_const(self.z3, name);
+    pub fn add_bool_var(&mut self, name: &str) -> Bool {
+        let v = Bool::new_const(name);
         self.vars.insert(name.to_owned(), Dynamic::from_ast(&v));
         v
     }
@@ -71,25 +78,25 @@ impl<'ctx> EncodeContext<'ctx> {
     ///
     /// Internally stored under the key `"old__{name}"`. The Z3 constant is named
     /// `"old__{name}"` in the solver model.
-    pub fn add_old_int_var(&mut self, name: &str) -> Int<'ctx> {
+    pub fn add_old_int_var(&mut self, name: &str) -> Int {
         let key = old_key(name);
-        let v = Int::new_const(self.z3, key.as_str());
+        let v = Int::new_const(key.as_str());
         self.old_vars.insert(key, Dynamic::from_ast(&v));
         v
     }
 
     /// Register a real-number variable representing the pre-state snapshot of `name`.
-    pub fn add_old_real_var(&mut self, name: &str) -> Real<'ctx> {
+    pub fn add_old_real_var(&mut self, name: &str) -> Real {
         let key = old_key(name);
-        let v = Real::new_const(self.z3, key.as_str());
+        let v = Real::new_const(key.as_str());
         self.old_vars.insert(key, Dynamic::from_ast(&v));
         v
     }
 
     /// Register a boolean variable representing the pre-state snapshot of `name`.
-    pub fn add_old_bool_var(&mut self, name: &str) -> Bool<'ctx> {
+    pub fn add_old_bool_var(&mut self, name: &str) -> Bool {
         let key = old_key(name);
-        let v = Bool::new_const(self.z3, key.as_str());
+        let v = Bool::new_const(key.as_str());
         self.old_vars.insert(key, Dynamic::from_ast(&v));
         v
     }
@@ -99,19 +106,19 @@ impl<'ctx> EncodeContext<'ctx> {
     /// Look up a current-state variable by its dotted-path segments.
     ///
     /// Returns `None` if the path was not registered.
-    pub fn get_var(&self, path: &[String]) -> Option<&Dynamic<'ctx>> {
+    pub fn get_var(&self, path: &[String]) -> Option<&Dynamic> {
         self.vars.get(&var_key(path))
     }
 
     /// Look up a pre-state (`old()`) variable by its dotted-path segments.
     ///
     /// Returns `None` if the path was not registered as an old-var.
-    pub fn get_old_var(&self, path: &[String]) -> Option<&Dynamic<'ctx>> {
+    pub fn get_old_var(&self, path: &[String]) -> Option<&Dynamic> {
         self.old_vars.get(&old_key(&var_key(path)))
     }
 
     /// Look up and return a current-state variable, or an [`EncodeError::UnboundVariable`].
-    pub(super) fn require_var(&self, path: &[String]) -> Result<&Dynamic<'ctx>, EncodeError> {
+    pub(super) fn require_var(&self, path: &[String]) -> Result<&Dynamic, EncodeError> {
         self.get_var(path)
             .ok_or_else(|| EncodeError::UnboundVariable {
                 name: var_key(path),
@@ -119,7 +126,7 @@ impl<'ctx> EncodeContext<'ctx> {
     }
 
     /// Look up and return a pre-state variable, or an [`EncodeError::UnboundVariable`].
-    pub(super) fn require_old_var(&self, path: &[String]) -> Result<&Dynamic<'ctx>, EncodeError> {
+    pub(super) fn require_old_var(&self, path: &[String]) -> Result<&Dynamic, EncodeError> {
         self.get_old_var(path)
             .ok_or_else(|| EncodeError::UnboundVariable {
                 name: format!("old({})", var_key(path)),
@@ -132,7 +139,7 @@ impl<'ctx> EncodeContext<'ctx> {
     /// The returned list is sorted by name for deterministic output in counterexamples.
     /// Variables that the model does not interpret (e.g. unconstrained universals) are
     /// omitted from the result.
-    pub fn format_model(&self, model: &z3::Model<'ctx>) -> Vec<(String, String)> {
+    pub fn format_model(&self, model: &z3::Model) -> Vec<(String, String)> {
         let mut assignments: Vec<(String, String)> = Vec::new();
 
         for (name, dyn_var) in &self.vars {

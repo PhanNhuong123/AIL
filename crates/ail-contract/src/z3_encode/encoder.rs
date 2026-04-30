@@ -1,5 +1,5 @@
 use ail_types::{ArithOp, CompareOp, ConstraintExpr, LiteralValue, ValueExpr};
-use z3::ast::{Ast, Bool, Int, Real};
+use z3::ast::{Bool, Int, Real};
 
 use crate::errors::EncodeError;
 
@@ -15,27 +15,27 @@ use super::context::EncodeContext;
 ///
 /// Unsupported variants (`Matches`, `ForAll`, `Exists`, `In` with a non-literal
 /// collection) produce [`EncodeError::UnsupportedConstraint`].
-pub fn encode_constraint<'ctx>(
+pub fn encode_constraint(
     expr: &ConstraintExpr,
-    ctx: &EncodeContext<'ctx>,
-) -> Result<Bool<'ctx>, EncodeError> {
+    ctx: &EncodeContext,
+) -> Result<Bool, EncodeError> {
     match expr {
         ConstraintExpr::Compare { op, left, right } => encode_compare(op, left, right, ctx),
 
         ConstraintExpr::And(children) => {
-            let bools: Result<Vec<Bool<'ctx>>, EncodeError> =
-                children.iter().map(|c| encode_constraint(c, ctx)).collect();
-            let bools = bools?;
-            let refs: Vec<&Bool<'ctx>> = bools.iter().collect();
-            Ok(Bool::and(ctx.z3, &refs))
+            let bools: Vec<Bool> = children
+                .iter()
+                .map(|c| encode_constraint(c, ctx))
+                .collect::<Result<_, _>>()?;
+            Ok(Bool::and(&bools))
         }
 
         ConstraintExpr::Or(children) => {
-            let bools: Result<Vec<Bool<'ctx>>, EncodeError> =
-                children.iter().map(|c| encode_constraint(c, ctx)).collect();
-            let bools = bools?;
-            let refs: Vec<&Bool<'ctx>> = bools.iter().collect();
-            Ok(Bool::or(ctx.z3, &refs))
+            let bools: Vec<Bool> = children
+                .iter()
+                .map(|c| encode_constraint(c, ctx))
+                .collect::<Result<_, _>>()?;
+            Ok(Bool::or(&bools))
         }
 
         ConstraintExpr::Not(inner) => Ok(encode_constraint(inner, ctx)?.not()),
@@ -58,12 +58,9 @@ pub fn encode_constraint<'ctx>(
 ///
 /// Float literals and Bool variables produce a [`EncodeError::SortMismatch`].
 /// Use [`encode_value_real`] when the expression may involve floating-point values.
-pub fn encode_value_int<'ctx>(
-    expr: &ValueExpr,
-    ctx: &EncodeContext<'ctx>,
-) -> Result<Int<'ctx>, EncodeError> {
+pub fn encode_value_int(expr: &ValueExpr, ctx: &EncodeContext) -> Result<Int, EncodeError> {
     match expr {
-        ValueExpr::Literal(LiteralValue::Integer(n)) => Ok(Int::from_i64(ctx.z3, *n)),
+        ValueExpr::Literal(LiteralValue::Integer(n)) => Ok(Int::from_i64(*n)),
 
         ValueExpr::Literal(LiteralValue::Float(_)) => Err(EncodeError::SortMismatch {
             expected: "Int",
@@ -114,14 +111,11 @@ pub fn encode_value_int<'ctx>(
 /// Floating-point literals are approximated as rationals scaled by 10 000.
 /// This gives 4 decimal places of precision — sufficient for AIL v0.1 percentage
 /// and amount contracts.
-pub fn encode_value_real<'ctx>(
-    expr: &ValueExpr,
-    ctx: &EncodeContext<'ctx>,
-) -> Result<Real<'ctx>, EncodeError> {
+pub fn encode_value_real(expr: &ValueExpr, ctx: &EncodeContext) -> Result<Real, EncodeError> {
     match expr {
-        ValueExpr::Literal(LiteralValue::Integer(n)) => Ok(Int::from_i64(ctx.z3, *n).to_real()),
+        ValueExpr::Literal(LiteralValue::Integer(n)) => Ok(Int::from_i64(*n).to_real()),
 
-        ValueExpr::Literal(LiteralValue::Float(f)) => f64_to_real(ctx.z3, *f),
+        ValueExpr::Literal(LiteralValue::Float(f)) => f64_to_real(*f),
 
         ValueExpr::Literal(LiteralValue::Bool(_)) => Err(EncodeError::SortMismatch {
             expected: "Real",
@@ -168,12 +162,9 @@ pub fn encode_value_real<'ctx>(
 /// Encode a [`ValueExpr`] as a Z3 [`Bool`].
 ///
 /// Only `Literal(Bool(_))`, Bool-registered `Ref`, and Bool-registered `Old(Ref)` succeed.
-pub fn encode_value_bool<'ctx>(
-    expr: &ValueExpr,
-    ctx: &EncodeContext<'ctx>,
-) -> Result<Bool<'ctx>, EncodeError> {
+pub fn encode_value_bool(expr: &ValueExpr, ctx: &EncodeContext) -> Result<Bool, EncodeError> {
     match expr {
-        ValueExpr::Literal(LiteralValue::Bool(b)) => Ok(Bool::from_bool(ctx.z3, *b)),
+        ValueExpr::Literal(LiteralValue::Bool(b)) => Ok(Bool::from_bool(*b)),
 
         ValueExpr::Ref(path) => {
             let dyn_var = ctx.require_var(path)?;
@@ -225,7 +216,7 @@ pub(super) fn expr_has_float(expr: &ValueExpr) -> bool {
 ///
 /// Used by [`encode_compare`] to promote Int-literal comparisons to Real when
 /// at least one operand variable is declared as a `number`-based type.
-fn expr_references_real_var(expr: &ValueExpr, ctx: &EncodeContext<'_>) -> bool {
+fn expr_references_real_var(expr: &ValueExpr, ctx: &EncodeContext) -> bool {
     match expr {
         ValueExpr::Ref(path) => ctx.get_var(path).is_some_and(|v| v.as_real().is_some()),
         ValueExpr::Old(inner) => {
@@ -255,7 +246,7 @@ fn expr_has_bool_literal(expr: &ValueExpr) -> bool {
 ///
 /// Used by [`encode_compare`] to route Bool equality checks (e.g.
 /// `result == true`) to [`encode_value_bool`] instead of the Int path.
-fn expr_references_bool_var(expr: &ValueExpr, ctx: &EncodeContext<'_>) -> bool {
+fn expr_references_bool_var(expr: &ValueExpr, ctx: &EncodeContext) -> bool {
     match expr {
         ValueExpr::Ref(path) => ctx.get_var(path).is_some_and(|v| v.as_bool().is_some()),
         ValueExpr::Old(inner) => {
@@ -279,12 +270,12 @@ fn expr_references_bool_var(expr: &ValueExpr, ctx: &EncodeContext<'_>) -> bool {
 /// references a variable registered with Real sort (e.g. a `number`-typed
 /// parameter); integer literals are promoted to Real in that case. All remaining
 /// cases encode as Int.
-fn encode_compare<'ctx>(
+fn encode_compare(
     op: &CompareOp,
     left: &ValueExpr,
     right: &ValueExpr,
-    ctx: &EncodeContext<'ctx>,
-) -> Result<Bool<'ctx>, EncodeError> {
+    ctx: &EncodeContext,
+) -> Result<Bool, EncodeError> {
     let use_bool = expr_has_bool_literal(left)
         || expr_has_bool_literal(right)
         || expr_references_bool_var(left, ctx)
@@ -313,18 +304,14 @@ fn encode_compare<'ctx>(
 }
 
 /// Apply a comparison operator to two Int operands.
-fn apply_compare_int<'ctx>(
-    op: &CompareOp,
-    l: &Int<'ctx>,
-    r: &Int<'ctx>,
-) -> Result<Bool<'ctx>, EncodeError> {
+fn apply_compare_int(op: &CompareOp, l: &Int, r: &Int) -> Result<Bool, EncodeError> {
     Ok(match op {
         CompareOp::Gte => l.ge(r),
         CompareOp::Lte => l.le(r),
         CompareOp::Gt => l.gt(r),
         CompareOp::Lt => l.lt(r),
-        CompareOp::Eq | CompareOp::Is => l._eq(r),
-        CompareOp::Neq | CompareOp::IsNot => l._eq(r).not(),
+        CompareOp::Eq | CompareOp::Is => l.eq(r),
+        CompareOp::Neq | CompareOp::IsNot => l.eq(r).not(),
     })
 }
 
@@ -332,14 +319,10 @@ fn apply_compare_int<'ctx>(
 ///
 /// Only equality operators are defined on Bool; ordering operators produce
 /// [`EncodeError::UnsupportedConstraint`].
-fn apply_compare_bool<'ctx>(
-    op: &CompareOp,
-    l: &Bool<'ctx>,
-    r: &Bool<'ctx>,
-) -> Result<Bool<'ctx>, EncodeError> {
+fn apply_compare_bool(op: &CompareOp, l: &Bool, r: &Bool) -> Result<Bool, EncodeError> {
     match op {
-        CompareOp::Eq | CompareOp::Is => Ok(l._eq(r)),
-        CompareOp::Neq | CompareOp::IsNot => Ok(l._eq(r).not()),
+        CompareOp::Eq | CompareOp::Is => Ok(l.eq(r)),
+        CompareOp::Neq | CompareOp::IsNot => Ok(l.eq(r).not()),
         CompareOp::Gt | CompareOp::Gte | CompareOp::Lt | CompareOp::Lte => {
             Err(EncodeError::UnsupportedConstraint {
                 variant: "Bool-ordering",
@@ -349,18 +332,14 @@ fn apply_compare_bool<'ctx>(
 }
 
 /// Apply a comparison operator to two Real operands.
-fn apply_compare_real<'ctx>(
-    op: &CompareOp,
-    l: &Real<'ctx>,
-    r: &Real<'ctx>,
-) -> Result<Bool<'ctx>, EncodeError> {
+fn apply_compare_real(op: &CompareOp, l: &Real, r: &Real) -> Result<Bool, EncodeError> {
     Ok(match op {
         CompareOp::Gte => l.ge(r),
         CompareOp::Lte => l.le(r),
         CompareOp::Gt => l.gt(r),
         CompareOp::Lt => l.lt(r),
-        CompareOp::Eq | CompareOp::Is => l._eq(r),
-        CompareOp::Neq | CompareOp::IsNot => l._eq(r).not(),
+        CompareOp::Eq | CompareOp::Is => l.eq(r),
+        CompareOp::Neq | CompareOp::IsNot => l.eq(r).not(),
     })
 }
 
@@ -372,11 +351,7 @@ fn apply_compare_real<'ctx>(
 /// These agree for non-negative numbers. For negative dividends the results may
 /// diverge — a known v0.1 limitation. TODO: encode Python floor-division semantics
 /// in a future task if contracts involve negative arithmetic.
-fn apply_arith_int<'ctx>(
-    op: &ArithOp,
-    l: &Int<'ctx>,
-    r: &Int<'ctx>,
-) -> Result<Int<'ctx>, EncodeError> {
+fn apply_arith_int(op: &ArithOp, l: &Int, r: &Int) -> Result<Int, EncodeError> {
     Ok(match op {
         ArithOp::Add => l + r,
         ArithOp::Sub => l - r,
@@ -389,11 +364,7 @@ fn apply_arith_int<'ctx>(
 /// Apply an arithmetic operator to two Real operands.
 ///
 /// `Mod` on Real is not defined in Z3 and returns [`EncodeError::UnsupportedConstraint`].
-fn apply_arith_real<'ctx>(
-    op: &ArithOp,
-    l: &Real<'ctx>,
-    r: &Real<'ctx>,
-) -> Result<Real<'ctx>, EncodeError> {
+fn apply_arith_real(op: &ArithOp, l: &Real, r: &Real) -> Result<Real, EncodeError> {
     Ok(match op {
         ArithOp::Add => l + r,
         ArithOp::Sub => l - r,
@@ -408,11 +379,11 @@ fn apply_arith_real<'ctx>(
 }
 
 /// Encode `In { value, collection }` where `collection` must be a literal `Set`.
-fn encode_in<'ctx>(
+fn encode_in(
     value: &ValueExpr,
     collection: &ValueExpr,
-    ctx: &EncodeContext<'ctx>,
-) -> Result<Bool<'ctx>, EncodeError> {
+    ctx: &EncodeContext,
+) -> Result<Bool, EncodeError> {
     let ValueExpr::Set(items) = collection else {
         return Err(EncodeError::UnsupportedConstraint {
             variant: "In-dynamic",
@@ -421,36 +392,31 @@ fn encode_in<'ctx>(
 
     if items.is_empty() {
         // Empty set membership is always false.
-        return Ok(Bool::from_bool(ctx.z3, false));
+        return Ok(Bool::from_bool(false));
     }
 
     let use_real = expr_has_float(value) || items.iter().any(expr_has_float);
 
     // Encode `value` once; reuse it for each equality check against set items.
-    let disjuncts: Result<Vec<Bool<'ctx>>, EncodeError> = if use_real {
+    let disjuncts: Vec<Bool> = if use_real {
         let v = encode_value_real(value, ctx)?;
         items
             .iter()
-            .map(|item| Ok(v._eq(&encode_value_real(item, ctx)?)))
-            .collect()
+            .map(|item| encode_value_real(item, ctx).map(|i| v.eq(&i)))
+            .collect::<Result<_, _>>()?
     } else {
         let v = encode_value_int(value, ctx)?;
         items
             .iter()
-            .map(|item| Ok(v._eq(&encode_value_int(item, ctx)?)))
-            .collect()
+            .map(|item| encode_value_int(item, ctx).map(|i| v.eq(&i)))
+            .collect::<Result<_, _>>()?
     };
 
-    let disjuncts = disjuncts?;
-    let refs: Vec<&Bool<'ctx>> = disjuncts.iter().collect();
-    Ok(Bool::or(ctx.z3, &refs))
+    Ok(Bool::or(&disjuncts))
 }
 
 /// Encode `Old(inner)` as an integer, requiring `inner` to be a `Ref`.
-fn encode_old_int<'ctx>(
-    inner: &ValueExpr,
-    ctx: &EncodeContext<'ctx>,
-) -> Result<Int<'ctx>, EncodeError> {
+fn encode_old_int(inner: &ValueExpr, ctx: &EncodeContext) -> Result<Int, EncodeError> {
     let ValueExpr::Ref(path) = inner else {
         return Err(EncodeError::UnsupportedConstraint {
             variant: "Old-non-Ref",
@@ -464,10 +430,7 @@ fn encode_old_int<'ctx>(
 }
 
 /// Encode `Old(inner)` as a real, requiring `inner` to be a `Ref`.
-fn encode_old_real<'ctx>(
-    inner: &ValueExpr,
-    ctx: &EncodeContext<'ctx>,
-) -> Result<Real<'ctx>, EncodeError> {
+fn encode_old_real(inner: &ValueExpr, ctx: &EncodeContext) -> Result<Real, EncodeError> {
     let ValueExpr::Ref(path) = inner else {
         return Err(EncodeError::UnsupportedConstraint {
             variant: "Old-non-Ref",
@@ -488,11 +451,21 @@ fn encode_old_real<'ctx>(
 
 /// Represent an f64 as a Z3 Real via a rational approximation scaled by 10 000.
 ///
-/// Precision: 4 decimal places. Adequate for AIL v0.1 percentage and amount literals
-/// (e.g. `3.14`, `99.99`). Values beyond the i32 range before scaling will overflow;
-/// those are not expected in v0.1 contracts.
-fn f64_to_real<'ctx>(z3: &'ctx z3::Context, f: f64) -> Result<Real<'ctx>, EncodeError> {
-    const SCALE: i32 = 10_000;
-    let scaled = (f * SCALE as f64).round() as i32;
-    Ok(Real::from_real(z3, scaled, SCALE))
+/// Precision: 4 decimal places. Adequate for AIL v0.1 percentage and amount
+/// literals (e.g. `3.14`, `99.99`).
+///
+/// `Real::from_rational` declares an `i64` signature in z3 0.20, but the
+/// underlying `Z3_mk_real` C FFI takes `c_int` (32 bits) and casts silently.
+/// To prevent a wrong-rational corruption at runtime, guard against
+/// `|scaled| > i32::MAX` (i.e. `|f| > 214_748.3647`) and surface an
+/// `UnsupportedConstraint` instead. Values within range are unaffected.
+fn f64_to_real(f: f64) -> Result<Real, EncodeError> {
+    const SCALE: i64 = 10_000;
+    let scaled = (f * SCALE as f64).round() as i64;
+    if scaled > i32::MAX as i64 || scaled < i32::MIN as i64 {
+        return Err(EncodeError::UnsupportedConstraint {
+            variant: "float-out-of-i32-range",
+        });
+    }
+    Ok(Real::from_rational(scaled, SCALE))
 }

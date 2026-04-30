@@ -77,4 +77,5 @@ if ($frozenSize -lt 1024) {
     exit 1
 }
 
-Write-Host "Build succeeded: $FrozenBin"
+$frozenSizeMb = [math]::Round($frozenSize / 1MB, 1)
+Write-Host "Build succeeded: $FrozenBin ($frozenSizeMb MB)"

@@ -21,12 +21,8 @@ use super::sort::{sort_for_type_ref, Z3Sort};
 ///
 /// `Uninterpreted` sorts (record types, text types, unknown types) are silently
 /// skipped. No type constraint is asserted for those variables.
-pub(super) fn build_encode_context<'ctx>(
-    node: &Node,
-    graph: &dyn GraphBackend,
-    z3_ctx: &'ctx z3::Context,
-) -> EncodeContext<'ctx> {
-    let mut enc = EncodeContext::new(z3_ctx);
+pub(super) fn build_encode_context(node: &Node, graph: &dyn GraphBackend) -> EncodeContext {
+    let mut enc = EncodeContext::new();
     populate_encode_context(&mut enc, node, graph);
     enc
 }
@@ -38,7 +34,7 @@ pub(super) fn build_encode_context<'ctx>(
 /// merge variables from two nodes into a single shared context without re-creating
 /// the Z3 context.
 pub(super) fn populate_encode_context(
-    enc: &mut EncodeContext<'_>,
+    enc: &mut EncodeContext,
     node: &Node,
     graph: &dyn GraphBackend,
 ) {
@@ -125,7 +121,7 @@ pub(super) fn collect_param_type_constraints(
 /// Scan the graph for a `Describe` node whose `metadata.name == type_name`.
 /// For each scalar field, register a `"{prefix}.{field.name}"` Z3 variable.
 fn expand_record_fields(
-    enc: &mut EncodeContext<'_>,
+    enc: &mut EncodeContext,
     prefix: &str,
     type_name: &str,
     graph: &dyn GraphBackend,

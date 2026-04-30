@@ -1,7 +1,6 @@
 <script lang="ts">
   import type { FunctionJson, FlowchartJson, NodeDetail } from '$lib/types';
   import { flowMode, flowFocusedNodeId, flowSelectedNodeId } from './flow-state';
-  import { activeLens } from '$lib/stores';
   import FlowSwim from './FlowSwim.svelte';
   import FlowchartCanvas from './FlowchartCanvas.svelte';
   import FlowCode from './FlowCode.svelte';

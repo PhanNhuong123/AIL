@@ -1,8 +1,13 @@
 [build]
 # Workspace build configuration
 
-# z3-sys bundles Z3 source whose CMakeLists.txt predates CMake 3.5.
-# VS 2026 ships a CMake that removed backwards-compat with < 3.5.
-# Passing this policy flag lets the build proceed unchanged.
+# z3 was upgraded from 0.12 to 0.20 on 2026-04-30; z3-sys 0.11.0 / z3-src 416.0.2
+# vendor Z3 4.16.0 whose CMakeLists.txt declares cmake_minimum_required(VERSION 3.16).
+# Adversarial review confirmed that the Z3 4.16 CMakeLists has zero references to
+# CMAKE_POLICY_VERSION_MINIMUM and that this env var is now inert dead weight
+# — it cannot affect a project that already declares its own minimum (>= 3.16).
+# Kept temporarily for traceability; safe to delete this `[env]` block + comment
+# after the next clean rebuild confirms `cargo clean && cargo build -p ail-contract
+# --features z3-verify` still succeeds without it.
 [env]
 CMAKE_POLICY_VERSION_MINIMUM = "3.5"

@@ -9,9 +9,10 @@ ail-graph = { workspace = true }
 ail-types = { workspace = true }
 serde = { workspace = true }
 thiserror = { workspace = true }
-# z3 requires libclang (LLVM) for bindgen to generate FFI bindings.
-# Install LLVM from https://releases.llvm.org/ and set LIBCLANG_PATH,
-# then enable this feature: cargo build --features z3-verify
+# z3 0.20+ ships static FFI bindings; libclang/bindgen no longer required at build.
+# Enable formal verification with: cargo build --features z3-verify
+# (Vendored Z3 4.16.0 source builds via cmake; a working MSVC/clang/gcc toolchain is
+# the only remaining build requirement on each platform.)
 z3 = { workspace = true, optional = true }
 
 [dev-dependencies]

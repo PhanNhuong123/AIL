@@ -18,7 +18,7 @@ use ail_graph::{
 };
 use ail_types::ConstraintExpr;
 use serde::{Deserialize, Serialize};
-use z3::{ast::Bool, SatResult, Solver};
+use z3::{ast::Bool, Params, SatResult, Solver};
 
 use crate::sheaf::{CechNerve, SheafOverlap, SheafSection};
 use crate::types::VerifiedGraph;
@@ -120,7 +120,7 @@ fn dedup_constraints(constraints: &[ConstraintExpr]) -> Vec<ConstraintExpr> {
 ///
 /// Returns `(conflicting_a, conflicting_b)` sorted by `to_string()`.
 fn attribute_core(
-    core_labels: &[Bool<'_>],
+    core_labels: &[Bool],
     label_map: &HashMap<String, LabelEntry>,
     side_a: &[ConstraintExpr],
     side_b: &[ConstraintExpr],
@@ -186,10 +186,8 @@ pub fn detect_obstructions(nerve: &CechNerve, verified: &VerifiedGraph) -> Vec<O
         return Vec::new();
     }
 
-    // Build shared Z3 context with 30 s timeout.
-    let mut cfg = z3::Config::new();
-    cfg.set_param_value("timeout", "30000");
-    let z3_ctx = z3::Context::new(&cfg);
+    // z3 0.20: implicit thread-local Z3 Context. Per-overlap solvers each get
+    // their own 30 s timeout via `Params::set_u32` inside `check_overlap`.
 
     // Build section lookup map for O(1) access by node id.
     let section_map: HashMap<NodeId, &SheafSection> =
@@ -201,7 +199,7 @@ pub fn detect_obstructions(nerve: &CechNerve, verified: &VerifiedGraph) -> Vec<O
         .overlaps
         .iter()
         .enumerate()
-        .map(|(idx, overlap)| check_overlap(idx, overlap, &section_map, graph, &z3_ctx))
+        .map(|(idx, overlap)| check_overlap(idx, overlap, &section_map, graph))
         .collect()
 }
 
@@ -212,7 +210,6 @@ fn check_overlap(
     overlap: &SheafOverlap,
     section_map: &HashMap<NodeId, &SheafSection>,
     graph: &dyn GraphBackend,
-    z3_ctx: &z3::Context,
 ) -> ObstructionResult {
     let unknown = |reason: String| ObstructionResult {
         overlap_index: idx,
@@ -260,7 +257,7 @@ fn check_overlap(
     }
 
     // Step 1c — build merged EncodeContext from both nodes.
-    let mut enc = EncodeContext::new(z3_ctx);
+    let mut enc = EncodeContext::new();
     populate_encode_context(&mut enc, &node_a, graph);
     populate_encode_context(&mut enc, &node_b, graph);
 
@@ -281,8 +278,13 @@ fn check_overlap(
     let side_a = dedup_constraints(&all_a);
     let side_b = dedup_constraints(&all_b);
 
-    // Step 1e — fresh solver; track-and-assert with side-attributing labels.
-    let solver = Solver::new(z3_ctx);
+    // Step 1e — fresh solver with per-overlap 30 s timeout (preserves invariant
+    // 17.2-C: each overlap gets its own isolated Solver). Track-and-assert with
+    // side-attributing labels.
+    let solver = Solver::new();
+    let mut params = Params::new();
+    params.set_u32("timeout", 30_000);
+    solver.set_params(&params);
     // `label_map` maps the Z3 Bool label string back to (side, constraint index).
     let mut label_map: HashMap<String, LabelEntry> = HashMap::new();
     let mut encode_errors: Vec<String> = Vec::new();
@@ -291,7 +293,7 @@ fn check_overlap(
         let label_name = format!("lbl_a_{idx}_{ci}");
         match encode_constraint(constraint, &enc) {
             Ok(encoded) => {
-                let lbl = Bool::new_const(z3_ctx, label_name.as_str());
+                let lbl = Bool::new_const(label_name.as_str());
                 solver.assert_and_track(&encoded, &lbl);
                 label_map.insert(lbl.to_string(), LabelEntry { side: Side::A, ci });
             }
@@ -305,7 +307,7 @@ fn check_overlap(
         let label_name = format!("lbl_b_{idx}_{ci}");
         match encode_constraint(constraint, &enc) {
             Ok(encoded) => {
-                let lbl = Bool::new_const(z3_ctx, label_name.as_str());
+                let lbl = Bool::new_const(label_name.as_str());
                 solver.assert_and_track(&encoded, &lbl);
                 label_map.insert(lbl.to_string(), LabelEntry { side: Side::B, ci });
             }
@@ -1050,17 +1052,16 @@ mod tests {
     #[test]
     fn z3_bool_const_to_string_matches_declared_name() {
         // Lock the z3-rs Ast::to_string() contract for named Bool constants —
-        // attribute_core relies on Bool::new_const(ctx, name).to_string() == name
-        // to round-trip labels through the unsat core. A future Z3 upgrade that
+        // attribute_core relies on Bool::new_const(name).to_string() == name to
+        // round-trip labels through the unsat core. A future Z3 upgrade that
         // changes this format would silently break per-side attribution.
-        let cfg = z3::Config::new();
-        let ctx = z3::Context::new(&cfg);
+        // (Invariant 17.2-G; gate test for the z3 0.20 upgrade.)
         for name in ["lbl_a_0_0", "lbl_b_3_17", "lbl_a_42_99"] {
-            let lbl = z3::ast::Bool::new_const(&ctx, name);
+            let lbl = z3::ast::Bool::new_const(name);
             assert_eq!(
                 lbl.to_string(),
                 name,
-                "Bool::new_const(ctx, {name}).to_string() must equal the declared name"
+                "Bool::new_const({name}).to_string() must equal the declared name"
             );
         }
     }

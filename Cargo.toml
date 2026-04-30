@@ -28,7 +28,9 @@ thiserror    = "2"
 miette       = { version = "7",   features = ["fancy"] }
 
 # contract / Z3
-z3           = { version = "0.12", features = ["static-link-z3"] }
+# z3 0.20+ ships static FFI bindings; libclang/bindgen no longer required at build.
+# `vendored` builds Z3 4.16 from in-tree z3-src 416.x source via cmake-rs 0.1.58 (VS 2026 compatible).
+z3           = { version = "0.20", features = ["vendored"] }
 
 # regex
 regex        = "1"

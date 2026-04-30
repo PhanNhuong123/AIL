@@ -104,10 +104,8 @@ fn single_do_graph(
     (typed, do_id)
 }
 
-fn z3_context() -> z3::Context {
-    let cfg = z3::Config::new();
-    z3::Context::new(&cfg)
-}
+// z3 0.20: Context::new is pub(crate); the implicit thread-local context is
+// used by every Z3 constructor below. No fixture helper needed.
 
 // ── Sort mapping tests ────────────────────────────────────────────────────────
 
@@ -193,9 +191,8 @@ fn z3_verify_context_registers_int_param() {
         .get_node(do_id)
         .unwrap()
         .expect("test node must exist");
-    let z3 = z3_context();
 
-    let enc = build_encode_context(&node, graph, &z3);
+    let enc = build_encode_context(&node, graph);
 
     // `amount` must be registered (Int) and `old__amount` must exist.
     let path = vec!["amount".to_string()];
@@ -219,9 +216,8 @@ fn z3_verify_context_skips_uninterpreted_param() {
         .get_node(do_id)
         .unwrap()
         .expect("test node must exist");
-    let z3 = z3_context();
 
-    let enc = build_encode_context(&node, graph, &z3);
+    let enc = build_encode_context(&node, graph);
 
     // `email` is EmailAddress (Uninterpreted) — must NOT be registered.
     let path = vec!["email".to_string()];
@@ -245,9 +241,8 @@ fn z3_verify_sat_type_constraints_pass() {
         .get_node(do_id)
         .unwrap()
         .expect("test node must exist");
-    let z3 = z3_context();
 
-    let errors = verify_do_node(&node, graph, &[], &[], &z3);
+    let errors = verify_do_node(&node, graph, &[], &[]);
     assert!(
         !errors
             .iter()
@@ -273,9 +268,8 @@ fn z3_verify_preconditions_consistent() {
         .get_node(do_id)
         .unwrap()
         .expect("test node must exist");
-    let z3 = z3_context();
 
-    let errors = verify_do_node(&node, graph, &[], &[], &z3);
+    let errors = verify_do_node(&node, graph, &[], &[]);
     assert!(
         !errors
             .iter()
@@ -301,9 +295,8 @@ fn z3_verify_contradictory_preconditions() {
         .get_node(do_id)
         .unwrap()
         .expect("test node must exist");
-    let z3 = z3_context();
 
-    let errors = verify_do_node(&node, graph, &[], &[], &z3);
+    let errors = verify_do_node(&node, graph, &[], &[]);
     assert!(
         errors
             .iter()
@@ -327,9 +320,8 @@ fn z3_verify_postcondition_entailed() {
         .get_node(do_id)
         .unwrap()
         .expect("test node must exist");
-    let z3 = z3_context();
 
-    let errors = verify_do_node(&node, graph, &[], &[], &z3);
+    let errors = verify_do_node(&node, graph, &[], &[]);
     assert!(
         errors.is_empty(),
         "post `x > -1` is trivially entailed by pre `x > 0`; errors: {errors:?}"
@@ -349,9 +341,8 @@ fn z3_verify_postcondition_not_entailed() {
         .get_node(do_id)
         .unwrap()
         .expect("test node must exist");
-    let z3 = z3_context();
 
-    let errors = verify_do_node(&node, graph, &[], &[], &z3);
+    let errors = verify_do_node(&node, graph, &[], &[]);
     assert!(
         errors
             .iter()
@@ -373,9 +364,8 @@ fn z3_verify_counterexample_contains_assignments() {
         .get_node(do_id)
         .unwrap()
         .expect("test node must exist");
-    let z3 = z3_context();
 
-    let errors = verify_do_node(&node, graph, &[], &[], &z3);
+    let errors = verify_do_node(&node, graph, &[], &[]);
     let cex = errors.iter().find_map(|e| {
         if let VerifyError::PostconditionNotEntailed { counterexample, .. } = e {
             Some(counterexample.clone())
@@ -406,9 +396,8 @@ fn z3_verify_multiple_postconditions_one_fails() {
         .get_node(do_id)
         .unwrap()
         .expect("test node must exist");
-    let z3 = z3_context();
 
-    let errors = verify_do_node(&node, graph, &[], &[], &z3);
+    let errors = verify_do_node(&node, graph, &[], &[]);
     let not_entailed: Vec<_> = errors
         .iter()
         .filter(|e| matches!(e, VerifyError::PostconditionNotEntailed { .. }))
@@ -438,7 +427,6 @@ fn z3_verify_encoding_fails_gracefully() {
         .get_node(do_id)
         .unwrap()
         .expect("test node must exist");
-    let z3 = z3_context();
 
     // This test verifies that a parseable-but-unencodable expression (Matches)
     // produces EncodingFailed rather than panicking. We exercise by injecting
@@ -449,7 +437,7 @@ fn z3_verify_encoding_fails_gracefully() {
         pattern: r"^\d+$".to_string(),
     };
 
-    let errors = verify_do_node(&node, graph, &[matches_expr], &[], &z3);
+    let errors = verify_do_node(&node, graph, &[matches_expr], &[]);
     // Matches in child_posts is silently skipped (not EncodingFailed).
     // But if we somehow got a parse error on a contract, it would be EncodingFailed.
     // The test verifies no panic occurs.
@@ -476,9 +464,8 @@ fn z3_verify_always_contract_entailed() {
         .get_node(do_id)
         .unwrap()
         .expect("test node must exist");
-    let z3 = z3_context();
 
-    let errors = verify_do_node(&node, graph, &[], &[], &z3);
+    let errors = verify_do_node(&node, graph, &[], &[]);
     assert!(
         errors.is_empty(),
         "`always balance >= 0` is entailed by `before balance > 0`; errors: {errors:?}"
@@ -502,9 +489,8 @@ fn z3_verify_always_contract_not_entailed() {
         .get_node(do_id)
         .unwrap()
         .expect("test node must exist");
-    let z3 = z3_context();
 
-    let errors = verify_do_node(&node, graph, &[], &[], &z3);
+    let errors = verify_do_node(&node, graph, &[], &[]);
     assert!(
         errors
             .iter()
@@ -537,9 +523,8 @@ fn z3_verify_old_values_in_postcondition_entailed() {
         .get_node(do_id)
         .unwrap()
         .expect("test node must exist");
-    let z3 = z3_context();
 
-    let errors = verify_do_node(&node, graph, &[], &[], &z3);
+    let errors = verify_do_node(&node, graph, &[], &[]);
     // With only pre-conditions as facts (no actual mutation proof), the post
     // `balance == old(balance) - amount` is satisfiable from the pre but not
     // universally entailed (balance is treated as a free variable that may or
@@ -580,9 +565,8 @@ fn z3_verify_wallet_transfer_node_passes() {
         .get_node(do_id)
         .unwrap()
         .expect("test node must exist");
-    let z3 = z3_context();
 
-    let errors = verify_do_node(&node, graph, &[], &[], &z3);
+    let errors = verify_do_node(&node, graph, &[], &[]);
     assert!(
         errors.is_empty(),
         "wallet transfer with valid contracts should produce no errors; got: {errors:?}"
@@ -610,9 +594,8 @@ fn z3_verify_bad_postcondition_caught() {
         .get_node(do_id)
         .unwrap()
         .expect("test node must exist");
-    let z3 = z3_context();
 
-    let errors = verify_do_node(&node, graph, &[], &[], &z3);
+    let errors = verify_do_node(&node, graph, &[], &[]);
     assert!(
         errors
             .iter()
@@ -643,7 +626,6 @@ fn z3_verify_compositional_child_fact_used() {
         .get_node(do_id)
         .unwrap()
         .expect("test node must exist");
-    let z3 = z3_context();
 
     let child_post = ConstraintExpr::Compare {
         op: CompareOp::Gt,
@@ -652,7 +634,7 @@ fn z3_verify_compositional_child_fact_used() {
     };
 
     // Without child post, parent pre `x > 0` alone does not entail `x > 3`.
-    let errors_without_child = verify_do_node(&node, graph, &[], &[], &z3);
+    let errors_without_child = verify_do_node(&node, graph, &[], &[]);
     assert!(
         errors_without_child
             .iter()
@@ -661,7 +643,7 @@ fn z3_verify_compositional_child_fact_used() {
     );
 
     // With child post `x > 5`, parent post `x > 3` IS entailed.
-    let errors_with_child = verify_do_node(&node, graph, &[child_post], &[], &z3);
+    let errors_with_child = verify_do_node(&node, graph, &[child_post], &[]);
     assert!(
         errors_with_child.is_empty(),
         "with child fact `x > 5`, post `x > 3` should be entailed; errors: {errors_with_child:?}"
@@ -819,7 +801,6 @@ fn t083_z3_uses_promoted_fact_as_axiom() {
         .get_node(do_id)
         .unwrap()
         .expect("test node must exist");
-    let z3 = z3_context();
 
     let promoted = ParsedPromotedFact {
         source_node: NodeId::new(), // dummy source
@@ -831,7 +812,7 @@ fn t083_z3_uses_promoted_fact_as_axiom() {
     };
 
     // Without promoted fact: x > 0 alone does NOT entail x > 3.
-    let errors_without = verify_do_node(&node, graph, &[], &[], &z3);
+    let errors_without = verify_do_node(&node, graph, &[], &[]);
     assert!(
         errors_without
             .iter()
@@ -840,7 +821,7 @@ fn t083_z3_uses_promoted_fact_as_axiom() {
     );
 
     // With promoted fact x > 5: x > 0 AND x > 5 entails x > 3.
-    let errors_with = verify_do_node(&node, graph, &[], &[promoted], &z3);
+    let errors_with = verify_do_node(&node, graph, &[], &[promoted]);
     assert!(
         errors_with.is_empty(),
         "with promoted fact `x > 5`, post `x > 3` should be entailed; errors: {errors_with:?}"
@@ -926,7 +907,6 @@ fn t083_z3_negated_check_promotes_negation() {
         .get_node(do_id)
         .unwrap()
         .expect("test node must exist");
-    let z3 = z3_context();
 
     // Build the negation: NOT(x == 0).
     let negation = ConstraintExpr::Not(Box::new(ConstraintExpr::Compare {
@@ -941,7 +921,7 @@ fn t083_z3_negated_check_promotes_negation() {
     };
 
     // Without promoted fact: x >= 0 alone does NOT entail x > 0.
-    let errors_without = verify_do_node(&node, graph, &[], &[], &z3);
+    let errors_without = verify_do_node(&node, graph, &[], &[]);
     assert!(
         errors_without
             .iter()
@@ -950,7 +930,7 @@ fn t083_z3_negated_check_promotes_negation() {
     );
 
     // With promoted fact NOT(x == 0): x >= 0 AND x != 0 entails x > 0.
-    let errors_with = verify_do_node(&node, graph, &[], &[promoted], &z3);
+    let errors_with = verify_do_node(&node, graph, &[], &[promoted]);
     assert!(
         errors_with.is_empty(),
         "promoted negation `NOT(x == 0)` with `x >= 0` should entail `x > 0`; \

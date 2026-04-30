@@ -114,19 +114,14 @@ pub fn verify_contracts(typed_graph: &TypedGraph) -> Vec<VerifyError> {
             .cmp(depth_map.get(&a.id).unwrap_or(&0))
     });
 
-    // ── Create a single shared Z3 context ────────────────────────────────────
-    // The 30-second timeout is set via Config and applies to each solver call.
-    // In z3 0.12 the timeout is per-context; all solver calls within the same
-    // context share the budget. For Phase 3.3 this is acceptable — v0.2 can
-    // create per-node contexts if finer-grained control is needed.
-    let mut cfg = z3::Config::new();
-    cfg.set_param_value("timeout", "30000"); // 30 000 ms = 30 s
-    let z3_ctx = z3::Context::new(&cfg);
-
     // ── Process nodes bottom-up ───────────────────────────────────────────────
     // `verified_posts`: maps NodeId → parsed After/Always ConstraintExpr values
     // that were successfully verified for that node. Used for compositional
     // verification of ancestor nodes.
+    //
+    // z3 0.20 uses an implicit thread-local Z3 context. The 30-second solver
+    // timeout is set per-Solver inside `verify_do_node` via `Params::set_u32`
+    // — each node gets its own independent 30 000 ms budget.
     let mut verified_posts: HashMap<NodeId, Vec<ConstraintExpr>> = HashMap::new();
     let mut all_errors: Vec<VerifyError> = Vec::new();
 
@@ -137,7 +132,7 @@ pub fn verify_contracts(typed_graph: &TypedGraph) -> Vec<VerifyError> {
         // Collect promoted facts from preceding check nodes (v2.0 task 8.3).
         let promoted = collect_promoted_facts(node.id, graph);
 
-        let errors = verify_do_node(node, graph, &child_posts, &promoted, &z3_ctx);
+        let errors = verify_do_node(node, graph, &child_posts, &promoted);
 
         // Block postcondition propagation on node-fatal errors: these
         // cause verify_do_node to return early without checking post-
