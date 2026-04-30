@@ -1,0 +1,4 @@
+# build.rs::materialize_sidecars writes here every cargo build (16.5/16.6);
+# without this exclusion, Tauri dev watcher loops indefinitely.
+binaries/
+binaries/**
