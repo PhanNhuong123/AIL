@@ -82,4 +82,96 @@ describe('breadcrumbs', () => {
     expect(result).toHaveLength(1);
     expect(result[0].kind).toBe('project');
   });
+
+  // Acceptance test 2026-05-01: the real `ail-ui-bridge` parser emits bare
+  // ids (`wallet_service`, `src`, `src.transfer_money`,
+  // `src.transfer_money.new_balance`) rather than the fixture's `kind:id`
+  // prefixed shape. `breadcrumbs()` must infer the kind by graph lookup so
+  // the title bar still renders crumbs for real projects loaded via
+  // `loadProject` IPC.
+  describe('bare-id resolution (real parser output)', () => {
+    function realProjectFixture() {
+      // Mirrors the real wallet_service shape: bare ids, project.id ===
+      // 'wallet_service', module.id === 'src', function.id === 'src.fn',
+      // step.id === 'src.fn.step'.
+      return {
+        project: {
+          id: 'wallet_service',
+          name: 'wallet_service',
+          description: '',
+          nodeCount: 4,
+          moduleCount: 1,
+          fnCount: 1,
+          status: 'ok' as const,
+        },
+        clusters: [{ id: 'default', name: 'wallet_service', color: '#2997ff' }],
+        modules: [
+          {
+            id: 'src',
+            name: 'src',
+            description: 'src',
+            cluster: 'default',
+            clusterName: 'wallet_service',
+            clusterColor: '#2997ff',
+            status: 'ok' as const,
+            nodeCount: 2,
+            functions: [
+              {
+                id: 'src.transfer_money',
+                name: 'transfer_money',
+                status: 'ok' as const,
+                steps: [
+                  {
+                    id: 'src.transfer_money.new_balance',
+                    name: 'new_balance',
+                    status: 'ok' as const,
+                    intent: 'let new_balance',
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+        externals: [],
+        relations: [],
+        types: [{ id: 'src.walletbalance', name: 'WalletBalance', status: 'ok' as const }],
+        errors: [],
+        issues: [],
+        detail: {},
+      };
+    }
+
+    it('resolves bare project id', () => {
+      const result = breadcrumbs(realProjectFixture(), ['wallet_service']);
+      expect(result).toEqual([
+        { kind: 'project', id: 'wallet_service', name: 'wallet_service' },
+      ]);
+    });
+
+    it('resolves full bare-id path: project → module → function → step', () => {
+      const result = breadcrumbs(realProjectFixture(), [
+        'wallet_service',
+        'src',
+        'src.transfer_money',
+        'src.transfer_money.new_balance',
+      ]);
+      expect(result).toEqual([
+        { kind: 'project',  id: 'wallet_service',                     name: 'wallet_service' },
+        { kind: 'module',   id: 'src',                                name: 'src' },
+        { kind: 'function', id: 'src.transfer_money',                 name: 'transfer_money' },
+        { kind: 'step',     id: 'src.transfer_money.new_balance',     name: 'new_balance' },
+      ]);
+    });
+
+    it('resolves bare type id', () => {
+      const result = breadcrumbs(realProjectFixture(), ['src.walletbalance']);
+      expect(result).toEqual([
+        { kind: 'type', id: 'src.walletbalance', name: 'WalletBalance' },
+      ]);
+    });
+
+    it('skips bare ids that are not in the graph', () => {
+      expect(breadcrumbs(realProjectFixture(), ['unknown_id'])).toEqual([]);
+    });
+  });
 });

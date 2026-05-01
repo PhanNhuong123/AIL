@@ -10,7 +10,7 @@
   import NodeView from './NodeView.svelte';
   import type { ModuleJson, FunctionJson, NodeDetail, FlowchartJson } from '$lib/types';
   type SelectedNodeDetailShape = { id: string; detail: NodeDetail } | null;
-  import { flowFixture } from './fixtures';
+  import { getFlowchart, isTauri } from '$lib/bridge';
 
   // Phase 16.3: override prop for freshly-verified node detail. When set and
   // its id matches the current selection, it takes precedence over the
@@ -49,10 +49,39 @@
     return (d as NodeDetail | undefined) ?? null;
   }
 
-  // Phase 16 stub; Phase 17 wires getFlowchart.
-  function resolveFlowchart(_fnId) {
-    const fx = flowFixture();
-    return fx.flowchart as FlowchartJson;
+  // Real-flowchart fetch via the Tauri bridge. The previous Phase-16 stub
+  // returned a hardcoded `flowFixture()` for every selected function, which
+  // meant FlowView's Swim/Flowchart modes showed the same fictional 7-node
+  // graph regardless of which function the user selected from a real
+  // project. The bridge's `getFlowchart(fnId)` IPC returns the actual
+  // FlowchartJson.
+  //
+  // Tracks the in-flight request so a slower response from a previous
+  // selection cannot overwrite a newer one (paired-id { id, flowchart }
+  // shape, same pattern Phase 16.3 used for selectedNodeDetail). Outside
+  // Tauri (browser preview / vite dev), we skip the IPC and FlowView
+  // renders an empty canvas — never the misleading stub.
+  let activeFlowchartPair = null as { id: string; flowchart: FlowchartJson | null } | null;
+  let lastFlowchartReq = 0;
+
+  async function refetchFlowchart(fnId) {
+    const reqId = ++lastFlowchartReq;
+    if (!isTauri()) {
+      if (reqId === lastFlowchartReq) {
+        activeFlowchartPair = { id: fnId, flowchart: null };
+      }
+      return;
+    }
+    try {
+      const fc = await getFlowchart(fnId);
+      if (reqId === lastFlowchartReq) {
+        activeFlowchartPair = { id: fnId, flowchart: fc };
+      }
+    } catch {
+      if (reqId === lastFlowchartReq) {
+        activeFlowchartPair = { id: fnId, flowchart: null };
+      }
+    }
   }
 
   $: kind                 = $selection.kind;
@@ -65,7 +94,12 @@
   $: activeModule         = findModule($graph, $selection.id);
   $: activeFunction       = findFunction($graph, $selection.id);
   $: graphDetail          = findStepDetail($graph, $selection.id);
-  $: activeFlowchart      = activeFunction ? resolveFlowchart(activeFunction.id) : null;
+  $: if (activeFunction && (!activeFlowchartPair || activeFlowchartPair.id !== activeFunction.id)) {
+    refetchFlowchart(activeFunction.id);
+  }
+  $: activeFlowchart = activeFunction && activeFlowchartPair && activeFlowchartPair.id === activeFunction.id
+    ? activeFlowchartPair.flowchart
+    : null;
   $: activeFunctionDetail = activeFunction
       ? ($graph?.detail[activeFunction.id] as NodeDetail | undefined) ?? null
       : null;

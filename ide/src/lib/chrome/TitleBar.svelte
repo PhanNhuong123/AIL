@@ -23,12 +23,17 @@
     // leave `selection` stuck on the previous (deeper) entity, leaving Stage
     // rendering "Node detail not found." after the user thought they
     // navigated back.
+    //
+    // The clicked crumb already knows its `kind` (resolved by `breadcrumbs()`
+    // against the graph). Reuse it instead of parsing the segment, so this
+    // works for both fixture-style `kind:id` segments AND the real parser's
+    // bare ids (`wallet_service`, `src`, `src.transfer_money`, …).
     const newPath = $path.slice(0, index + 1);
     if (newPath.length === 0) return;
     const last = newPath[newPath.length - 1];
-    const colonIdx = last.indexOf(':');
-    if (colonIdx === -1) return;
-    const kind = last.slice(0, colonIdx) as SelectionKind;
+    const crumb = crumbs[index];
+    if (!crumb) return;
+    const kind = crumb.kind as SelectionKind;
     navigateTo(newPath, kind, last, stageLevelForKind(kind));
   }
 

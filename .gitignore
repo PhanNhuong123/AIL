@@ -41,3 +41,7 @@ ide/src-tauri/gen/
 # Playwright MCP / acceptance scratch artifacts (tester sessions write here)
 .playwright-mcp/
 acceptance-*.png
+
+# Acceptance scratch: GraphJson dumps written by the dump_wallet_graph
+# example into ide/static/ so the SvelteKit dev server can fetch them.
+ide/static/*.json
