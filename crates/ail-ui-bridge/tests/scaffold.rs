@@ -28,10 +28,7 @@ fn unique_tempdir(label: &str) -> PathBuf {
         .duration_since(UNIX_EPOCH)
         .map(|d| d.as_nanos())
         .unwrap_or(0);
-    let dir = env::temp_dir().join(format!(
-        "ail-scaffold-test-{label}-{}-{:x}",
-        seq, now_ns
-    ));
+    let dir = env::temp_dir().join(format!("ail-scaffold-test-{label}-{}-{:x}", seq, now_ns));
     fs::create_dir_all(&dir).expect("tempdir create");
     dir
 }
@@ -63,6 +60,33 @@ fn validate_name_rejects_special_chars() {
     assert!(validate_name("wallet.service").is_err());
     assert!(validate_name("wallet/service").is_err());
     assert!(validate_name("wallet service").is_err());
+}
+
+// Closes acceptance review MINOR-1 (2026-05-01): explicit path-traversal
+// guard. The behavior already passes through `validate_name` (which rejects
+// `.` and `/`), but a named test pins the security contract so a future
+// relaxation of the character set cannot accidentally re-open path traversal
+// via `<parent>/..` or `<parent>/../foo` writes.
+#[test]
+fn validate_name_rejects_path_traversal() {
+    assert!(validate_name("..").is_err(), "bare `..` must be rejected");
+    assert!(validate_name(".").is_err(), "bare `.` must be rejected");
+    assert!(
+        validate_name("../foo").is_err(),
+        "`../foo` must be rejected"
+    );
+    assert!(
+        validate_name("..\\foo").is_err(),
+        "`..\\foo` must be rejected (Windows separator)"
+    );
+    assert!(
+        validate_name("foo/..").is_err(),
+        "`foo/..` must be rejected"
+    );
+    assert!(
+        validate_name("foo\\bar").is_err(),
+        "Windows backslash must be rejected"
+    );
 }
 
 #[test]

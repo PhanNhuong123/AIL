@@ -3,9 +3,12 @@ import { render, fireEvent } from '@testing-library/svelte';
 import { tick } from 'svelte';
 import { get } from 'svelte/store';
 import WelcomeModal from './WelcomeModal.svelte';
-import { welcomeModalOpen } from '$lib/stores';
+import { welcomeModalOpen, welcomeNotice } from '$lib/stores';
 
-beforeEach(() => welcomeModalOpen.set(false));
+beforeEach(() => {
+  welcomeModalOpen.set(false);
+  welcomeNotice.set('');
+});
 
 describe('WelcomeModal.svelte', () => {
   it('test_welcome_shows_3_cards', async () => {
@@ -107,5 +110,121 @@ describe('WelcomeModal.svelte', () => {
     await tick();
 
     expect(get(welcomeModalOpen)).toBe(false);
+  });
+
+  // -------------------------------------------------------------------------
+  // WCAG 2.1 SC 2.4.3 — focus trap
+  // -------------------------------------------------------------------------
+
+  it('focus-trap pulls initial focus into the dialog on open', async () => {
+    welcomeModalOpen.set(true);
+    const { container } = render(WelcomeModal);
+    await tick();
+    // The trap defers initial focus via queueMicrotask — flush it.
+    await Promise.resolve();
+
+    const dialog = container.querySelector('.modal-dialog')!;
+    expect(dialog.contains(document.activeElement)).toBe(true);
+  });
+
+  it('Tab from the last focusable wraps to the first (forward cycle)', async () => {
+    welcomeModalOpen.set(true);
+    const { container } = render(WelcomeModal);
+    await tick();
+    await Promise.resolve();
+
+    const dialog = container.querySelector('.modal-dialog') as HTMLElement;
+    const focusables = dialog.querySelectorAll<HTMLElement>(
+      'button:not([disabled]), [tabindex]:not([tabindex="-1"])',
+    );
+    const first = focusables[0];
+    const last = focusables[focusables.length - 1];
+    last.focus();
+    expect(document.activeElement).toBe(last);
+
+    await fireEvent.keyDown(dialog, { key: 'Tab' });
+    expect(document.activeElement).toBe(first);
+    expect(dialog.contains(document.activeElement)).toBe(true);
+  });
+
+  it('Shift+Tab from the first focusable wraps to the last (reverse cycle)', async () => {
+    welcomeModalOpen.set(true);
+    const { container } = render(WelcomeModal);
+    await tick();
+    await Promise.resolve();
+
+    const dialog = container.querySelector('.modal-dialog') as HTMLElement;
+    const focusables = dialog.querySelectorAll<HTMLElement>(
+      'button:not([disabled]), [tabindex]:not([tabindex="-1"])',
+    );
+    const first = focusables[0];
+    const last = focusables[focusables.length - 1];
+    first.focus();
+    expect(document.activeElement).toBe(first);
+
+    await fireEvent.keyDown(dialog, { key: 'Tab', shiftKey: true });
+    expect(document.activeElement).toBe(last);
+  });
+
+  // -------------------------------------------------------------------------
+  // MINOR-3 acceptance review (2026-05-01) — inline notice rendering
+  // -------------------------------------------------------------------------
+
+  it('does not render the notice element when welcomeNotice is empty', async () => {
+    welcomeModalOpen.set(true);
+    welcomeNotice.set('');
+    const { container } = render(WelcomeModal);
+    await tick();
+    expect(container.querySelector('[data-testid="welcome-notice"]')).toBeNull();
+  });
+
+  it('renders the inline notice with role="status" when welcomeNotice is set', async () => {
+    welcomeModalOpen.set(true);
+    welcomeNotice.set('Open is unavailable in browser preview.');
+    const { container } = render(WelcomeModal);
+    await tick();
+    const notice = container.querySelector('[data-testid="welcome-notice"]');
+    expect(notice).not.toBeNull();
+    expect(notice?.getAttribute('role')).toBe('status');
+    expect(notice?.getAttribute('aria-live')).toBe('polite');
+    expect(notice?.textContent ?? '').toContain('browser preview');
+  });
+
+  it('close() clears welcomeNotice so a stale message does not flash on re-open', async () => {
+    welcomeModalOpen.set(true);
+    welcomeNotice.set('Open is unavailable in browser preview.');
+    const { container } = render(WelcomeModal);
+    await tick();
+
+    await fireEvent.click(container.querySelector('[data-testid="welcome-close"]')!);
+    await tick();
+
+    expect(get(welcomeModalOpen)).toBe(false);
+    expect(get(welcomeNotice)).toBe('');
+  });
+
+  it('Tab when focus has escaped the dialog pulls it back to the first focusable', async () => {
+    welcomeModalOpen.set(true);
+    const { container } = render(WelcomeModal);
+    await tick();
+    await Promise.resolve();
+
+    const dialog = container.querySelector('.modal-dialog') as HTMLElement;
+    const focusables = dialog.querySelectorAll<HTMLElement>(
+      'button:not([disabled]), [tabindex]:not([tabindex="-1"])',
+    );
+    const first = focusables[0];
+
+    // Simulate an outside element stealing focus.
+    const outside = document.createElement('button');
+    document.body.appendChild(outside);
+    outside.focus();
+    expect(document.activeElement).toBe(outside);
+
+    await fireEvent.keyDown(dialog, { key: 'Tab' });
+    expect(document.activeElement).toBe(first);
+    expect(dialog.contains(document.activeElement)).toBe(true);
+
+    document.body.removeChild(outside);
   });
 });

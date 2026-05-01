@@ -83,12 +83,12 @@ pub fn get_tutorial_path<R: Runtime>(app: AppHandle<R>) -> Result<String, Bridge
         }
     }
 
-    let resource_dir =
-        app.path()
-            .resource_dir()
-            .map_err(|e| BridgeError::InvalidInput {
-                reason: format!("failed to resolve resource dir: {e}"),
-            })?;
+    let resource_dir = app
+        .path()
+        .resource_dir()
+        .map_err(|e| BridgeError::InvalidInput {
+            reason: format!("failed to resolve resource dir: {e}"),
+        })?;
     let bundled = resource_dir.join(TUTORIAL_RELATIVE);
     if bundled.is_dir() {
         return Ok(bundled.to_string_lossy().into_owned());

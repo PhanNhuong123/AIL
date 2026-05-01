@@ -47,3 +47,13 @@
   --shadow-2: 0 4px 12px rgba(0, 0, 0, 0.10);
   --modal-backdrop: rgba(0, 0, 0, 0.25);
 }
+
+/* WCAG 2.4.7 — global focus indicator. Browsers' default outline (~0.5px gray)
+ * is invisible on dark surfaces; this rule makes keyboard focus visible across
+ * lens pills, modal cards, sidecar buttons, traffic lights, and every other
+ * focusable surface. `:focus-visible` (not `:focus`) limits the ring to
+ * keyboard-driven focus, so mouse clicks on buttons stay clean. */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}

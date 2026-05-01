@@ -96,6 +96,17 @@ describe('TitleBar.svelte', () => {
     expect(get(tweaksPanelOpen)).toBe(false);
   });
 
+  // Closes acceptance review MINOR-2 (2026-05-01): the gear button must
+  // expose `data-testid="tweaks-toggle-btn"` so the outside-click skip logic
+  // in TweaksPanel.svelte can identify gear clicks and avoid the
+  // close-then-reopen race when the gear is clicked while the panel is open.
+  it('Tweaks gear button exposes data-testid="tweaks-toggle-btn"', () => {
+    const { container } = render(TitleBar);
+    const gear = container.querySelector('[data-testid="tweaks-toggle-btn"]');
+    expect(gear).not.toBeNull();
+    expect(gear?.getAttribute('aria-label')).toBe('Tweaks');
+  });
+
   it('root element has region-titlebar class and data-tauri-drag-region', () => {
     const { container } = render(TitleBar);
     const header = container.querySelector('header');

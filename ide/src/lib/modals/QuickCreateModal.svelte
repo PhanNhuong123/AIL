@@ -2,6 +2,7 @@
   import { createEventDispatcher, onMount } from 'svelte';
   import { get } from 'svelte/store';
   import { quickCreateModalOpen } from '$lib/stores';
+  import { focusTrap } from './focus-trap';
 
   // Component-local form state — reset on every close
   let kind = 'module';
@@ -92,7 +93,12 @@
   >
     <!-- svelte-ignore a11y-click-events-have-key-events -->
     <!-- svelte-ignore a11y-no-static-element-interactions -->
-    <div class="modal-dialog qc" on:click|stopPropagation>
+    <div
+      class="modal-dialog qc"
+      tabindex="-1"
+      use:focusTrap
+      on:click|stopPropagation
+    >
       <header class="modal-header">
         <span class="modal-title">Quick Create</span>
         <button

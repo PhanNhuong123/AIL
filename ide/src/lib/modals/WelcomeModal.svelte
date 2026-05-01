@@ -1,7 +1,8 @@
 <script lang="ts">
   import { createEventDispatcher, onMount } from 'svelte';
   import { get } from 'svelte/store';
-  import { welcomeModalOpen } from '$lib/stores';
+  import { welcomeModalOpen, welcomeNotice } from '$lib/stores';
+  import { focusTrap } from './focus-trap';
 
   // The component dispatches `start` / `open` / `tutorial` events (one per
   // card). The route shell (`+page.svelte`) owns the actual project loading
@@ -38,6 +39,9 @@
   // ---------------------------------------------------------------------------
 
   function close() {
+    // Clear any browser-preview notice so a stale "Open is unavailable…"
+    // message does not flash on the next re-open of the modal.
+    welcomeNotice.set('');
     welcomeModalOpen.set(false);
   }
 
@@ -92,7 +96,12 @@
   >
     <!-- svelte-ignore a11y-click-events-have-key-events -->
     <!-- svelte-ignore a11y-no-static-element-interactions -->
-    <div class="modal-dialog welcome" on:click|stopPropagation>
+    <div
+      class="modal-dialog welcome"
+      tabindex="-1"
+      use:focusTrap
+      on:click|stopPropagation
+    >
       <header class="modal-header">
         <span class="modal-title">Welcome to AIL IDE</span>
         <button
@@ -119,6 +128,17 @@
           </button>
         {/each}
       </div>
+
+      {#if $welcomeNotice}
+        <p
+          class="welcome-notice"
+          data-testid="welcome-notice"
+          role="status"
+          aria-live="polite"
+        >
+          {$welcomeNotice}
+        </p>
+      {/if}
     </div>
   </div>
 {/if}

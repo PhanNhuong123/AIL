@@ -16,14 +16,14 @@
     runReviewer, cancelReviewerRun, onCoverageComplete,
     loadProject, runAgent, scaffoldProject, getTutorialPath,
     healthCheckCore, healthCheckAgent, openProjectDialog,
+    isTauri,
   } from '$lib/bridge';
-  import { isTauri } from '@tauri-apps/api/core';
   import type {
     AgentStepPayload, AgentMessagePayload, AgentCompletePayload,
   } from '$lib/types';
   import type { GraphPatchJson, NodeDetail } from '$lib/types';
   type SelectedNodeDetailShape = { id: string; detail: NodeDetail } | null;
-  import { graph, selection, welcomeModalOpen, quickCreateModalOpen } from '$lib/stores';
+  import { graph, selection, welcomeModalOpen, welcomeNotice, quickCreateModalOpen } from '$lib/stores';
   import { sidecarHealth, sidecarChecking } from '$lib/sidecar/sidecar-state';
   import {
     chatMessages, chatPreviewCards, currentRunId, isAgentRunning,
@@ -320,7 +320,17 @@
   }
 
   async function handleWelcomeOpen() {
+    // Closes acceptance review MINOR-3 (2026-05-01): in browser preview the
+    // native dialog is unavailable, so `openProjectDialog()` resolves to null
+    // and the modal would silently no-op. Surface a friendly inline notice
+    // (mirrors the sidecar "unavailable in browser preview" pattern) so the
+    // user understands why nothing happened.
+    if (!isTauri()) {
+      welcomeNotice.set('Open is unavailable in browser preview. Launch the AIL desktop app to load a project.');
+      return;
+    }
     try {
+      welcomeNotice.set('');
       const dir = await openProjectDialog();
       if (!dir) return;
       await loadAndCloseWelcome(dir);
@@ -330,8 +340,12 @@
   }
 
   async function handleWelcomeTutorial() {
-    if (!isTauri()) return;
+    if (!isTauri()) {
+      welcomeNotice.set('Tutorial is unavailable in browser preview. Launch the AIL desktop app to load the bundled example.');
+      return;
+    }
     try {
+      welcomeNotice.set('');
       const path = await getTutorialPath();
       await loadAndCloseWelcome(path);
     } catch (err) {

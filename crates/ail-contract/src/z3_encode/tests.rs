@@ -398,8 +398,7 @@ fn z3_encode_type_constraint_positive_int() {
 
     let solver = Solver::new();
     let dyn_x = z3::ast::Dynamic::from_ast(&x);
-    let assertions =
-        encode_type_constraint(BuiltinSemanticType::PositiveInteger, &dyn_x).unwrap();
+    let assertions = encode_type_constraint(BuiltinSemanticType::PositiveInteger, &dyn_x).unwrap();
     for a in &assertions {
         solver.assert(a);
     }

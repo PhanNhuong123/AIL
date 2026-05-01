@@ -20,11 +20,16 @@ import {
   cancelAgentRun,
   runVerifier,
   cancelVerifierRun,
+  runSheafAnalysis,
+  cancelSheafAnalysis,
+  runReviewer,
+  cancelReviewerRun,
   scaffoldProject,
   getTutorialPath,
   healthCheckCore,
   healthCheckAgent,
   SIDECAR_BROWSER_PREVIEW_MESSAGE,
+  BRIDGE_BROWSER_PREVIEW_MESSAGE,
   onGraphUpdated,
   onVerifyComplete,
   onCoverageComplete,
@@ -259,5 +264,50 @@ describe('bridge.ts event listeners outside Tauri (M2 guard)', () => {
     invoke.mockReset();
     await expect(fn()).rejects.toThrow(SIDECAR_BROWSER_PREVIEW_MESSAGE);
     expect(invoke).not.toHaveBeenCalled();
+  });
+
+  // Closes IMPORTANT finding from acceptance review 2026-05-01:
+  // Every `invoke()` wrapper — not just the sidecar health checks — must
+  // reject with `BRIDGE_BROWSER_PREVIEW_MESSAGE` when running outside Tauri.
+  // Previously only `healthCheck*` carried the guard; calling `runAgent` from
+  // the chat panel in Vite preview leaked the raw `invoke` TypeError into the
+  // chat log. Cover every `invoke()` wrapper exported from `bridge.ts` that
+  // is not the dynamic-import-based `openProjectDialog` (which already
+  // returns null in non-Tauri).
+  describe('every invoke() wrapper rejects with friendly message in browser preview', () => {
+    type Wrapper = readonly [name: string, fn: () => Promise<unknown>];
+    const wrappers: ReadonlyArray<Wrapper> = [
+      ['loadProject', () => loadProject('/tmp/x')],
+      ['getNodeDetail', () => getNodeDetail('n-1')],
+      ['getFlowchart', () => getFlowchart('fn-1')],
+      ['verifyProject', () => verifyProject()],
+      ['saveFlowchart', () => saveFlowchart('fn-1', { nodes: [], edges: [] })],
+      ['computeLensMetrics', () => computeLensMetrics('verify', null)],
+      ['startWatchProject', () => startWatchProject()],
+      ['runAgent', () => runAgent({
+        text: 'x', selectionKind: 'function', selectionId: 'm/f',
+        path: ['m','f'], lens: 'verify', mode: 'edit',
+      })],
+      ['cancelAgentRun', () => cancelAgentRun('r-1')],
+      ['runVerifier', () => runVerifier({ scope: 'project', nodeIds: [] })],
+      ['cancelVerifierRun', () => cancelVerifierRun('vr-1')],
+      ['runSheafAnalysis', () => runSheafAnalysis()],
+      ['cancelSheafAnalysis', () => cancelSheafAnalysis('sr-1')],
+      ['runReviewer', () => runReviewer({ nodeId: 'm:wallet' })],
+      ['cancelReviewerRun', () => cancelReviewerRun('rv-1')],
+      ['scaffoldProject', () => scaffoldProject({
+        parentDir: '/tmp', kind: 'module', name: 'wallet', description: 'x',
+      })],
+      ['getTutorialPath', () => getTutorialPath()],
+    ];
+
+    it.each(wrappers)(
+      '%s rejects with BRIDGE_BROWSER_PREVIEW_MESSAGE and does not call invoke()',
+      async (_name, fn) => {
+        invoke.mockReset();
+        await expect(fn()).rejects.toThrow(BRIDGE_BROWSER_PREVIEW_MESSAGE);
+        expect(invoke).not.toHaveBeenCalled();
+      },
+    );
   });
 });

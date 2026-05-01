@@ -122,7 +122,8 @@ pub fn render_config(name: &str) -> String {
 pub fn scaffold_project(
     request: ProjectScaffoldRequest,
 ) -> Result<ProjectScaffoldResult, BridgeError> {
-    let kind = validate_kind(&request.kind).map_err(|reason| BridgeError::InvalidInput { reason })?;
+    let kind =
+        validate_kind(&request.kind).map_err(|reason| BridgeError::InvalidInput { reason })?;
     validate_name(&request.name).map_err(|reason| BridgeError::InvalidInput { reason })?;
 
     let parent = PathBuf::from(&request.parent_dir);

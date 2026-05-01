@@ -144,6 +144,7 @@
     on:click={toggleTweaks}
     aria-label="Tweaks"
     title="Tweaks"
+    data-testid="tweaks-toggle-btn"
   >
     <Icon name="tweaks" size={14} />
   </button>

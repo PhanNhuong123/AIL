@@ -122,6 +122,59 @@ test('kind resets to module after close', async () => {
   expect(moduleBtn?.getAttribute('aria-pressed')).toBe('true');
 });
 
+// -------------------------------------------------------------------------
+// WCAG 2.1 SC 2.4.3 — focus trap
+// -------------------------------------------------------------------------
+
+test('focus-trap pulls initial focus into the dialog on open', async () => {
+  quickCreateModalOpen.set(true);
+  const { container } = render(QuickCreateModal);
+  await tick();
+  await Promise.resolve();
+
+  const dialog = container.querySelector('.modal-dialog')!;
+  expect(dialog.contains(document.activeElement)).toBe(true);
+});
+
+test('Tab from the last focusable wraps to the first (forward cycle)', async () => {
+  quickCreateModalOpen.set(true);
+  const { container } = render(QuickCreateModal);
+  await tick();
+  await Promise.resolve();
+
+  const dialog = container.querySelector('.modal-dialog') as HTMLElement;
+  const focusables = dialog.querySelectorAll<HTMLElement>(
+    'button:not([disabled]), input:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+  );
+  const first = focusables[0];
+  const last = focusables[focusables.length - 1];
+  last.focus();
+  expect(document.activeElement).toBe(last);
+
+  await fireEvent.keyDown(dialog, { key: 'Tab' });
+  expect(document.activeElement).toBe(first);
+  expect(dialog.contains(document.activeElement)).toBe(true);
+});
+
+test('Shift+Tab from the first focusable wraps to the last (reverse cycle)', async () => {
+  quickCreateModalOpen.set(true);
+  const { container } = render(QuickCreateModal);
+  await tick();
+  await Promise.resolve();
+
+  const dialog = container.querySelector('.modal-dialog') as HTMLElement;
+  const focusables = dialog.querySelectorAll<HTMLElement>(
+    'button:not([disabled]), input:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+  );
+  const first = focusables[0];
+  const last = focusables[focusables.length - 1];
+  first.focus();
+  expect(document.activeElement).toBe(first);
+
+  await fireEvent.keyDown(dialog, { key: 'Tab', shiftKey: true });
+  expect(document.activeElement).toBe(last);
+});
+
 test('form state stays bound to inputs across kind selection', async () => {
   // Cannot observe the dispatched payload directly in an isolated mount
   // (Svelte 5 createEventDispatcher quirk — see comment above). Instead,

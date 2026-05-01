@@ -4,6 +4,22 @@
 //! The Tauri command itself requires a live `AppHandle` and is therefore
 //! exercised from the IDE side. Pure helpers (`find_tutorial_in_workspace`,
 //! `resolve_tutorial_path_dev`) are covered here.
+//!
+//! ## Bundle-mode coverage gap (acceptance review MINOR-4, 2026-05-01)
+//!
+//! `get_tutorial_path` has three resolution branches:
+//!   1. `AIL_DEV=1` → `resolve_tutorial_path_dev()` (covered here).
+//!   2. `app.path().resource_dir().join("examples/wallet_service")` —
+//!      requires a live Tauri `AppHandle`, so it cannot be unit-tested from
+//!      this binary. It is exercised through the real Tauri runtime by the
+//!      IDE shell when the bundled app is launched.
+//!   3. Fallback to `resolve_tutorial_path_dev()` when the bundle resource
+//!      is absent (covered transitively by the dev-resolver tests).
+//!
+//! Branch 2 stays uncovered intentionally; adding a stub `AppHandle` would
+//! require pulling Tauri test scaffolding into this default-feature-gated
+//! binary, which is out of scope for the bridge crate. The contract is
+//! pinned through the IDE-side smoke tests.
 
 #![cfg(feature = "tauri-commands")]
 
@@ -22,10 +38,7 @@ fn unique_tempdir(label: &str) -> PathBuf {
         .duration_since(UNIX_EPOCH)
         .map(|d| d.as_nanos())
         .unwrap_or(0);
-    let dir = env::temp_dir().join(format!(
-        "ail-tutorial-test-{label}-{}-{:x}",
-        seq, now_ns
-    ));
+    let dir = env::temp_dir().join(format!("ail-tutorial-test-{label}-{}-{:x}", seq, now_ns));
     fs::create_dir_all(&dir).expect("tempdir create");
     dir
 }
@@ -77,7 +90,10 @@ fn find_tutorial_prefers_closest_match() {
     fs::create_dir_all(&inner_tutorial).unwrap();
 
     let found = find_tutorial_in_workspace(&inner).expect("found inner");
-    assert_eq!(canonicalize_or_self(&found), canonicalize_or_self(&inner_tutorial));
+    assert_eq!(
+        canonicalize_or_self(&found),
+        canonicalize_or_self(&inner_tutorial)
+    );
 
     let _ = fs::remove_dir_all(&root);
 }
@@ -98,8 +114,7 @@ fn resolve_tutorial_path_dev_finds_workspace_example() {
     let path = resolved.unwrap();
     assert!(path.is_dir(), "resolved path must be a directory: {path:?}");
     assert!(
-        path.ends_with("examples/wallet_service")
-            || path.ends_with("examples\\wallet_service"),
+        path.ends_with("examples/wallet_service") || path.ends_with("examples\\wallet_service"),
         "resolved path must end with examples/wallet_service: {path:?}"
     );
 }

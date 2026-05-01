@@ -15,10 +15,7 @@ use super::context::EncodeContext;
 ///
 /// Unsupported variants (`Matches`, `ForAll`, `Exists`, `In` with a non-literal
 /// collection) produce [`EncodeError::UnsupportedConstraint`].
-pub fn encode_constraint(
-    expr: &ConstraintExpr,
-    ctx: &EncodeContext,
-) -> Result<Bool, EncodeError> {
+pub fn encode_constraint(expr: &ConstraintExpr, ctx: &EncodeContext) -> Result<Bool, EncodeError> {
     match expr {
         ConstraintExpr::Compare { op, left, right } => encode_compare(op, left, right, ctx),
 

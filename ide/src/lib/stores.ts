@@ -19,5 +19,11 @@ export const density: Writable<Density>         = writable('comfortable');
 export const welcomeModalOpen: Writable<boolean> = writable(false);
 export const quickCreateModalOpen: Writable<boolean> = writable(false);
 export const tweaksPanelOpen: Writable<boolean> = writable(false);
+
+// Inline notice surfaced inside WelcomeModal — used by the route shell to
+// communicate UX feedback that the modal itself can render (e.g. "Open in
+// browser preview is unavailable; launch the desktop app to load a project").
+// Empty string hides the notice. Session-only (no localStorage).
+export const welcomeNotice: Writable<string> = writable('');
 export type { Lens } from './types';
 export const activeLens: Writable<Lens> = writable('verify');
