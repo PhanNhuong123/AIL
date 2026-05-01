@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onDestroy } from 'svelte';
   import { activeLens, graph } from '$lib/stores';
-  import { computeLensMetrics } from '$lib/bridge';
+  import { computeLensMetrics, isTauri } from '$lib/bridge';
   import { verifyTick } from '$lib/verify/verify-state';
   import type { LensStats } from '$lib/types';
   import {
@@ -30,6 +30,15 @@
     const lensVal = lens as import('$lib/types').Lens;
     const scopeVal = scope as string | null;
     const reqId = ++lastRequest;
+    // Skip the IPC entirely outside the Tauri WebView. The bridge wrapper
+    // would reject with `BRIDGE_BROWSER_PREVIEW_MESSAGE` for every reactive
+    // tick (graph patch, selection change, verifyTick), spamming the dev
+    // console. Stats stay null and `formatLensStats(null)` renders the
+    // "loading…" placeholder, which matches the original UI.
+    if (!isTauri()) {
+      if (!destroyed && reqId === lastRequest) stats = null;
+      return;
+    }
     try {
       const next = await computeLensMetrics(lensVal, scopeVal);
       if (!destroyed && reqId === lastRequest) stats = next;

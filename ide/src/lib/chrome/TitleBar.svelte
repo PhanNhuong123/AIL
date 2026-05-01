@@ -1,8 +1,9 @@
 <script lang="ts">
   import { createEventDispatcher, onMount } from 'svelte';
   import { graph, path, tweaksPanelOpen, activeLens, quickCreateModalOpen } from '$lib/stores';
-  import type { Lens } from '$lib/stores';
+  import type { Lens, SelectionKind } from '$lib/stores';
   import { countPills, breadcrumbs } from './rollup';
+  import { navigateTo, stageLevelForKind } from './toolbar-state';
   import TrafficLights from './TrafficLights.svelte';
   import Icon from '$lib/icons/Icon.svelte';
 
@@ -17,7 +18,18 @@
   $: pills  = countPills($graph);
 
   function handleCrumbClick(index) {
-    path.set($path.slice(0, index + 1));
+    // Truncate path to the clicked crumb AND sync selection + zoom level.
+    // navigateTo is the canonical entry point — using path.set() alone would
+    // leave `selection` stuck on the previous (deeper) entity, leaving Stage
+    // rendering "Node detail not found." after the user thought they
+    // navigated back.
+    const newPath = $path.slice(0, index + 1);
+    if (newPath.length === 0) return;
+    const last = newPath[newPath.length - 1];
+    const colonIdx = last.indexOf(':');
+    if (colonIdx === -1) return;
+    const kind = last.slice(0, colonIdx) as SelectionKind;
+    navigateTo(newPath, kind, last, stageLevelForKind(kind));
   }
 
   function toggleTweaks() {

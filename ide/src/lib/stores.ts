@@ -25,5 +25,11 @@ export const tweaksPanelOpen: Writable<boolean> = writable(false);
 // browser preview is unavailable; launch the desktop app to load a project").
 // Empty string hides the notice. Session-only (no localStorage).
 export const welcomeNotice: Writable<string> = writable('');
+
+// Inline notice surfaced inside QuickCreateModal — mirror of welcomeNotice for
+// the Create / Create-with-AI flows. Same rationale: when the route shell
+// short-circuits because the runtime is not Tauri (or scaffold/runAgent fails),
+// the modal would otherwise look frozen. Empty string hides the notice.
+export const quickCreateNotice: Writable<string> = writable('');
 export type { Lens } from './types';
 export const activeLens: Writable<Lens> = writable('verify');

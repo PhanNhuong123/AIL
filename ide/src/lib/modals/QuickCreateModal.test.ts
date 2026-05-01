@@ -3,9 +3,12 @@ import { render, fireEvent } from '@testing-library/svelte';
 import { tick } from 'svelte';
 import { get } from 'svelte/store';
 import QuickCreateModal from './QuickCreateModal.svelte';
-import { quickCreateModalOpen } from '$lib/stores';
+import { quickCreateModalOpen, quickCreateNotice } from '$lib/stores';
 
-beforeEach(() => quickCreateModalOpen.set(false));
+beforeEach(() => {
+  quickCreateModalOpen.set(false);
+  quickCreateNotice.set('');
+});
 
 describe('QuickCreateModal.svelte', () => {
   it('renders only when store open', async () => {
@@ -91,6 +94,41 @@ describe('QuickCreateModal.svelte', () => {
     await tick();
 
     expect(get(quickCreateModalOpen)).toBe(false);
+  });
+
+  // Acceptance review 2026-05-01: in browser preview, the route handler sets
+  // `quickCreateNotice` instead of silently no-op'ing. The modal must surface
+  // the notice via [data-testid="qc-notice"].
+  it('renders inline notice when quickCreateNotice store is non-empty', async () => {
+    quickCreateModalOpen.set(true);
+    quickCreateNotice.set('Create is unavailable in browser preview.');
+    const { container } = render(QuickCreateModal);
+    await tick();
+
+    const notice = container.querySelector('[data-testid="qc-notice"]');
+    expect(notice).not.toBeNull();
+    expect(notice?.textContent).toContain('browser preview');
+  });
+
+  it('does NOT render notice element when quickCreateNotice is empty', async () => {
+    quickCreateModalOpen.set(true);
+    quickCreateNotice.set('');
+    const { container } = render(QuickCreateModal);
+    await tick();
+
+    expect(container.querySelector('[data-testid="qc-notice"]')).toBeNull();
+  });
+
+  it('close clears the quickCreateNotice store', async () => {
+    quickCreateModalOpen.set(true);
+    quickCreateNotice.set('Stale notice');
+    const { container } = render(QuickCreateModal);
+    await tick();
+
+    await fireEvent.click(container.querySelector('[data-testid="qc-close"]')!);
+    await tick();
+
+    expect(get(quickCreateNotice)).toBe('');
   });
 });
 

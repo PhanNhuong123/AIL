@@ -113,9 +113,14 @@
   border-radius: var(--radius-sm);
 }
 
-.stage-tab-add:hover {
+.stage-tab-add:hover:not(:disabled) {
   background: var(--surface-3);
   color: var(--ink);
+}
+
+.stage-tab-add:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
 }
 
 /* ============================================================

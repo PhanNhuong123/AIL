@@ -1,7 +1,7 @@
 <script lang="ts">
   import { createEventDispatcher, onMount } from 'svelte';
   import { get } from 'svelte/store';
-  import { quickCreateModalOpen } from '$lib/stores';
+  import { quickCreateModalOpen, quickCreateNotice } from '$lib/stores';
   import { focusTrap } from './focus-trap';
 
   // Component-local form state — reset on every close
@@ -27,6 +27,9 @@
     name = '';
     description = '';
     kind = 'module';
+    // Clear the notice so a stale "unavailable in browser preview" message
+    // doesn't flash on the next re-open. Mirror of WelcomeModal.close().
+    quickCreateNotice.set('');
     quickCreateModalOpen.set(false);
   }
 
@@ -158,6 +161,17 @@
           ✦ Create with AI
         </button>
       </div>
+
+      {#if $quickCreateNotice}
+        <p
+          class="qc-notice"
+          data-testid="qc-notice"
+          role="status"
+          aria-live="polite"
+        >
+          {$quickCreateNotice}
+        </p>
+      {/if}
     </div>
   </div>
 {/if}

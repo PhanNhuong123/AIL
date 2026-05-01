@@ -2,13 +2,14 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { render, fireEvent } from '@testing-library/svelte';
 import { tick } from 'svelte';
 import { get } from 'svelte/store';
-import { graph, path, tweaksPanelOpen, activeLens, quickCreateModalOpen } from '$lib/stores';
+import { graph, path, selection, tweaksPanelOpen, activeLens, quickCreateModalOpen } from '$lib/stores';
 import { walletFixture, walletFixtureWithFail } from './fixtures';
 import TitleBar from './TitleBar.svelte';
 
 beforeEach(() => {
   graph.set(null);
   path.set([]);
+  selection.set({ kind: 'none', id: null });
   tweaksPanelOpen.set(false);
   activeLens.set('verify');
   quickCreateModalOpen.set(false);
@@ -77,6 +78,48 @@ describe('TitleBar.svelte', () => {
 
     const p = get(path);
     expect(p).toEqual(['project:root']);
+  });
+
+  // Regression: clicking a breadcrumb must also re-sync `selection` to the
+  // truncated path's leaf. Without this, Stage stayed stuck rendering a
+  // deeper view ("Node detail not found.") even though the breadcrumb said
+  // the user navigated back. (User-acceptance pass on 2026-05-01.)
+  it('crumb click also updates selection to match the truncated path leaf', async () => {
+    const { container } = render(TitleBar);
+
+    graph.set(walletFixture());
+    path.set([
+      'project:root',
+      'module:m_wallet',
+      'function:fn_transfer',
+      'step:s_debit',
+    ]);
+    selection.set({ kind: 'step', id: 'step:s_debit' });
+    await tick();
+
+    const crumbs = container.querySelectorAll('.crumb');
+    expect(crumbs.length).toBe(4);
+
+    // Click the function crumb (index 2 → fn_transfer)
+    fireEvent.click(crumbs[2]);
+    await tick();
+
+    expect(get(path)).toEqual([
+      'project:root',
+      'module:m_wallet',
+      'function:fn_transfer',
+    ]);
+    expect(get(selection)).toEqual({ kind: 'function', id: 'function:fn_transfer' });
+
+    // Click the module crumb
+    fireEvent.click(crumbs[1]);
+    await tick();
+    expect(get(selection)).toEqual({ kind: 'module', id: 'module:m_wallet' });
+
+    // Click the project crumb
+    fireEvent.click(crumbs[0]);
+    await tick();
+    expect(get(selection)).toEqual({ kind: 'project', id: 'project:root' });
   });
 
   it('Tweaks button toggles tweaksPanelOpen store', async () => {

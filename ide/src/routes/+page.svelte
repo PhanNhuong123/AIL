@@ -23,7 +23,7 @@
   } from '$lib/types';
   import type { GraphPatchJson, NodeDetail } from '$lib/types';
   type SelectedNodeDetailShape = { id: string; detail: NodeDetail } | null;
-  import { graph, selection, welcomeModalOpen, welcomeNotice, quickCreateModalOpen } from '$lib/stores';
+  import { graph, selection, welcomeModalOpen, welcomeNotice, quickCreateModalOpen, quickCreateNotice } from '$lib/stores';
   import { sidecarHealth, sidecarChecking } from '$lib/sidecar/sidecar-state';
   import {
     chatMessages, chatPreviewCards, currentRunId, isAgentRunning,
@@ -357,20 +357,37 @@
   // `ev` is a CustomEvent with detail = { kind, name, description }.
   async function handleQuickCreate(ev) {
     const { kind, name, description } = ev.detail;
-    if (!isTauri() || !name) return;
+    if (!name) {
+      quickCreateNotice.set('Please enter a name before creating.');
+      return;
+    }
+    if (!isTauri()) {
+      quickCreateNotice.set('Create is unavailable in browser preview. Launch the AIL desktop app to scaffold a project.');
+      return;
+    }
     try {
+      quickCreateNotice.set('');
       const parentDir = await openProjectDialog();
       if (!parentDir) return;
       const result = await scaffoldProject({ parentDir, kind, name, description });
       await loadAndCloseWelcome(result.projectDir);
     } catch (err) {
       console.warn('[quick-create] failed:', err);
+      quickCreateNotice.set(`Couldn't create project: ${err instanceof Error ? err.message : String(err)}`);
     }
   }
 
   async function handleQuickCreateAi(ev) {
     const { kind, name, description } = ev.detail;
-    if (!isTauri() || !name) return;
+    if (!name) {
+      quickCreateNotice.set('Please enter a name before asking the agent.');
+      return;
+    }
+    if (!isTauri()) {
+      quickCreateNotice.set('Create with AI is unavailable in browser preview. Launch the AIL desktop app to run the agent.');
+      return;
+    }
+    quickCreateNotice.set('');
     quickCreateModalOpen.set(false);
     welcomeModalOpen.set(false);
     setWelcomeDismissed(true);

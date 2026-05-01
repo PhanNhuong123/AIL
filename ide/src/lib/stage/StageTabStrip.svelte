@@ -15,8 +15,10 @@
   <button
     class="stage-tab-add"
     data-testid="stage-tab-add"
-    aria-label="New tab"
-    title="New tab"
+    aria-label="New tab (coming in v5)"
+    title="Multi-tab editing arrives in v5"
+    aria-disabled="true"
+    disabled
     type="button"
   >
     <Icon name="plus-circle" size={12} />
