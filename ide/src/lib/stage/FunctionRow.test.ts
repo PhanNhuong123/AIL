@@ -1,7 +1,10 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
 // Mock Tauri BEFORE any Svelte imports (LensBanner pattern)
-vi.mock('@tauri-apps/api/core', () => ({ invoke: vi.fn() }));
+vi.mock('@tauri-apps/api/core', () => ({
+  invoke: vi.fn(),
+  isTauri: () => 'isTauri' in window && (window as Window & { isTauri?: boolean }).isTauri === true,
+}));
 vi.mock('@tauri-apps/api/event', () => ({ listen: vi.fn() }));
 
 // vi.mock is hoisted above top-level const declarations, so co-hoist

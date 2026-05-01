@@ -4,6 +4,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 // In jsdom there is no Tauri host; stub `invoke` to keep tests deterministic.
 vi.mock('@tauri-apps/api/core', () => ({
   invoke: vi.fn(() => Promise.resolve(null)),
+  isTauri: () => 'isTauri' in window && (window as Window & { isTauri?: boolean }).isTauri === true,
 }));
 vi.mock('@tauri-apps/api/event', () => ({ listen: vi.fn() }));
 

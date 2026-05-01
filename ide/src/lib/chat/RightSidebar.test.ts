@@ -1,6 +1,9 @@
 // Tauri mock must be hoisted before any bridge imports via ChatPanel.
 const invoke = vi.fn();
-vi.mock('@tauri-apps/api/core', () => ({ invoke: (...args: unknown[]) => invoke(...args) }));
+vi.mock('@tauri-apps/api/core', () => ({
+  invoke: (...args: unknown[]) => invoke(...args),
+  isTauri: () => 'isTauri' in window && (window as Window & { isTauri?: boolean }).isTauri === true,
+}));
 vi.mock('@tauri-apps/api/event', () => ({ listen: vi.fn() }));
 
 import { describe, test, expect, beforeEach, afterEach, vi } from 'vitest';

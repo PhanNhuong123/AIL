@@ -3,7 +3,10 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 // Establish the Tauri mock surface BEFORE importing bridge.ts. This pattern
 // is new to the chat folder — 16.1 tests are the first to need it.
 const invoke = vi.fn();
-vi.mock('@tauri-apps/api/core', () => ({ invoke: (...args: unknown[]) => invoke(...args) }));
+vi.mock('@tauri-apps/api/core', () => ({
+  invoke: (...args: unknown[]) => invoke(...args),
+  isTauri: () => 'isTauri' in window && (window as Window & { isTauri?: boolean }).isTauri === true,
+}));
 vi.mock('@tauri-apps/api/event', () => ({ listen: vi.fn() }));
 
 import { render, fireEvent } from '@testing-library/svelte';

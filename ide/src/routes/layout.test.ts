@@ -8,6 +8,7 @@ const listeners = new Map<string, PatchHandler>();
 const unlistenFns = new Map<string, ReturnType<typeof vi.fn>>();
 vi.mock('@tauri-apps/api/core', () => ({
   invoke: (...args: unknown[]) => invoke(...args),
+  isTauri: () => 'isTauri' in window && (window as Window & { isTauri?: boolean }).isTauri === true,
 }));
 vi.mock('@tauri-apps/api/event', () => ({
   listen: vi.fn((event: string, cb: PatchHandler) => {

@@ -1,8 +1,11 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 const invoke = vi.fn();
 const listen = vi.fn();
-vi.mock('@tauri-apps/api/core', () => ({ invoke: (...args: unknown[]) => invoke(...args) }));
+vi.mock('@tauri-apps/api/core', () => ({
+  invoke: (...args: unknown[]) => invoke(...args),
+  isTauri: () => 'isTauri' in window && (window as Window & { isTauri?: boolean }).isTauri === true,
+}));
 vi.mock('@tauri-apps/api/event', () => ({ listen: (...args: unknown[]) => listen(...args) }));
 
 import {
@@ -17,10 +20,13 @@ import {
   cancelAgentRun,
   runVerifier,
   cancelVerifierRun,
+  onGraphUpdated,
   onVerifyComplete,
+  onCoverageComplete,
   onAgentStep,
   onAgentMessage,
   onAgentComplete,
+  onSheafComplete,
   EVENTS,
 } from './bridge';
 import type { AgentRunRequest, FlowchartJson, VerifierScopeRequest, VerifyCompletePayload } from './types';
@@ -174,5 +180,43 @@ describe('bridge.ts event listeners', () => {
     expect(captured).not.toBeNull();
     captured!({ payload: { runId: 'r-7', index: 1, phase: 'plan', text: 'hi' } });
     expect(h).toHaveBeenCalledWith({ runId: 'r-7', index: 1, phase: 'plan', text: 'hi' });
+  });
+});
+
+// M2 — when running outside the Tauri WebView (e.g., dev preview at
+// localhost:1420 in a regular browser), `window.isTauri` is undefined.
+// Subscriptions must short-circuit to a no-op `UnlistenFn` so the route
+// `register()` lifecycle stays valid and the console stays clean.
+describe('bridge.ts event listeners outside Tauri (M2 guard)', () => {
+  type TauriWindow = Window & { __TAURI_INTERNALS__?: unknown; isTauri?: boolean };
+
+  beforeEach(() => {
+    delete (window as TauriWindow).__TAURI_INTERNALS__;
+    delete (window as TauriWindow).isTauri;
+    listen.mockReset();
+    listen.mockImplementation((_event: string, _cb: unknown) => Promise.resolve(() => {}));
+  });
+
+  // Restore the global markers set by `src/test-setup.ts` so subsequent test
+  // suites (which assume Tauri-like env) are not affected by these deletions.
+  afterEach(() => {
+    (window as TauriWindow).__TAURI_INTERNALS__ = {};
+    (window as TauriWindow).isTauri = true;
+  });
+
+  it.each([
+    ['onGraphUpdated', onGraphUpdated],
+    ['onVerifyComplete', onVerifyComplete],
+    ['onCoverageComplete', onCoverageComplete],
+    ['onAgentStep', onAgentStep],
+    ['onAgentMessage', onAgentMessage],
+    ['onAgentComplete', onAgentComplete],
+    ['onSheafComplete', onSheafComplete],
+  ] as const)('%s does not call listen() and returns a no-op UnlistenFn', async (_name, fn) => {
+    const h = vi.fn();
+    const unlisten = await fn(h);
+    expect(listen).not.toHaveBeenCalled();
+    expect(typeof unlisten).toBe('function');
+    expect(() => unlisten()).not.toThrow();
   });
 });

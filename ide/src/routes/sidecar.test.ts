@@ -9,7 +9,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const invoke = vi.fn();
-vi.mock('@tauri-apps/api/core', () => ({ invoke: (...args: unknown[]) => invoke(...args) }));
+vi.mock('@tauri-apps/api/core', () => ({
+  invoke: (...args: unknown[]) => invoke(...args),
+  isTauri: () => 'isTauri' in window && (window as Window & { isTauri?: boolean }).isTauri === true,
+}));
 // event module is not used by the sidecar commands but the bridge imports it
 vi.mock('@tauri-apps/api/event', () => ({ listen: vi.fn() }));
 

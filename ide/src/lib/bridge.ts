@@ -1,4 +1,4 @@
-import { invoke } from '@tauri-apps/api/core';
+import { invoke, isTauri } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import type {
   GraphJson, NodeDetail, FlowchartJson,
@@ -10,6 +10,17 @@ import type {
   CoverageCompletePayload, ReviewerCancelResult, ReviewerScopeRequest,
   HealthCheckPayload,
 } from './types';
+
+// Tauri WebView detection. Outside Tauri (e.g., browsing localhost:1420
+// directly during frontend dev), `listen()` would throw a `transformCallback`
+// TypeError on every subscription because the Tauri runtime markers are not
+// injected. Each `on*` wrapper below short-circuits to a no-op `UnlistenFn`
+// so the route-level `register()` lifecycle stays valid and the console stays
+// clean. We use the SDK's official `isTauri()` (reads `window.isTauri`)
+// rather than the internal `__TAURI_INTERNALS__` marker, so the contract
+// follows whatever the SDK ships with. Real Tauri runtime sets both markers
+// before any frontend JS runs, so the production path is unaffected.
+const noopUnlisten: UnlistenFn = () => {};
 
 // Commands
 export const loadProject    = (path: string) =>
@@ -73,33 +84,45 @@ export const EVENTS = {
 
 export const onGraphUpdated = (
   h: (p: GraphPatchJson) => void,
-): Promise<UnlistenFn> =>
-  listen<GraphPatchJson>(EVENTS.GRAPH_UPDATED, (e) => h(e.payload));
+): Promise<UnlistenFn> => {
+  if (!isTauri()) return Promise.resolve(noopUnlisten);
+  return listen<GraphPatchJson>(EVENTS.GRAPH_UPDATED, (e) => h(e.payload));
+};
 
 export const onVerifyComplete = (
   h: (p: VerifyCompletePayload) => void,
-): Promise<UnlistenFn> =>
-  listen<VerifyCompletePayload>(EVENTS.VERIFY_COMPLETE, (e) => h(e.payload));
+): Promise<UnlistenFn> => {
+  if (!isTauri()) return Promise.resolve(noopUnlisten);
+  return listen<VerifyCompletePayload>(EVENTS.VERIFY_COMPLETE, (e) => h(e.payload));
+};
 
 export const onCoverageComplete = (
   h: (p: CoverageCompletePayload) => void,
-): Promise<UnlistenFn> =>
-  listen<CoverageCompletePayload>(EVENTS.COVERAGE_COMPLETE, (e) => h(e.payload));
+): Promise<UnlistenFn> => {
+  if (!isTauri()) return Promise.resolve(noopUnlisten);
+  return listen<CoverageCompletePayload>(EVENTS.COVERAGE_COMPLETE, (e) => h(e.payload));
+};
 
 export const onAgentStep = (
   h: (p: AgentStepPayload) => void,
-): Promise<UnlistenFn> =>
-  listen<AgentStepPayload>(EVENTS.AGENT_STEP, (e) => h(e.payload));
+): Promise<UnlistenFn> => {
+  if (!isTauri()) return Promise.resolve(noopUnlisten);
+  return listen<AgentStepPayload>(EVENTS.AGENT_STEP, (e) => h(e.payload));
+};
 
 export const onAgentMessage = (
   h: (p: AgentMessagePayload) => void,
-): Promise<UnlistenFn> =>
-  listen<AgentMessagePayload>(EVENTS.AGENT_MESSAGE, (e) => h(e.payload));
+): Promise<UnlistenFn> => {
+  if (!isTauri()) return Promise.resolve(noopUnlisten);
+  return listen<AgentMessagePayload>(EVENTS.AGENT_MESSAGE, (e) => h(e.payload));
+};
 
 export const onAgentComplete = (
   h: (p: AgentCompletePayload) => void,
-): Promise<UnlistenFn> =>
-  listen<AgentCompletePayload>(EVENTS.AGENT_COMPLETE, (e) => h(e.payload));
+): Promise<UnlistenFn> => {
+  if (!isTauri()) return Promise.resolve(noopUnlisten);
+  return listen<AgentCompletePayload>(EVENTS.AGENT_COMPLETE, (e) => h(e.payload));
+};
 
 // Phase 17.4 — Sheaf analysis commands and event listener.
 // Mirror runVerifier / cancelVerifierRun / onVerifyComplete patterns.
@@ -120,8 +143,10 @@ export const cancelSheafAnalysis = (runId: string): Promise<SheafCancelResult> =
 
 export const onSheafComplete = (
   handler: (payload: SheafCompletePayload) => void,
-): Promise<UnlistenFn> =>
-  listen<SheafCompletePayload>(EVENTS.SHEAF_COMPLETE, (e) => handler(e.payload));
+): Promise<UnlistenFn> => {
+  if (!isTauri()) return Promise.resolve(noopUnlisten);
+  return listen<SheafCompletePayload>(EVENTS.SHEAF_COMPLETE, (e) => handler(e.payload));
+};
 
 // Phase 16.4 — Reviewer (coverage scoring) commands.
 export const runReviewer = (req: ReviewerScopeRequest): Promise<string> =>
