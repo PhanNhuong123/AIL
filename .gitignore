@@ -37,3 +37,7 @@ ide/src-tauri/gen/
 
 .env
 .tmp-design
+
+# Playwright MCP / acceptance scratch artifacts (tester sessions write here)
+.playwright-mcp/
+acceptance-*.png
