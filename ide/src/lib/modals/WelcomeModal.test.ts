@@ -4,10 +4,17 @@ import { tick } from 'svelte';
 import { get } from 'svelte/store';
 import WelcomeModal from './WelcomeModal.svelte';
 import { welcomeModalOpen, welcomeNotice } from '$lib/stores';
+import { setWelcomeDismissed, getWelcomeDismissed } from '$lib/chat/sidebar-state';
 
 beforeEach(() => {
   welcomeModalOpen.set(false);
   welcomeNotice.set('');
+  // Welcome-dismissed is now persisted on close — wipe it between tests
+  // so each case starts from "fresh user, never dismissed".
+  if (typeof localStorage !== 'undefined') {
+    try { localStorage.removeItem('ail3_welcome_dismissed_v1'); } catch { /* ignore */ }
+  }
+  setWelcomeDismissed(false);
 });
 
 describe('WelcomeModal.svelte', () => {
@@ -110,6 +117,36 @@ describe('WelcomeModal.svelte', () => {
     await tick();
 
     expect(get(welcomeModalOpen)).toBe(false);
+  });
+
+  // Acceptance review 2026-05-01 (Story S1.A3): closing the Welcome modal
+  // via the ✕ button must persist the dismissed flag so the modal does not
+  // re-open on every reload. Previously only the success-load route in
+  // `loadAndCloseWelcome` set the flag; the ✕/ESC paths dropped it.
+  it('✕ close persists welcome-dismissed flag', async () => {
+    expect(getWelcomeDismissed()).toBe(false);
+    welcomeModalOpen.set(true);
+    const { container } = render(WelcomeModal);
+    await tick();
+
+    await fireEvent.click(container.querySelector('[data-testid="welcome-close"]')!);
+    await tick();
+
+    expect(get(welcomeModalOpen)).toBe(false);
+    expect(getWelcomeDismissed()).toBe(true);
+  });
+
+  it('ESC close persists welcome-dismissed flag', async () => {
+    expect(getWelcomeDismissed()).toBe(false);
+    welcomeModalOpen.set(true);
+    render(WelcomeModal);
+    await tick();
+
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    await tick();
+
+    expect(get(welcomeModalOpen)).toBe(false);
+    expect(getWelcomeDismissed()).toBe(true);
   });
 
   // -------------------------------------------------------------------------

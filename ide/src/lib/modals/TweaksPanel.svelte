@@ -1,7 +1,7 @@
 <script lang="ts">
   import { createEventDispatcher, onMount } from 'svelte';
   import { get } from 'svelte/store';
-  import { tweaksPanelOpen, theme, density } from '$lib/stores';
+  import { tweaksPanelOpen, theme, density, accent } from '$lib/stores';
   import type { Density } from '$lib/stores';
   import { sidecarHealth, sidecarChecking } from '$lib/sidecar/sidecar-state';
 
@@ -38,19 +38,19 @@
     tweaksPanelOpen.set(false);
   }
 
+  // Theme / accent / density now go exclusively through their stores.
+  // `lib/chrome/tweaks-state.ts` (initialised from `+page.svelte::onMount`)
+  // owns DOM application (`html.light` / `html.dark` toggle, `--accent` CSS
+  // var) and localStorage write-through. This avoids the prior bugs where
+  //   • toggling theme left both `dark` and `light` classes on `<html>`
+  //   • theme / density / accent did not persist across reloads
+  //   • accent was applied to the DOM but never reflected in any store
   function toggleTheme() {
-    const next = isLight ? 'dark' : 'light';
-    theme.set(next);
-    if (typeof document !== 'undefined') {
-      document.documentElement.classList.toggle('light', next === 'light');
-    }
+    theme.set(isLight ? 'dark' : 'light');
   }
 
   function setAccent(e) {
-    const value = (e.currentTarget as HTMLInputElement).value;
-    if (typeof document !== 'undefined') {
-      document.documentElement.style.setProperty('--accent', value);
-    }
+    accent.set((e.currentTarget as HTMLInputElement).value);
   }
 
   function setDensity(next) {
@@ -125,7 +125,7 @@
           <input
             type="color"
             data-testid="tweaks-accent-input"
-            value="#2997ff"
+            value={$accent}
             on:input={setAccent}
           />
           <span class="tweaks-hint">Click to pick</span>

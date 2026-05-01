@@ -31,6 +31,7 @@
   import {
     getWelcomeDismissed, setWelcomeDismissed,
   } from '$lib/chat/sidebar-state';
+  import { initTweaksState } from '$lib/chrome/tweaks-state';
   import { applyGraphPatch, reconcileSelectionAfterPatch } from '$lib/graph-patch';
   import { mergePatches, isEmptyPatch } from '$lib/patch-merge';
   import { patchEffects, clearPatchEffects, computePatchEffects, CLEAR_DELAY_MS } from '$lib/patch-effects';
@@ -461,6 +462,12 @@
 
   onMount(() => {
     const unlistens = [] as Array<() => void>;
+
+    // Hydrate Tweaks-panel settings (theme, density, accent) from
+    // localStorage and start write-through persistence. Owns DOM
+    // application (`html.light` / `html.dark` class hygiene + `--accent`
+    // CSS var) so the toggle paths in TweaksPanel only set the stores.
+    initTweaksState();
 
     // Auto-open Welcome on first launch when no project is loaded and the
     // user has not previously dismissed it. Closes review finding **N1**.

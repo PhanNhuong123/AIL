@@ -3,21 +3,21 @@ import { render, fireEvent } from '@testing-library/svelte';
 import { tick } from 'svelte';
 import { get } from 'svelte/store';
 import TweaksPanel from './TweaksPanel.svelte';
-import { tweaksPanelOpen, theme, density } from '$lib/stores';
+import { tweaksPanelOpen, theme, density, accent } from '$lib/stores';
 import {
   sidecarHealth, sidecarChecking, resetSidecarState,
 } from '$lib/sidecar/sidecar-state';
+import { initTweaksState, resetTweaksState } from '$lib/chrome/tweaks-state';
 
 beforeEach(() => {
   tweaksPanelOpen.set(false);
-  theme.set('dark');
-  density.set('comfortable');
+  resetTweaksState();      // restore default theme/density/accent + DOM cleanup
+  initTweaksState();        // re-arm subscribers so toggles apply DOM class + persist
   resetSidecarState();
 });
 
 afterEach(() => {
-  document.documentElement.classList.remove('light');
-  document.documentElement.style.removeProperty('--accent');
+  resetTweaksState();
 });
 
 describe('TweaksPanel.svelte', () => {

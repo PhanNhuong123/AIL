@@ -2,6 +2,7 @@
   import { createEventDispatcher, onMount } from 'svelte';
   import { get } from 'svelte/store';
   import { welcomeModalOpen, welcomeNotice } from '$lib/stores';
+  import { setWelcomeDismissed } from '$lib/chat/sidebar-state';
   import { focusTrap } from './focus-trap';
 
   // The component dispatches `start` / `open` / `tutorial` events (one per
@@ -42,6 +43,12 @@
     // Clear any browser-preview notice so a stale "Open is unavailable…"
     // message does not flash on the next re-open of the modal.
     welcomeNotice.set('');
+    // Persist the dismissal flag so the modal does not re-open on every
+    // reload. Previously the ✕ / ESC paths dropped the flag and only the
+    // success-load route in `loadAndCloseWelcome` set it, which meant a
+    // user who explicitly closed Welcome would still be greeted by it on
+    // the next launch — annoying after the first dismissal.
+    setWelcomeDismissed(true);
     welcomeModalOpen.set(false);
   }
 

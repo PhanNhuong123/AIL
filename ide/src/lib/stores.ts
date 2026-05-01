@@ -16,6 +16,10 @@ export const history: Writable<NavHistory>      = writable({ back: [], forward: 
 export const paletteVisible: Writable<boolean>  = writable(false);
 export const theme: Writable<Theme>             = writable('dark');
 export const density: Writable<Density>         = writable('comfortable');
+// Default accent matches the value baked into tokens.css `:root { --accent }`.
+// `lib/chrome/tweaks-state.ts` is the single owner of this store + its
+// localStorage persistence and CSS-var application.
+export const accent: Writable<string>           = writable('#2997ff');
 export const welcomeModalOpen: Writable<boolean> = writable(false);
 export const quickCreateModalOpen: Writable<boolean> = writable(false);
 export const tweaksPanelOpen: Writable<boolean> = writable(false);
