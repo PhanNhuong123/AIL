@@ -159,6 +159,27 @@ describe('TitleBar.svelte', () => {
     expect(verifyBtn.getAttribute('aria-pressed')).toBe('true');
   });
 
+  // ── Open project ──────────────────────────────────────────────────────────
+  it('renders Open button with correct aria-label', () => {
+    const { container } = render(TitleBar);
+    const btn = container.querySelector('[data-testid="open-btn"]');
+    expect(btn).not.toBeNull();
+    expect(btn?.getAttribute('aria-label')).toBe('Open project');
+  });
+
+  it('Open button is clickable and shows hover affordance via title', () => {
+    // Svelte 5 createEventDispatcher only delivers events when the parent
+    // template registers `on:event=`; isolated mounts cannot observe the
+    // dispatch directly (matches WelcomeModal/QuickCreateModal pattern).
+    // The dispatch -> +page.svelte -> handleWelcomeOpen wiring is verified
+    // in routes/layout.test.ts.
+    const { container } = render(TitleBar);
+    const btn = container.querySelector('[data-testid="open-btn"]') as HTMLButtonElement;
+    expect(btn).not.toBeNull();
+    expect(btn.title).toBe('Open an existing .ail project');
+    expect(btn.disabled).toBe(false);
+  });
+
   // ── Quick Create ──────────────────────────────────────────────────────────
   it('renders + New button with correct aria-label', () => {
     const { container } = render(TitleBar);

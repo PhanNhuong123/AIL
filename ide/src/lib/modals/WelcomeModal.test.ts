@@ -21,15 +21,25 @@ describe('WelcomeModal.svelte', () => {
     expect(start.textContent).toContain('Start a new project');
   });
 
-  it('test_welcome_dismiss_on_card_click', async () => {
+  it('card click does NOT auto-close modal (route closes after success)', async () => {
+    // Svelte 5 `createEventDispatcher` only delivers events to a parent that
+    // wired them via `on:event=`; isolated mounts cannot observe the
+    // dispatch directly. The dispatch -> parent wiring is verified in
+    // routes/layout.test.ts where `+page.svelte` is mounted. This unit test
+    // pins the modal-side behaviour: clicking a card MUST NOT close the
+    // modal (closes review finding N1.b — old stub closed on click).
     welcomeModalOpen.set(true);
     const { container } = render(WelcomeModal);
     await tick();
 
     await fireEvent.click(container.querySelector('[data-testid="welcome-card-start"]')!);
     await tick();
+    expect(get(welcomeModalOpen)).toBe(true);
 
-    expect(get(welcomeModalOpen)).toBe(false);
+    await fireEvent.click(container.querySelector('[data-testid="welcome-card-open"]')!);
+    await fireEvent.click(container.querySelector('[data-testid="welcome-card-tutorial"]')!);
+    await tick();
+    expect(get(welcomeModalOpen)).toBe(true);
   });
 
   it('backdrop click closes modal; click inside does not', async () => {
@@ -55,7 +65,18 @@ describe('WelcomeModal.svelte', () => {
     expect(get(welcomeModalOpen)).toBe(true);
   });
 
-  it('invariant 15.11-B: does not register a global keydown listener', async () => {
+  it('close button closes modal', async () => {
+    welcomeModalOpen.set(true);
+    const { container } = render(WelcomeModal);
+    await tick();
+
+    await fireEvent.click(container.querySelector('[data-testid="welcome-close"]')!);
+    await tick();
+
+    expect(get(welcomeModalOpen)).toBe(false);
+  });
+
+  it('invariant 15.11-B: does not register a global window keydown listener (open path)', async () => {
     const spy = vi.spyOn(window, 'addEventListener');
     welcomeModalOpen.set(true);
     render(WelcomeModal);
@@ -64,5 +85,27 @@ describe('WelcomeModal.svelte', () => {
     const keydownCalls = spy.mock.calls.filter((c) => c[0] === 'keydown');
     expect(keydownCalls).toHaveLength(0);
     spy.mockRestore();
+  });
+
+  it('ESC key closes the modal when open', async () => {
+    welcomeModalOpen.set(true);
+    render(WelcomeModal);
+    await tick();
+
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    await tick();
+
+    expect(get(welcomeModalOpen)).toBe(false);
+  });
+
+  it('ESC key is a no-op when the modal is closed', async () => {
+    welcomeModalOpen.set(false);
+    render(WelcomeModal);
+    await tick();
+
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    await tick();
+
+    expect(get(welcomeModalOpen)).toBe(false);
   });
 });

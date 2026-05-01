@@ -17,9 +17,12 @@
  *                        and resetSidebarState
  *
  * INVARIANT 15.12-B: This file is the only frontend file allowed to read or
- * write localStorage. Only { collapsed: boolean, activeTab: string } is stored
- * under key 'ail3_sidebar_v1'. Theme / accent / density / chat / flow / node
- * tab / outline state must NOT be persisted here.
+ * write localStorage. Persisted shape:
+ *   - key 'ail3_sidebar_v1' -> { collapsed: boolean, activeTab: string }
+ *   - key 'ail3_welcome_dismissed_v1' -> 'true' (presence flag; absent means
+ *     the Welcome modal should auto-open on next launch)
+ * Theme / accent / density / chat / flow / node tab / outline state must NOT
+ * be persisted here.
  */
 
 import { get, writable } from 'svelte/store';
@@ -44,6 +47,7 @@ export interface SidebarSlotEntry {
 // ---------------------------------------------------------------------------
 
 const STORAGE_KEY = 'ail3_sidebar_v1';
+const WELCOME_DISMISSED_KEY = 'ail3_welcome_dismissed_v1';
 
 // ---------------------------------------------------------------------------
 // Stores
@@ -148,6 +152,33 @@ export function registerSidebarSlot(
       sidebarActiveTab.set('chat');
     }
   };
+}
+
+// ---------------------------------------------------------------------------
+// Welcome-dismissed flag — single allowed localStorage writer for the
+// "user already dismissed Welcome on this machine" bit. Stored as a separate
+// key so the sidebar JSON stays a clean { collapsed, activeTab } shape.
+// Routes consume `getWelcomeDismissed()` on mount; only `setWelcomeDismissed`
+// writes the flag. SSR + private-mode + quota errors fall back silently.
+// ---------------------------------------------------------------------------
+
+export function getWelcomeDismissed(): boolean {
+  if (typeof localStorage === 'undefined') return false;
+  try {
+    return localStorage.getItem(WELCOME_DISMISSED_KEY) === 'true';
+  } catch {
+    return false;
+  }
+}
+
+export function setWelcomeDismissed(value: boolean): void {
+  if (typeof localStorage === 'undefined') return;
+  try {
+    if (value) localStorage.setItem(WELCOME_DISMISSED_KEY, 'true');
+    else localStorage.removeItem(WELCOME_DISMISSED_KEY);
+  } catch {
+    // Quota / private mode — drop silently.
+  }
 }
 
 // ---------------------------------------------------------------------------

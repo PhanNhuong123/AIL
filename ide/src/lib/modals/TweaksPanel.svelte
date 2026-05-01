@@ -1,16 +1,34 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { createEventDispatcher, onMount } from 'svelte';
   import { get } from 'svelte/store';
   import { tweaksPanelOpen, theme, density } from '$lib/stores';
   import type { Density } from '$lib/stores';
+  import { sidecarHealth, sidecarChecking } from '$lib/sidecar/sidecar-state';
+
+  // Sidecar health buttons dispatch events; the route shell
+  // (`+page.svelte`) owns the actual `bridge.healthCheck*` calls because
+  // modals must NOT import `$lib/bridge.ts` (modals/CLAUDE.md).
+  // Note: untyped `createEventDispatcher()` because esrap rejects generic
+  // type annotations on it (invariant 16.2-E).
+  const dispatch = createEventDispatcher();
 
   $: isLight = $theme === 'light';
 
+  // Note: param types omitted because esrap rejects them in `.svelte`
+  // script blocks (invariant 16.2-E). `payload` is HealthCheckPayload | null.
+  function formatHealth(payload) {
+    if (!payload) return 'not checked';
+    if (payload.ok) return `${payload.mode} · v${payload.version ?? '?'}`;
+    return payload.error ?? 'unavailable';
+  }
+
+  function healthState(payload) {
+    if (!payload) return 'idle';
+    return payload.ok ? 'ok' : 'fail';
+  }
+
   const shortcuts = [
     { key: '⌘K', label: 'Quick Create' },
-    { key: '⌘P', label: 'Command Palette' },
-    { key: '⌘1..4', label: 'Zoom level' },
-    { key: '⌘[ / ⌘]', label: 'Navigate back/forward' },
     { key: 'Esc', label: 'Close modal' },
   ];
 
@@ -141,6 +159,42 @@
           >
             Comfy
           </button>
+        </div>
+      </div>
+
+      <div class="tweaks-section" data-testid="tweaks-sidecar-section">
+        <span class="tweaks-section-label">Sidecars</span>
+        <div class="tweaks-sidecar-row">
+          <button
+            type="button"
+            class="tweaks-sidecar-btn"
+            data-testid="sidecar-health-core"
+            on:click={() => dispatch('checkCore', undefined, { bubbles: true } as never)}
+            disabled={$sidecarChecking.core}
+          >
+            {$sidecarChecking.core ? 'Checking…' : 'Check core'}
+          </button>
+          <span
+            class="tweaks-sidecar-status"
+            data-testid="sidecar-status-core"
+            data-state={healthState($sidecarHealth.core)}
+          >{formatHealth($sidecarHealth.core)}</span>
+        </div>
+        <div class="tweaks-sidecar-row">
+          <button
+            type="button"
+            class="tweaks-sidecar-btn"
+            data-testid="sidecar-health-agent"
+            on:click={() => dispatch('checkAgent', undefined, { bubbles: true } as never)}
+            disabled={$sidecarChecking.agent}
+          >
+            {$sidecarChecking.agent ? 'Checking…' : 'Check agent'}
+          </button>
+          <span
+            class="tweaks-sidecar-status"
+            data-testid="sidecar-status-agent"
+            data-state={healthState($sidecarHealth.agent)}
+          >{formatHealth($sidecarHealth.agent)}</span>
         </div>
       </div>
 

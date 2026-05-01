@@ -2,9 +2,9 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { get } from 'svelte/store';
 import {
   chatMode, chatDraft, chatMessages, chatPreviewCards,
-  resetChatState, CHAT_ASSISTANT_SEED, CHAT_PREVIEW_SEED, CHAT_PLACEHOLDERS,
+  resetChatState, CHAT_ASSISTANT_SEED, CHAT_PLACEHOLDERS,
   contextSubtextFor, suggestChipsFor, placeholderFor,
-  type ChatMessage, type PreviewCardModel,
+  type PreviewCardModel,
 } from './chat-state';
 
 beforeEach(() => resetChatState());
@@ -141,13 +141,15 @@ describe('chat-state — resetChatState', () => {
     chatMode.set('ask');
     chatDraft.set('hello');
     chatMessages.set([]);
-    chatPreviewCards.set([]);
+    const stubCard: PreviewCardModel = { id: 'p1', title: 't', summary: 's' };
+    chatPreviewCards.set([stubCard]);
 
     resetChatState();
 
     expect(get(chatMode)).toBe('edit');
     expect(get(chatDraft)).toBe('');
     expect(get(chatMessages)).toEqual([CHAT_ASSISTANT_SEED]);
-    expect(get(chatPreviewCards)).toEqual([CHAT_PREVIEW_SEED]);
+    // M-5 fix: preview cards default empty (no fictional rate-limiter seed).
+    expect(get(chatPreviewCards)).toEqual([]);
   });
 });

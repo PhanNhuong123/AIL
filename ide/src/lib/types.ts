@@ -351,3 +351,20 @@ export interface HealthCheckPayload {
   /** Human-readable error. Absent when `ok` is `true`. */
   error?: string;
 }
+
+// === Project scaffolding (closes review finding N2) ===
+// Mirror of crates/ail-ui-bridge/src/types/scaffold.rs. camelCase wire format.
+
+export type QuickCreateKind = 'module' | 'function' | 'rule' | 'test';
+
+export interface ProjectScaffoldRequest {
+  parentDir: string;
+  kind: QuickCreateKind;
+  name: string;
+  description: string;
+}
+
+export interface ProjectScaffoldResult {
+  projectDir: string;
+  ailFile: string;
+}

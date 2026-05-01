@@ -1,11 +1,40 @@
 use std::env;
+use std::io;
 use std::path::PathBuf;
 
 fn main() {
     if let Err(e) = materialize_sidecars() {
-        println!("cargo:warning=sidecar materialization skipped: {e}");
+        // Windows ERROR_SHARING_VIOLATION (raw os error 32) fires when a
+        // running `ail-ide.exe` (e.g. an open dev IDE) holds a lock on the
+        // sidecar binary. The next build picks the file back up and the
+        // missing copy is a no-op-style transient — emit it as a regular
+        // log line instead of a `cargo:warning=` so the dev console stays
+        // quiet (closes review finding **N5**).
+        if is_sharing_violation(e.as_ref()) {
+            println!(
+                "cargo:rustc-env=AIL_SIDECAR_LOCK_NOTICE=1\ncargo:rerun-if-changed=build.rs"
+            );
+            println!(
+                "ail-ide build.rs: sidecar copy skipped (file in use, retry on next build)"
+            );
+        } else {
+            println!("cargo:warning=sidecar materialization skipped: {e}");
+        }
     }
     tauri_build::build();
+}
+
+/// Detect the Windows ERROR_SHARING_VIOLATION (raw os error 32) which
+/// surfaces during dev rebuilds while the previous IDE process still holds
+/// the sidecar file open. Other I/O errors are real and should still warn.
+///
+/// Takes `&(dyn Error + 'static)` (not `&Box<dyn Error>`) so clippy's
+/// `borrowed_box` lint stays clean. The `'static` bound is required by
+/// `downcast_ref`. Callers pass `e.as_ref()` where `e: Box<dyn Error>`.
+fn is_sharing_violation(err: &(dyn std::error::Error + 'static)) -> bool {
+    err.downcast_ref::<io::Error>()
+        .and_then(|e| e.raw_os_error())
+        == Some(32)
 }
 
 /// Copy built sidecar binaries into `binaries/` before Tauri bundles.

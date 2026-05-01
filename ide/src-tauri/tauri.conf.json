@@ -33,7 +33,8 @@
       "../../LICENSE",
       "../../NOTICE",
       "../../THIRD-PARTY-NOTICES.txt",
-      "binaries/ail-agent*"
+      "binaries/ail-agent*",
+      "../../examples/wallet_service/**/*"
     ]
   }
 }

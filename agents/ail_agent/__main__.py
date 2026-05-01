@@ -19,6 +19,47 @@ from ail_agent.registry import get_provider
 _DEFAULT_MODEL = "anthropic:claude-sonnet-4-5"
 
 
+def _force_utf8_io() -> None:
+    """Switch stdout/stderr (and on Windows, the console output code page) to
+    UTF-8 so non-ASCII characters in help text and JSON envelopes survive
+    the platform default (cp1252 on Windows, which mojibakes em-dashes into
+    replacement glyphs).
+
+    Two-step sequence:
+
+    1. On Windows, ask the OS to flip the console output code page to 65001
+       (UTF-8). This affects how the console renders bytes Python writes;
+       without it, even a UTF-8 stream is mis-rendered. ``SetConsoleOutputCP``
+       is a no-op when stdout is redirected to a pipe/file, and may fail
+       silently inside some terminal emulators — that is acceptable, the
+       second step still reduces corruption.
+    2. Reconfigure stdout/stderr to encode with UTF-8 + ``errors='replace'``.
+       Idempotent and a no-op when the streams do not expose
+       ``reconfigure()`` (older runtimes, redirected non-text streams).
+
+    The Tauri IDE sidecar reader already decodes UTF-8 explicitly, so this
+    primarily fixes user-visible output when launching ``ail-agent`` from a
+    plain Windows console.
+    """
+    if sys.platform == "win32":
+        try:
+            import ctypes
+
+            ctypes.windll.kernel32.SetConsoleOutputCP(65001)  # type: ignore[attr-defined]
+        except (OSError, AttributeError):
+            # Non-windll environment / restricted process — drop silently.
+            pass
+
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if callable(reconfigure):
+            try:
+                reconfigure(encoding="utf-8", errors="replace")
+            except (ValueError, OSError, AttributeError):
+                # Non-text stream / closed / unsupported — drop silently.
+                pass
+
+
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="ail_agent",
@@ -99,6 +140,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     Returns the process exit code; the module-level guard calls sys.exit(main()).
     """
+    _force_utf8_io()
     args = _build_parser().parse_args(argv)
     progress: Progress = (
         JsonProgress(run_id=args.run_id) if args.json_events else Progress()

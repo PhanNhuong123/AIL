@@ -1,5 +1,16 @@
 <script lang="ts">
+  import { createEventDispatcher, onMount } from 'svelte';
+  import { get } from 'svelte/store';
   import { welcomeModalOpen } from '$lib/stores';
+
+  // The component dispatches `start` / `open` / `tutorial` events (one per
+  // card). The route shell (`+page.svelte`) owns the actual project loading
+  // because modals must NOT import `$lib/bridge.ts` (modals/CLAUDE.md).
+  // The route closes the modal explicitly via the `welcomeModalOpen` store
+  // after the side-effect resolves so transient failures keep the UI open.
+  // Note: untyped `createEventDispatcher()` because esrap rejects generic
+  // type annotations on it (invariant 16.2-E).
+  const dispatch = createEventDispatcher();
 
   const cards = [
     {
@@ -30,9 +41,15 @@
     welcomeModalOpen.set(false);
   }
 
+  // Note: param types omitted because esrap rejects them in `.svelte`
+  // script blocks (invariant 16.2-E). `key` is a string from `card.key`.
+  // Pass `{ bubbles: true }` so tests + parents that listen via DOM
+  // `addEventListener` (rather than the deprecated `$on`) still receive
+  // the event — Svelte 5's `createEventDispatcher` defaults to non-bubbling.
+  // The `as never` cast bypasses the incomplete `DispatchOptions` TS type
+  // (it omits `bubbles` though the runtime supports it).
   function onCard(key) {
-    console.info('[phase-17-stub] welcome:', key);
-    close();
+    dispatch(key, undefined, { bubbles: true } as never);
   }
 
   function handleBackdrop(e) {
@@ -40,6 +57,26 @@
       close();
     }
   }
+
+  // ESC closes the Welcome modal. The listener is attached for the component
+  // lifetime (the modal stays mounted under `{#if $welcomeModalOpen}` from
+  // routes/+page.svelte's perspective the wrapper component is always
+  // present), and gates on the open store so ESC is a no-op when the modal
+  // is hidden. Compatible with invariant 15.11-B: the listener triggers only
+  // the close path, never the open path.
+  onMount(() => {
+    function handleKey(e) {
+      if (e.key === 'Escape' && get(welcomeModalOpen)) close();
+    }
+    if (typeof document !== 'undefined') {
+      document.addEventListener('keydown', handleKey);
+    }
+    return () => {
+      if (typeof document !== 'undefined') {
+        document.removeEventListener('keydown', handleKey);
+      }
+    };
+  });
 </script>
 
 {#if $welcomeModalOpen}
@@ -73,9 +110,10 @@
           <button
             class="welcome-card"
             data-testid="welcome-card-{card.key}"
+            aria-label="{card.title} — {card.blurb}"
             on:click={() => onCard(card.key)}
           >
-            <span class="welcome-icon">{card.icon}</span>
+            <span class="welcome-icon" aria-hidden="true">{card.icon}</span>
             <span class="welcome-title">{card.title}</span>
             <span class="welcome-blurb">{card.blurb}</span>
           </button>

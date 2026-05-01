@@ -106,6 +106,11 @@ beforeEach(() => {
   quickCreateModalOpen.set(false);
   welcomeModalOpen.set(false);
   tweaksPanelOpen.set(false);
+  // The route auto-opens the Welcome modal on first launch when no project
+  // is loaded and the user hasn't dismissed it (closes review finding N1).
+  // Suppress the auto-open in shell/layout tests by pre-marking dismissed
+  // — a dedicated test below covers the auto-open behaviour itself.
+  localStorage.setItem('ail3_welcome_dismissed_v1', 'true');
   resetChatState();
   resetSidebarState();
   resetVerifyState();
@@ -440,10 +445,11 @@ describe('+page.svelte — task 16.1 agent listener wiring', () => {
 
     expect(get(chatPreviewCards).find((c) => c.id === 'm-prev')).toBeDefined();
 
-    // The agent-message handler appended the new card AFTER the seed card.
-    // Click the LAST Confirm button so we operate on the patch-bearing card.
+    // M-5: default `chatPreviewCards` is empty (seed card removed); the only
+    // card present is the one the agent-message handler just appended. Click
+    // the LAST Confirm button to operate on the patch-bearing card.
     const confirmBtns = container.querySelectorAll('[data-testid="chat-preview-confirm"]');
-    expect(confirmBtns.length).toBeGreaterThanOrEqual(2);
+    expect(confirmBtns.length).toBeGreaterThanOrEqual(1);
     fireEvent.click(confirmBtns[confirmBtns.length - 1] as HTMLButtonElement);
     await tick();
 
@@ -470,9 +476,10 @@ describe('+page.svelte — task 16.1 agent listener wiring', () => {
     await tick();
     const modulesBefore = [...(get(graph)?.modules ?? [])];
 
-    // Dismiss the LAST card (the one we just added).
+    // M-5: default `chatPreviewCards` is empty; only the appended card is
+    // present. Dismiss the LAST card (the one we just added).
     const discardBtns = container.querySelectorAll('[data-testid="chat-preview-discard"]');
-    expect(discardBtns.length).toBeGreaterThanOrEqual(2);
+    expect(discardBtns.length).toBeGreaterThanOrEqual(1);
     fireEvent.click(discardBtns[discardBtns.length - 1] as HTMLButtonElement);
     await tick();
 
@@ -1081,5 +1088,44 @@ describe('+page.svelte — Phase E verifier wiring (task 16.3)', () => {
     expect(get(nodeCodeLang)).toBe('typescript');
     expect(get(chatMessages).length).toBe(beforeChatCount);
     expect(get(graph)?.modules.length).toBe(modulesBefore);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Welcome auto-open (closes review finding N1)
+// ---------------------------------------------------------------------------
+
+describe('+page.svelte — Welcome auto-open', () => {
+  it('opens Welcome on first launch when no project is loaded', async () => {
+    localStorage.removeItem('ail3_welcome_dismissed_v1');
+    graph.set(null);
+    welcomeModalOpen.set(false);
+
+    render(Page);
+    await tick();
+
+    expect(get(welcomeModalOpen)).toBe(true);
+  });
+
+  it('does not auto-open when the user has previously dismissed', async () => {
+    localStorage.setItem('ail3_welcome_dismissed_v1', 'true');
+    graph.set(null);
+    welcomeModalOpen.set(false);
+
+    render(Page);
+    await tick();
+
+    expect(get(welcomeModalOpen)).toBe(false);
+  });
+
+  it('does not auto-open when a project is already loaded', async () => {
+    localStorage.removeItem('ail3_welcome_dismissed_v1');
+    graph.set(emptyGraph('p_existing'));
+    welcomeModalOpen.set(false);
+
+    render(Page);
+    await tick();
+
+    expect(get(welcomeModalOpen)).toBe(false);
   });
 });

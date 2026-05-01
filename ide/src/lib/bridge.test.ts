@@ -20,6 +20,11 @@ import {
   cancelAgentRun,
   runVerifier,
   cancelVerifierRun,
+  scaffoldProject,
+  getTutorialPath,
+  healthCheckCore,
+  healthCheckAgent,
+  SIDECAR_BROWSER_PREVIEW_MESSAGE,
   onGraphUpdated,
   onVerifyComplete,
   onCoverageComplete,
@@ -29,7 +34,7 @@ import {
   onSheafComplete,
   EVENTS,
 } from './bridge';
-import type { AgentRunRequest, FlowchartJson, VerifierScopeRequest, VerifyCompletePayload } from './types';
+import type { AgentRunRequest, FlowchartJson, ProjectScaffoldRequest, VerifierScopeRequest, VerifyCompletePayload } from './types';
 
 describe('bridge.ts invoke wrappers', () => {
   beforeEach(() => {
@@ -120,6 +125,30 @@ describe('bridge.ts invoke wrappers', () => {
     const result = await cancelVerifierRun('vr-7');
     expect(invoke).toHaveBeenCalledWith('cancel_verifier_run', { runId: 'vr-7' });
     expect(result).toEqual({ cancelled: true });
+  });
+
+  it('scaffoldProject forwards request under key "request"', async () => {
+    const request: ProjectScaffoldRequest = {
+      parentDir: '/tmp',
+      kind: 'module',
+      name: 'wallet',
+      description: 'demo',
+    };
+    invoke.mockResolvedValueOnce({
+      projectDir: '/tmp/wallet',
+      ailFile: '/tmp/wallet/src/wallet.ail',
+    });
+    const result = await scaffoldProject(request);
+    expect(invoke).toHaveBeenCalledWith('scaffold_project', { request });
+    expect(result.projectDir).toBe('/tmp/wallet');
+    expect(result.ailFile).toBe('/tmp/wallet/src/wallet.ail');
+  });
+
+  it('getTutorialPath invokes get_tutorial_path with no args', async () => {
+    invoke.mockResolvedValueOnce('/tmp/examples/wallet_service');
+    const path = await getTutorialPath();
+    expect(invoke).toHaveBeenCalledWith('get_tutorial_path');
+    expect(path).toBe('/tmp/examples/wallet_service');
   });
 });
 
@@ -218,5 +247,17 @@ describe('bridge.ts event listeners outside Tauri (M2 guard)', () => {
     expect(listen).not.toHaveBeenCalled();
     expect(typeof unlisten).toBe('function');
     expect(() => unlisten()).not.toThrow();
+  });
+
+  // M2 extension — sidecar health wrappers must reject with a friendly message
+  // instead of letting `invoke()` throw a raw `TypeError: Cannot read
+  // properties of undefined (reading 'invoke')` that leaks into the Tweaks UI.
+  it.each([
+    ['healthCheckCore', healthCheckCore],
+    ['healthCheckAgent', healthCheckAgent],
+  ] as const)('%s rejects with friendly message and does not call invoke()', async (_name, fn) => {
+    invoke.mockReset();
+    await expect(fn()).rejects.toThrow(SIDECAR_BROWSER_PREVIEW_MESSAGE);
+    expect(invoke).not.toHaveBeenCalled();
   });
 });

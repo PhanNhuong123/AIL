@@ -1,12 +1,22 @@
 <script lang="ts">
+  import { createEventDispatcher, onMount } from 'svelte';
+  import { get } from 'svelte/store';
   import { quickCreateModalOpen } from '$lib/stores';
 
   // Component-local form state — reset on every close
-  type QcKind = 'module' | 'function' | 'rule' | 'test';
-  let kind = 'module' as QcKind;
-  const KINDS = ['module', 'function', 'rule', 'test'] as QcKind[];
+  let kind = 'module';
+  const KINDS = ['module', 'function', 'rule', 'test'];
   let name = '';
   let description = '';
+
+  // The component dispatches `create` / `createAi` events with the form
+  // payload `{ kind, name, description }`. The route shell (`+page.svelte`)
+  // owns scaffolding/agent calls because modals must NOT import
+  // `$lib/bridge.ts` (modals/CLAUDE.md). `cancel` is also dispatched so
+  // consumers can react (e.g. test snapshotting).
+  // Note: untyped `createEventDispatcher()` because esrap rejects generic
+  // type annotations on it (invariant 16.2-E).
+  const dispatch = createEventDispatcher();
 
   // ---------------------------------------------------------------------------
   // Handlers
@@ -19,19 +29,28 @@
     quickCreateModalOpen.set(false);
   }
 
+  // Pass `{ bubbles: true }` on every dispatch so DOM-level
+  // `addEventListener` ancestors (and tests) catch the event — Svelte 5's
+  // `createEventDispatcher` defaults to non-bubbling.
+  // The `as never` cast bypasses the incomplete `DispatchOptions` TS type
+  // (it omits `bubbles` though the runtime supports it).
+  const BUBBLE = { bubbles: true } as never;
+
+  function snapshot() {
+    return { kind, name, description };
+  }
+
   function handleCancel() {
-    console.info('[phase-17-stub] quick-create: cancel');
+    dispatch('cancel', undefined, BUBBLE);
     close();
   }
 
   function handleCreate() {
-    console.info('[phase-17-stub] quick-create', { kind, name, description });
-    close();
+    dispatch('create', snapshot(), BUBBLE);
   }
 
   function handleCreateAI() {
-    console.info('[phase-17-stub] quick-create-ai', { kind, name, description });
-    close();
+    dispatch('createAi', snapshot(), BUBBLE);
   }
 
   function handleBackdrop(e) {
@@ -39,6 +58,25 @@
       close();
     }
   }
+
+  // ESC closes the Quick Create modal. The listener is attached for the
+  // component lifetime and gates on the open store so ESC is a no-op when the
+  // modal is hidden. Compatible with invariant 15.11-B: the listener triggers
+  // only the close path, never the open path. Cmd/Ctrl+K open shortcut stays
+  // owned by TitleBar.svelte::openQuickCreate (15.3-B).
+  onMount(() => {
+    function handleKey(e) {
+      if (e.key === 'Escape' && get(quickCreateModalOpen)) close();
+    }
+    if (typeof document !== 'undefined') {
+      document.addEventListener('keydown', handleKey);
+    }
+    return () => {
+      if (typeof document !== 'undefined') {
+        document.removeEventListener('keydown', handleKey);
+      }
+    };
+  });
 </script>
 
 {#if $quickCreateModalOpen}
@@ -80,21 +118,25 @@
             >{k}</button>
           {/each}
         </div>
-        <label>
+        <label for="qc-name-input">
           Name
           <input
+            id="qc-name-input"
             type="text"
             data-testid="qc-name"
             bind:value={name}
             placeholder="Node or module name"
+            aria-label="Name"
           />
         </label>
-        <label>
+        <label for="qc-description-input">
           Description
           <textarea
+            id="qc-description-input"
             data-testid="qc-description"
             bind:value={description}
             placeholder="What it does"
+            aria-label="Description"
           ></textarea>
         </label>
       </div>

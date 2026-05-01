@@ -36,9 +36,13 @@ pub mod commands;
 #[cfg(all(feature = "tauri-commands", feature = "embeddings"))]
 pub mod reviewer;
 #[cfg(feature = "tauri-commands")]
+pub mod scaffold;
+#[cfg(feature = "tauri-commands")]
 pub mod sheaf;
 #[cfg(feature = "tauri-commands")]
 pub mod sidecar;
+#[cfg(feature = "tauri-commands")]
+pub mod tutorial;
 #[cfg(feature = "tauri-commands")]
 pub mod verifier;
 #[cfg(feature = "tauri-commands")]
@@ -71,6 +75,7 @@ pub use types::{
     },
     patch::{FunctionPatchEntry, FunctionRemoval, GraphPatchJson, StepPatchEntry, StepRemoval},
     reviewer_result::{CoverageCompletePayload, ReviewerCancelResult},
+    scaffold::{ProjectScaffoldRequest, ProjectScaffoldResult},
     sheaf::{SheafCancelResult, SheafCompletePayload, SheafConflictEntry},
     sidecar_result::{HealthCheckPayload, SidecarMode},
     status::Status,

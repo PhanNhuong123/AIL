@@ -4,11 +4,15 @@ import { tick } from 'svelte';
 import { get } from 'svelte/store';
 import TweaksPanel from './TweaksPanel.svelte';
 import { tweaksPanelOpen, theme, density } from '$lib/stores';
+import {
+  sidecarHealth, sidecarChecking, resetSidecarState,
+} from '$lib/sidecar/sidecar-state';
 
 beforeEach(() => {
   tweaksPanelOpen.set(false);
   theme.set('dark');
   density.set('comfortable');
+  resetSidecarState();
 });
 
 afterEach(() => {
@@ -131,4 +135,99 @@ test('outside-click skips when target is the TitleBar gear button (clean toggle)
   // Panel must still be open — TitleBar's click handler will toggle it
   expect(get(tweaksPanelOpen)).toBe(true);
   document.body.removeChild(fakeGear);
+});
+
+// -------------------------------------------------------------------------
+// N3 — Sidecar health buttons (closes review finding N3)
+// -------------------------------------------------------------------------
+
+describe('TweaksPanel sidecar section', () => {
+  it('renders both Check buttons in the Sidecars section', async () => {
+    tweaksPanelOpen.set(true);
+    const { container } = render(TweaksPanel);
+    await tick();
+
+    expect(container.querySelector('[data-testid="tweaks-sidecar-section"]')).not.toBeNull();
+    expect(container.querySelector('[data-testid="sidecar-health-core"]')).not.toBeNull();
+    expect(container.querySelector('[data-testid="sidecar-health-agent"]')).not.toBeNull();
+  });
+
+  it('shows "not checked" status when no payload has been recorded', async () => {
+    tweaksPanelOpen.set(true);
+    const { container } = render(TweaksPanel);
+    await tick();
+
+    const coreStatus = container.querySelector('[data-testid="sidecar-status-core"]')!;
+    expect(coreStatus.textContent).toContain('not checked');
+    expect(coreStatus.getAttribute('data-state')).toBe('idle');
+  });
+
+  // Dispatch -> parent wiring is exercised in routes/layout.test.ts via
+  // `+page.svelte`. Here we only assert that clicking the buttons triggers
+  // their on:click handler at the DOM level (no exception, button toggles).
+
+  it('clicking Check core does not throw and the panel stays open', async () => {
+    tweaksPanelOpen.set(true);
+    const { container } = render(TweaksPanel);
+    await tick();
+
+    await fireEvent.click(container.querySelector('[data-testid="sidecar-health-core"]')!);
+    await tick();
+
+    expect(get(tweaksPanelOpen)).toBe(true);
+  });
+
+  it('clicking Check agent does not throw and the panel stays open', async () => {
+    tweaksPanelOpen.set(true);
+    const { container } = render(TweaksPanel);
+    await tick();
+
+    await fireEvent.click(container.querySelector('[data-testid="sidecar-health-agent"]')!);
+    await tick();
+
+    expect(get(tweaksPanelOpen)).toBe(true);
+  });
+
+  it('button is disabled and shows "Checking…" while a check is in flight', async () => {
+    tweaksPanelOpen.set(true);
+    sidecarChecking.set({ core: true, agent: false });
+    const { container } = render(TweaksPanel);
+    await tick();
+
+    const coreBtn = container.querySelector('[data-testid="sidecar-health-core"]') as HTMLButtonElement;
+    expect(coreBtn.disabled).toBe(true);
+    expect(coreBtn.textContent?.trim()).toBe('Checking…');
+
+    const agentBtn = container.querySelector('[data-testid="sidecar-health-agent"]') as HTMLButtonElement;
+    expect(agentBtn.disabled).toBe(false);
+  });
+
+  it('renders ok payload as mode + version with data-state="ok"', async () => {
+    tweaksPanelOpen.set(true);
+    sidecarHealth.set({
+      core: { component: 'ail-core', ok: true, mode: 'dev', version: '0.1.0' },
+      agent: null,
+    });
+    const { container } = render(TweaksPanel);
+    await tick();
+
+    const coreStatus = container.querySelector('[data-testid="sidecar-status-core"]')!;
+    expect(coreStatus.textContent).toContain('dev');
+    expect(coreStatus.textContent).toContain('0.1.0');
+    expect(coreStatus.getAttribute('data-state')).toBe('ok');
+  });
+
+  it('renders failed payload as error with data-state="fail"', async () => {
+    tweaksPanelOpen.set(true);
+    sidecarHealth.set({
+      core: null,
+      agent: { component: 'ail-agent', ok: false, mode: 'dev', error: 'spawn failed' },
+    });
+    const { container } = render(TweaksPanel);
+    await tick();
+
+    const agentStatus = container.querySelector('[data-testid="sidecar-status-agent"]')!;
+    expect(agentStatus.textContent).toContain('spawn failed');
+    expect(agentStatus.getAttribute('data-state')).toBe('fail');
+  });
 });

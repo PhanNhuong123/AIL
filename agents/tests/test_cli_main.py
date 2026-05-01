@@ -1,13 +1,14 @@
 """pytest tests for the ail_agent.__main__ CLI entry point (task 14.3 step 12)."""
 from __future__ import annotations
 
+import sys
 from io import StringIO
 from typing import Any
 from unittest.mock import MagicMock, Mock, call, patch
 
 import pytest
 
-from ail_agent.__main__ import main
+from ail_agent.__main__ import _force_utf8_io, main
 from ail_agent.errors import AgentError, MCPConnectionError, ProviderConfigError
 
 
@@ -289,3 +290,36 @@ def test_main_streams_progress_done(
 
     # Done path must call progress.done()
     progress_instance.done.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# 12. _force_utf8_io reconfigures stdout/stderr to UTF-8 (L-3 fix)
+# ---------------------------------------------------------------------------
+
+def test_force_utf8_io_calls_reconfigure_with_utf8():
+    """_force_utf8_io must call .reconfigure(encoding='utf-8', errors='replace')
+    on stdout and stderr so non-ASCII characters (em-dash in --help text,
+    JSON envelopes) survive the platform default code page."""
+    fake_stdout = MagicMock(spec=["reconfigure"])
+    fake_stderr = MagicMock(spec=["reconfigure"])
+    with patch.object(sys, "stdout", fake_stdout), patch.object(sys, "stderr", fake_stderr):
+        _force_utf8_io()
+    fake_stdout.reconfigure.assert_called_once_with(encoding="utf-8", errors="replace")
+    fake_stderr.reconfigure.assert_called_once_with(encoding="utf-8", errors="replace")
+
+
+def test_force_utf8_io_is_safe_when_reconfigure_missing():
+    """Streams without reconfigure() (older Pythons, redirected non-text
+    streams) must be a silent no-op rather than raising AttributeError."""
+    plain = object()  # no .reconfigure attribute
+    with patch.object(sys, "stdout", plain), patch.object(sys, "stderr", plain):
+        _force_utf8_io()  # must not raise
+
+
+def test_force_utf8_io_swallows_reconfigure_errors():
+    """If reconfigure() raises (closed stream, unsupported encoding) the
+    helper drops the error silently to keep CLI startup robust."""
+    failing = MagicMock(spec=["reconfigure"])
+    failing.reconfigure.side_effect = ValueError("nope")
+    with patch.object(sys, "stdout", failing), patch.object(sys, "stderr", failing):
+        _force_utf8_io()  # must not raise

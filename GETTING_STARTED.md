@@ -204,6 +204,15 @@ report the broken contract and a counterexample.
 ail status    # show pipeline stage reached and graph statistics
 ```
 
+> **Scope tip (closes review finding F1).** `ail verify [path]` in v0.1 always
+> verifies the **whole project**; the `path` argument selects the project
+> root, not a node-level filter. Run it from inside the project directory
+> (the one containing `ail.config.toml`), not from a parent workspace that
+> contains multiple projects — otherwise the CLI will scan every `.ail`
+> file it can reach (including any test fixtures in sibling crates) and may
+> surface unrelated errors. The IDE always invokes the verifier with an
+> explicit project root, so this only matters for terminal use.
+
 ---
 
 ## 7. Run Generated Tests

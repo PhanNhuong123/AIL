@@ -18,7 +18,12 @@ describe('QuickCreateModal.svelte', () => {
     expect(container.querySelector('[data-testid="qc-backdrop"]')).not.toBeNull();
   });
 
-  it('cancel button closes modal', async () => {
+  // Svelte 5 `createEventDispatcher` only delivers events when a parent
+  // template registered `on:event=` handlers. Isolated mounts can't observe
+  // the dispatch directly, so unit tests pin the modal-side side effects;
+  // dispatch -> parent wiring is verified from routes/layout.test.ts.
+
+  it('cancel button closes the modal locally', async () => {
     quickCreateModalOpen.set(true);
     const { container } = render(QuickCreateModal);
     await tick();
@@ -29,7 +34,7 @@ describe('QuickCreateModal.svelte', () => {
     expect(get(quickCreateModalOpen)).toBe(false);
   });
 
-  it('create button closes modal (phase-17 stub)', async () => {
+  it('Create button does NOT auto-close the modal (route closes after scaffoldProject)', async () => {
     quickCreateModalOpen.set(true);
     const { container } = render(QuickCreateModal);
     await tick();
@@ -37,10 +42,10 @@ describe('QuickCreateModal.svelte', () => {
     await fireEvent.click(container.querySelector('[data-testid="qc-create"]')!);
     await tick();
 
-    expect(get(quickCreateModalOpen)).toBe(false);
+    expect(get(quickCreateModalOpen)).toBe(true);
   });
 
-  it('create-with-ai button closes modal', async () => {
+  it('Create with AI button does NOT auto-close the modal (route closes after runAgent)', async () => {
     quickCreateModalOpen.set(true);
     const { container } = render(QuickCreateModal);
     await tick();
@@ -48,14 +53,14 @@ describe('QuickCreateModal.svelte', () => {
     await fireEvent.click(container.querySelector('[data-testid="qc-create-ai"]')!);
     await tick();
 
-    expect(get(quickCreateModalOpen)).toBe(false);
+    expect(get(quickCreateModalOpen)).toBe(true);
   });
 
   // -------------------------------------------------------------------------
   // Invariant 15.11-B: canonical modal trigger ownership
   // -------------------------------------------------------------------------
 
-  it('invariant 15.11-B: does not register a global keydown listener that opens modals', async () => {
+  it('invariant 15.11-B: does not register a global window keydown listener that opens modals', async () => {
     const spy = vi.spyOn(window, 'addEventListener');
     quickCreateModalOpen.set(true);
     render(QuickCreateModal);
@@ -64,6 +69,28 @@ describe('QuickCreateModal.svelte', () => {
     const keydownCalls = spy.mock.calls.filter((c) => c[0] === 'keydown');
     expect(keydownCalls).toHaveLength(0);
     spy.mockRestore();
+  });
+
+  it('ESC key closes the modal when open', async () => {
+    quickCreateModalOpen.set(true);
+    render(QuickCreateModal);
+    await tick();
+
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    await tick();
+
+    expect(get(quickCreateModalOpen)).toBe(false);
+  });
+
+  it('ESC key is a no-op when the modal is closed', async () => {
+    quickCreateModalOpen.set(false);
+    render(QuickCreateModal);
+    await tick();
+
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    await tick();
+
+    expect(get(quickCreateModalOpen)).toBe(false);
   });
 });
 
@@ -95,19 +122,33 @@ test('kind resets to module after close', async () => {
   expect(moduleBtn?.getAttribute('aria-pressed')).toBe('true');
 });
 
-test('kind is included in create handler payload', async () => {
-  const spy = vi.spyOn(console, 'info').mockImplementation(() => {});
+test('form state stays bound to inputs across kind selection', async () => {
+  // Cannot observe the dispatched payload directly in an isolated mount
+  // (Svelte 5 createEventDispatcher quirk — see comment above). Instead,
+  // verify the visible form state — which is what the dispatch payload
+  // snapshots — survives a kind toggle without being reset.
   quickCreateModalOpen.set(true);
   const { container } = render(QuickCreateModal);
   await tick();
+
   const ruleBtn = container.querySelector('[data-testid="qc-kind-btn-rule"]') as HTMLButtonElement;
   await fireEvent.click(ruleBtn);
+  expect(ruleBtn.getAttribute('aria-pressed')).toBe('true');
+
+  const nameInput = container.querySelector('[data-testid="qc-name"]') as HTMLInputElement;
+  await fireEvent.input(nameInput, { target: { value: 'wallet' } });
+  expect(nameInput.value).toBe('wallet');
+
+  const descInput = container.querySelector('[data-testid="qc-description"]') as HTMLTextAreaElement;
+  await fireEvent.input(descInput, { target: { value: 'Demo wallet' } });
+  expect(descInput.value).toBe('Demo wallet');
+
+  // Click Create — modal stays open (route owns the close), and form state
+  // remains intact for the route handler's snapshot.
   const createBtn = container.querySelector('[data-testid="qc-create"]') as HTMLButtonElement;
-  if (createBtn) await fireEvent.click(createBtn);
+  await fireEvent.click(createBtn);
   await tick();
-  // Verify the payload included kind: 'rule'
-  const calls = spy.mock.calls.find((c) => typeof c[0] === 'string' && c[0].includes('quick-create'));
-  expect(calls).toBeDefined();
-  expect(calls?.[1]).toMatchObject({ kind: 'rule' });
-  spy.mockRestore();
+  expect(nameInput.value).toBe('wallet');
+  expect(descInput.value).toBe('Demo wallet');
+  expect(ruleBtn.getAttribute('aria-pressed')).toBe('true');
 });

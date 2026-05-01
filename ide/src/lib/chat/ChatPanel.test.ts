@@ -16,9 +16,19 @@ import { graph, selection, path, activeLens, overlays } from '$lib/stores';
 import {
   chatMode, chatDraft, chatMessages, chatPreviewCards,
   isAgentRunning, currentRunId,
-  resetChatState, CHAT_ASSISTANT_SEED, CHAT_PREVIEW_SEED, CHAT_PLACEHOLDERS,
+  resetChatState, CHAT_ASSISTANT_SEED, CHAT_PLACEHOLDERS,
+  type PreviewCardModel,
 } from './chat-state';
 import ChatPanel from './ChatPanel.svelte';
+
+// M-5: preview-card UI tests inject this fixture instead of relying on a
+// fictional rate-limiter seed previously baked into chat-state. The seed
+// misled users on an empty workspace; default `chatPreviewCards` is now [].
+const PREVIEW_FIXTURE: PreviewCardModel = {
+  id: 'preview-fixture-1',
+  title: 'Proposed: add validator before transfer',
+  summary: 'Inserts Validator node before Billing.transfer.',
+};
 
 beforeEach(() => {
   invoke.mockReset();
@@ -115,12 +125,23 @@ describe('ChatPanel.svelte', () => {
     expect(invoke).not.toHaveBeenCalled();
   });
 
-  it('test_preview_card_renders_seed', async () => {
+  it('test_preview_card_default_empty', async () => {
+    // M-5: default state has zero preview cards. The previous fictional
+    // rate-limiter seed was removed because it implied a real rule on empty
+    // projects.
+    const { container } = render(ChatPanel);
+    await tick();
+    const cards = container.querySelectorAll('[data-testid="chat-preview-card"]');
+    expect(cards.length).toBe(0);
+  });
+
+  it('test_preview_card_renders_when_present', async () => {
+    chatPreviewCards.set([PREVIEW_FIXTURE]);
     const { container } = render(ChatPanel);
     await tick();
     const cards = container.querySelectorAll('[data-testid="chat-preview-card"]');
     expect(cards.length).toBe(1);
-    expect(cards[0].textContent).toContain(CHAT_PREVIEW_SEED.title);
+    expect(cards[0].textContent).toContain(PREVIEW_FIXTURE.title);
   });
 
   it('test_preview_confirm_does_not_mutate_cards_or_invoke_bridge', async () => {
@@ -128,6 +149,7 @@ describe('ChatPanel.svelte', () => {
     // remove preview cards directly. Parent (+page.svelte) handles that
     // on `previewapply`. The actual dispatch -> parent wiring is covered
     // in src/routes/page.test.ts.
+    chatPreviewCards.set([PREVIEW_FIXTURE]);
     const { container } = render(ChatPanel);
     await tick();
     const cardsBefore = get(chatPreviewCards).length;
@@ -139,17 +161,19 @@ describe('ChatPanel.svelte', () => {
   });
 
   it('test_preview_adjust_quotes_summary_into_draft', async () => {
+    chatPreviewCards.set([PREVIEW_FIXTURE]);
     const { container } = render(ChatPanel);
     await tick();
     fireEvent.click(container.querySelector('[data-testid="chat-preview-adjust"]') as HTMLButtonElement);
     await tick();
-    expect(get(chatDraft)).toBe(CHAT_PREVIEW_SEED.summary);
+    expect(get(chatDraft)).toBe(PREVIEW_FIXTURE.summary);
     // Card stays visible (Refine does not remove it; user edits + sends).
     expect(get(chatPreviewCards).length).toBe(1);
   });
 
   it('test_preview_discard_does_not_mutate_cards_directly', async () => {
     // Discard is delegated via `previewdismiss`; parent removes the card.
+    chatPreviewCards.set([PREVIEW_FIXTURE]);
     const { container } = render(ChatPanel);
     await tick();
     const cardsBefore = get(chatPreviewCards).length;

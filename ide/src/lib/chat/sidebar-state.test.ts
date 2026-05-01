@@ -7,9 +7,12 @@ import {
   initSidebarState,
   registerSidebarSlot,
   resetSidebarState,
+  getWelcomeDismissed,
+  setWelcomeDismissed,
 } from './sidebar-state';
 
 const STORAGE_KEY = 'ail3_sidebar_v1';
+const WELCOME_KEY = 'ail3_welcome_dismissed_v1';
 
 beforeEach(() => {
   resetSidebarState();
@@ -146,6 +149,39 @@ describe('sidebar-state — html class', () => {
 // ---------------------------------------------------------------------------
 // reset
 // ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// welcome-dismissed flag (15.12-B extension)
+// ---------------------------------------------------------------------------
+
+describe('sidebar-state — welcome-dismissed flag', () => {
+  test('default is false when key absent', () => {
+    expect(getWelcomeDismissed()).toBe(false);
+  });
+
+  test('setWelcomeDismissed(true) writes to localStorage and is readable', () => {
+    setWelcomeDismissed(true);
+    expect(localStorage.getItem(WELCOME_KEY)).toBe('true');
+    expect(getWelcomeDismissed()).toBe(true);
+  });
+
+  test('setWelcomeDismissed(false) removes the key', () => {
+    setWelcomeDismissed(true);
+    setWelcomeDismissed(false);
+    expect(localStorage.getItem(WELCOME_KEY)).toBeNull();
+    expect(getWelcomeDismissed()).toBe(false);
+  });
+
+  test('welcome-dismissed key is independent of sidebar STORAGE_KEY', () => {
+    setWelcomeDismissed(true);
+    initSidebarState();
+    sidebarCollapsed.set(true);
+    sidebarActiveTab.set('inspector');
+    const sidebarRaw = JSON.parse(localStorage.getItem(STORAGE_KEY)!);
+    expect(sidebarRaw).toEqual({ collapsed: true, activeTab: 'inspector' });
+    expect(localStorage.getItem(WELCOME_KEY)).toBe('true');
+  });
+});
 
 describe('sidebar-state — reset', () => {
   test('resetSidebarState clears all stores', () => {

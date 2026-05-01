@@ -86,13 +86,7 @@ export interface SuggestChip {
 export const CHAT_ASSISTANT_SEED: ChatMessage = {
   id: 'chat-seed-assistant-1',
   role: 'assistant',
-  text: 'Hi — I see Check Balance has a failing rule. Ask me to fix it, or drill in to see the counterexample.',
-};
-
-export const CHAT_PREVIEW_SEED: PreviewCardModel = {
-  id: 'chat-seed-preview-1',
-  title: 'Proposed: add rate limiter before transfer',
-  summary: 'Inserts RateLimiter node with 5 req/s before Billing.transfer.',
+  text: 'Hi — I am your AIL assistant. Open or create a project, then ask me to explain, verify, or modify it.',
 };
 
 export const CHAT_PLACEHOLDERS: Record<ChatMode, string> = {
@@ -108,7 +102,10 @@ export const CHAT_PLACEHOLDERS: Record<ChatMode, string> = {
 export const chatMode:         Writable<ChatMode>           = writable('edit');
 export const chatDraft:        Writable<string>             = writable('');
 export const chatMessages:     Writable<ChatMessage[]>      = writable([CHAT_ASSISTANT_SEED]);
-export const chatPreviewCards: Writable<PreviewCardModel[]> = writable([CHAT_PREVIEW_SEED]);
+// Preview cards default empty: live cards arrive from the agent stream
+// (`onAgentMessage` preview append). The previous seed card referenced a
+// fictional rate-limiter rule which misled users on an empty workspace.
+export const chatPreviewCards: Writable<PreviewCardModel[]> = writable([]);
 export const isAgentRunning:   Writable<boolean>            = writable(false);
 export const currentRunId:     Writable<string | null>      = writable(null);
 
@@ -120,7 +117,7 @@ export function resetChatState(): void {
   chatMode.set('edit');
   chatDraft.set('');
   chatMessages.set([CHAT_ASSISTANT_SEED]);
-  chatPreviewCards.set([CHAT_PREVIEW_SEED]);
+  chatPreviewCards.set([]);
   isAgentRunning.set(false);
   currentRunId.set(null);
 }

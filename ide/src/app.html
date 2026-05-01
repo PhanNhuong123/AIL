@@ -3,6 +3,11 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!-- inline empty data URI silences the SvelteKitError 404 for
+         /favicon.ico in dev (closes review finding N4) without forcing a
+         static asset. Real branding can be slotted in later by adding
+         `static/favicon.svg` and replacing this href. -->
+    <link rel="icon" href="data:," />
     %sveltekit.head%
   </head>
   <body data-sveltekit-preload-data="hover">

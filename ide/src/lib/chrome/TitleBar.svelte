@@ -1,10 +1,14 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { createEventDispatcher, onMount } from 'svelte';
   import { graph, path, tweaksPanelOpen, activeLens, quickCreateModalOpen } from '$lib/stores';
   import type { Lens } from '$lib/stores';
   import { countPills, breadcrumbs } from './rollup';
   import TrafficLights from './TrafficLights.svelte';
   import Icon from '$lib/icons/Icon.svelte';
+
+  // The "Open" button delegates to routes/+page.svelte, which owns
+  // openProjectDialog + loadProject (chrome must not call bridge.ts directly).
+  const dispatch = createEventDispatcher();
 
   const isMac = typeof navigator !== 'undefined' && navigator.platform.includes('Mac');
   const LENSES = ['structure', 'rules', 'verify', 'data', 'tests'] as const;
@@ -26,6 +30,10 @@
 
   function openQuickCreate() {
     quickCreateModalOpen.set(true);
+  }
+
+  function openProject() {
+    dispatch('openProject', undefined, { bubbles: true } as never);
   }
 
   onMount(() => {
@@ -104,6 +112,17 @@
       {/if}
     </div>
   {/if}
+
+  <button
+    type="button"
+    class="open-btn"
+    data-testid="open-btn"
+    on:click={openProject}
+    aria-label="Open project"
+    title="Open an existing .ail project"
+  >
+    Open
+  </button>
 
   <button
     type="button"
@@ -253,6 +272,27 @@
   .pill-issues {
     background: color-mix(in srgb, var(--warn) 15%, transparent);
     color: var(--warn);
+  }
+
+  .open-btn {
+    display: flex;
+    align-items: center;
+    height: 24px;
+    padding: 0 10px;
+    margin-right: 4px;
+    background: var(--surface-3);
+    color: var(--ink-2);
+    border: 1px solid var(--line-2);
+    border-radius: var(--radius-sm);
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+
+  .open-btn:hover {
+    color: var(--ink);
+    border-color: var(--accent);
   }
 
   .new-btn {

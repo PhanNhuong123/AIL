@@ -438,6 +438,8 @@ pub fn get_handler<R: tauri::Runtime>(
         crate::sheaf::cancel_sheaf_analysis,
         crate::sidecar::health_check_core,
         crate::sidecar::health_check_agent,
+        crate::scaffold::scaffold_project,
+        crate::tutorial::get_tutorial_path,
     ]
 }
 
@@ -462,5 +464,7 @@ pub fn get_handler<R: tauri::Runtime>(
         crate::reviewer::cancel_reviewer_run,
         crate::sidecar::health_check_core,
         crate::sidecar::health_check_agent,
+        crate::scaffold::scaffold_project,
+        crate::tutorial::get_tutorial_path,
     ]
 }

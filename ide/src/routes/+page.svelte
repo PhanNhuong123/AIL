@@ -14,16 +14,23 @@
     onVerifyComplete, runVerifier, cancelVerifierRun, getNodeDetail,
     onSheafComplete, runSheafAnalysis, cancelSheafAnalysis,
     runReviewer, cancelReviewerRun, onCoverageComplete,
+    loadProject, runAgent, scaffoldProject, getTutorialPath,
+    healthCheckCore, healthCheckAgent, openProjectDialog,
   } from '$lib/bridge';
+  import { isTauri } from '@tauri-apps/api/core';
   import type {
     AgentStepPayload, AgentMessagePayload, AgentCompletePayload,
   } from '$lib/types';
   import type { GraphPatchJson, NodeDetail } from '$lib/types';
   type SelectedNodeDetailShape = { id: string; detail: NodeDetail } | null;
-  import { graph, selection } from '$lib/stores';
+  import { graph, selection, welcomeModalOpen, quickCreateModalOpen } from '$lib/stores';
+  import { sidecarHealth, sidecarChecking } from '$lib/sidecar/sidecar-state';
   import {
     chatMessages, chatPreviewCards, currentRunId, isAgentRunning,
   } from '$lib/chat/chat-state';
+  import {
+    getWelcomeDismissed, setWelcomeDismissed,
+  } from '$lib/chat/sidebar-state';
   import { applyGraphPatch, reconcileSelectionAfterPatch } from '$lib/graph-patch';
   import { mergePatches, isEmptyPatch } from '$lib/patch-merge';
   import { patchEffects, clearPatchEffects, computePatchEffects, CLEAR_DELAY_MS } from '$lib/patch-effects';
@@ -283,11 +290,152 @@
   }
 
   // ---------------------------------------------------------------------------
+  // Welcome / Quick Create / Sidecar handlers (closes review findings
+  // N1, N1.b, N2, N3). Modals must NOT import bridge.ts (modals/CLAUDE.md);
+  // they dispatch Svelte events handled here. The route owns IPC + store
+  // writes and closes modals via `welcomeModalOpen` / `quickCreateModalOpen`.
+  // ---------------------------------------------------------------------------
+
+  // "User dismissed Welcome on this machine" persistence is delegated to
+  // `lib/chat/sidebar-state.ts`, which is the SINGLE allowed localStorage
+  // writer in the frontend (invariant 15.12-B). The route reads via
+  // `getWelcomeDismissed()` on mount and writes via `setWelcomeDismissed(true)`
+  // after a successful project load. Stored under key
+  // `ail3_welcome_dismissed_v1` (separate from the sidebar key).
+
+  // Directory picker now lives in `bridge.ts` (`openProjectDialog`) so the
+  // route does not import `@tauri-apps/plugin-dialog` directly — bridge.ts
+  // is the single Tauri import surface (ide/src/lib/CLAUDE.md).
+
+  async function loadAndCloseWelcome(path) {
+    await loadProject(path);
+    welcomeModalOpen.set(false);
+    quickCreateModalOpen.set(false);
+    setWelcomeDismissed(true);
+  }
+
+  async function handleWelcomeStart() {
+    welcomeModalOpen.set(false);
+    quickCreateModalOpen.set(true);
+  }
+
+  async function handleWelcomeOpen() {
+    try {
+      const dir = await openProjectDialog();
+      if (!dir) return;
+      await loadAndCloseWelcome(dir);
+    } catch (err) {
+      console.warn('[welcome] open failed:', err);
+    }
+  }
+
+  async function handleWelcomeTutorial() {
+    if (!isTauri()) return;
+    try {
+      const path = await getTutorialPath();
+      await loadAndCloseWelcome(path);
+    } catch (err) {
+      console.warn('[welcome] tutorial failed:', err);
+    }
+  }
+
+  // No param type annotations — esrap rejects them (invariant 16.2-E).
+  // `ev` is a CustomEvent with detail = { kind, name, description }.
+  async function handleQuickCreate(ev) {
+    const { kind, name, description } = ev.detail;
+    if (!isTauri() || !name) return;
+    try {
+      const parentDir = await openProjectDialog();
+      if (!parentDir) return;
+      const result = await scaffoldProject({ parentDir, kind, name, description });
+      await loadAndCloseWelcome(result.projectDir);
+    } catch (err) {
+      console.warn('[quick-create] failed:', err);
+    }
+  }
+
+  async function handleQuickCreateAi(ev) {
+    const { kind, name, description } = ev.detail;
+    if (!isTauri() || !name) return;
+    quickCreateModalOpen.set(false);
+    welcomeModalOpen.set(false);
+    setWelcomeDismissed(true);
+    const text = description
+      ? `Scaffold a ${kind} named "${name}": ${description}`
+      : `Scaffold a ${kind} named "${name}".`;
+    try {
+      const runId = await runAgent({
+        text,
+        selectionKind: 'project',
+        selectionId: null,
+        path: [],
+        lens: 'structure',
+        mode: 'edit',
+      });
+      currentRunId.set(runId);
+      isAgentRunning.set(true);
+    } catch (err) {
+      console.warn('[quick-create-ai] runAgent failed:', err);
+    }
+  }
+
+  async function handleSidecarCheckCore() {
+    sidecarChecking.update((s) => ({ ...s, core: true }));
+    try {
+      const result = await healthCheckCore();
+      sidecarHealth.update((s) => ({ ...s, core: result }));
+    } catch (err) {
+      console.warn('[sidecar] core check failed:', err);
+      // Preserve any prior mode; default to `'bundled'` (production
+      // assumption) when no prior payload exists. Avoids falsely claiming
+      // `'dev'` mode when the IPC throws inside a packaged bundle.
+      sidecarHealth.update((s) => ({
+        ...s,
+        core: {
+          component: 'ail-core',
+          ok: false,
+          mode: s.core?.mode ?? 'bundled',
+          error: err instanceof Error ? err.message : String(err),
+        },
+      }));
+    } finally {
+      sidecarChecking.update((s) => ({ ...s, core: false }));
+    }
+  }
+
+  async function handleSidecarCheckAgent() {
+    sidecarChecking.update((s) => ({ ...s, agent: true }));
+    try {
+      const result = await healthCheckAgent();
+      sidecarHealth.update((s) => ({ ...s, agent: result }));
+    } catch (err) {
+      console.warn('[sidecar] agent check failed:', err);
+      sidecarHealth.update((s) => ({
+        ...s,
+        agent: {
+          component: 'ail-agent',
+          ok: false,
+          mode: s.agent?.mode ?? 'bundled',
+          error: err instanceof Error ? err.message : String(err),
+        },
+      }));
+    } finally {
+      sidecarChecking.update((s) => ({ ...s, agent: false }));
+    }
+  }
+
+  // ---------------------------------------------------------------------------
   // onMount: event subscriptions
   // ---------------------------------------------------------------------------
 
   onMount(() => {
     const unlistens = [] as Array<() => void>;
+
+    // Auto-open Welcome on first launch when no project is loaded and the
+    // user has not previously dismissed it. Closes review finding **N1**.
+    if (get(graph) === null && !getWelcomeDismissed()) {
+      welcomeModalOpen.set(true);
+    }
 
     function register(p) {
       p.then((fn) => {
@@ -527,7 +675,7 @@
 </script>
 
 <div class="app-root" data-testid="app-root">
-  <TitleBar />
+  <TitleBar on:openProject={handleWelcomeOpen} />
   <Outline />
   <main class="region-stage" data-testid="region-stage"><Stage {selectedNodeDetail} /></main>
   <RightSidebar
@@ -536,6 +684,16 @@
   />
 </div>
 
-<WelcomeModal />
-<QuickCreateModal />
-<TweaksPanel />
+<WelcomeModal
+  on:start={handleWelcomeStart}
+  on:open={handleWelcomeOpen}
+  on:tutorial={handleWelcomeTutorial}
+/>
+<QuickCreateModal
+  on:create={handleQuickCreate}
+  on:createAi={handleQuickCreateAi}
+/>
+<TweaksPanel
+  on:checkCore={handleSidecarCheckCore}
+  on:checkAgent={handleSidecarCheckAgent}
+/>

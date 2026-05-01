@@ -9,6 +9,7 @@ import type {
   SheafCompletePayload, SheafCancelResult,
   CoverageCompletePayload, ReviewerCancelResult, ReviewerScopeRequest,
   HealthCheckPayload,
+  ProjectScaffoldRequest, ProjectScaffoldResult,
 } from './types';
 
 // Tauri WebView detection. Outside Tauri (e.g., browsing localhost:1420
@@ -158,11 +159,55 @@ export const cancelReviewerRun = (runId: string): Promise<ReviewerCancelResult> 
 // Phase 16.5 — Sidecar health checks.
 // Both commands are zero-arg from the frontend perspective; all state is held
 // in BridgeStateInner (sidecar_health_seq / sidecar_id_nonce).
+//
+// Sentinel surfaced when the wrappers run outside a real Tauri WebView (e.g.,
+// `vite dev` opened directly in a browser). The route handler maps this back
+// to a friendly status string instead of leaking the raw
+// `TypeError: Cannot read properties of undefined (reading 'invoke')` from
+// `invoke()` into the Tweaks panel UI.
+export const SIDECAR_BROWSER_PREVIEW_MESSAGE = 'Sidecar unavailable in browser preview';
 
 /** Check the ail-cli sidecar health by invoking `ail --version`. */
-export const healthCheckCore = (): Promise<HealthCheckPayload> =>
-  invoke<HealthCheckPayload>('health_check_core');
+export const healthCheckCore = (): Promise<HealthCheckPayload> => {
+  if (!isTauri()) return Promise.reject(new Error(SIDECAR_BROWSER_PREVIEW_MESSAGE));
+  return invoke<HealthCheckPayload>('health_check_core');
+};
 
 /** Check the ail-agent sidecar health by invoking `--version`. */
-export const healthCheckAgent = (): Promise<HealthCheckPayload> =>
-  invoke<HealthCheckPayload>('health_check_agent');
+export const healthCheckAgent = (): Promise<HealthCheckPayload> => {
+  if (!isTauri()) return Promise.reject(new Error(SIDECAR_BROWSER_PREVIEW_MESSAGE));
+  return invoke<HealthCheckPayload>('health_check_agent');
+};
+
+// Project scaffolding + tutorial path (closes review findings N1.b + N2).
+// `scaffoldProject` writes a minimal `.ail` skeleton; `getTutorialPath`
+// returns the bundled `examples/wallet_service` absolute path so the
+// Welcome modal can hand a real path to `loadProject`.
+
+/** Write a minimal `.ail` project skeleton at `<parentDir>/<name>`. */
+export const scaffoldProject = (
+  request: ProjectScaffoldRequest,
+): Promise<ProjectScaffoldResult> =>
+  invoke<ProjectScaffoldResult>('scaffold_project', { request });
+
+/** Resolve the bundled tutorial project path. */
+export const getTutorialPath = (): Promise<string> =>
+  invoke<string>('get_tutorial_path');
+
+/**
+ * Open the native directory-picker via `tauri-plugin-dialog` and return the
+ * absolute path the user chose, or `null` when the dialog is dismissed or
+ * when the frontend is running outside Tauri (jsdom / Vite-only browser).
+ *
+ * Dynamic import keeps the plugin off the synchronous import graph so vitest
+ * jsdom (which lacks `__TAURI_INTERNALS__`) can still load `bridge.ts` for
+ * unit tests of the other wrappers. Bridge.ts is the single allowed Tauri
+ * import surface (`ide/src/lib/CLAUDE.md`); routes/components must call this
+ * helper instead of importing `@tauri-apps/plugin-dialog` themselves.
+ */
+export const openProjectDialog = async (): Promise<string | null> => {
+  if (!isTauri()) return null;
+  const { open } = await import('@tauri-apps/plugin-dialog');
+  const result = await open({ directory: true, multiple: false });
+  return typeof result === 'string' ? result : null;
+};
