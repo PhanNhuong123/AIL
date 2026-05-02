@@ -443,4 +443,37 @@ describe('ChatPanel.svelte', () => {
     expect(last.text).toContain('Agent error');
     expect(last.text).toContain('spawn failed');
   });
+
+  // Acceptance pass 2026-05-02 — Send button must visually disable while a
+  // run is in flight. Story F4 / F19 caught the gap: behaviour was correct
+  // (the handler returned early) but the button looked clickable, screen
+  // readers couldn't announce inertness, and Enter still tried to submit.
+  it('Send button disables and Enter is suppressed while isAgentRunning', async () => {
+    const { container } = render(ChatPanel);
+    await tick();
+
+    isAgentRunning.set(true);
+    await tick();
+
+    const send = container.querySelector('[data-testid="chat-send-btn"]') as HTMLButtonElement;
+    expect(send.disabled).toBe(true);
+    expect(send.getAttribute('aria-disabled')).toBe('true');
+    // Label flips to a "…" hint so the user gets visual feedback.
+    expect(send.textContent?.trim()).toBe('…');
+
+    // Pressing Enter in the input should NOT add a "you" message because
+    // the keydown handler short-circuits while isAgentRunning is true.
+    const beforeMessages = get(chatMessages).length;
+    chatDraft.set('hello');
+    const input = container.querySelector('[data-testid="chat-input"]') as HTMLInputElement;
+    await fireEvent.keyDown(input, { key: 'Enter' });
+    await tick();
+    expect(get(chatMessages).length).toBe(beforeMessages);
+
+    // Once running clears, Send re-enables.
+    isAgentRunning.set(false);
+    await tick();
+    expect(send.disabled).toBe(false);
+    expect(send.textContent?.trim()).toBe('Send');
+  });
 });

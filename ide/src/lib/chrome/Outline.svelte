@@ -15,6 +15,26 @@
   // When filter is active, show all visible items regardless of expand state
   $: filtering = visible !== ALL;
 
+  // Filter input — Esc clears, allows the user to bail out of a narrowed
+  // tree without reaching for the mouse. Production a11y expectation.
+  function handleFilterKeydown(e) {
+    if (e.key === 'Escape' && $filterTerm) {
+      e.preventDefault();
+      filterTerm.set('');
+    }
+  }
+
+  // True when the filter is on and produced zero matches anywhere — used
+  // to swap the tree for an inline "No matches" hint instead of an empty
+  // panel, which previously left the user wondering whether the filter
+  // matched nothing or the panel was broken.
+  $: filterEmpty = filtering && g !== null && (
+    !isVisible(visible, g.project.id) &&
+    !g.modules.some((m) => isVisible(visible, m.id)) &&
+    !g.types.some((t) => isVisible(visible, t.id)) &&
+    !g.errors.some((e) => isVisible(visible, e.id))
+  );
+
   $: addedIds    = $patchEffects.addedIds;
   $: modifiedIds = $patchEffects.modifiedIds;
   $: removedIds  = $patchEffects.removedIds;
@@ -67,9 +87,21 @@
       placeholder="Filter…"
       bind:value={$filterTerm}
       aria-label="Filter outline"
+      on:keydown={handleFilterKeydown}
+      data-testid="outline-filter-input"
     />
   </div>
 
+  {#if g && filterEmpty}
+    <p
+      class="outline-empty"
+      role="status"
+      aria-live="polite"
+      data-testid="outline-filter-no-matches"
+    >No matches for "{$filterTerm}". Press Esc to clear.</p>
+  {/if}
+
+  <div role="tree" aria-label="Project outline">
   {#if g}
     <OutlineSection title="PROJECT">
       {#if isVisible(visible, g.project.id)}
@@ -183,6 +215,7 @@
       </OutlineSection>
     {/if}
   {/if}
+  </div>
 </aside>
 
 <style>
@@ -209,5 +242,15 @@
 
   .nav-filter-input:focus {
     border-color: var(--accent);
+  }
+
+  .outline-empty {
+    margin: 12px 12px 0;
+    padding: 8px 10px;
+    font-size: 11px;
+    color: var(--ink-3);
+    background: var(--surface-3);
+    border-radius: var(--radius-sm);
+    text-align: center;
   }
 </style>

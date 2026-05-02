@@ -12,12 +12,20 @@
   $: fwdDisabled   = $history.forward.length === 0;
 
   function handleCrumbClick(i) {
+    // Read `kind` from the resolved breadcrumb instead of parsing the raw
+    // path segment. Real-parser bare ids (`wallet_service`, `src`,
+    // `src.transfer_money`, …) have no `:` separator, so the previous
+    // `slice(0, indexOf(':'))` returned `slice(0, -1)` (truncated id) and
+    // produced a malformed selection kind. The Toolbar mirrors the fix
+    // already landed in TitleBar.svelte::handleCrumbClick.
     const idx = i as number;
     const newPath = $path.slice(0, idx + 1);
+    if (newPath.length === 0) return;
+    const crumb = crumbs[idx];
+    if (!crumb) return;
     const fullId = newPath[newPath.length - 1];
-    const kind = fullId.slice(0, fullId.indexOf(':')) as SelectionKind;
-    const level = stageLevelForKind(kind);
-    navigateTo(newPath, kind, fullId, level);
+    const kind = crumb.kind as SelectionKind;
+    navigateTo(newPath, kind, fullId, stageLevelForKind(kind));
   }
 
   function togglePalette() {

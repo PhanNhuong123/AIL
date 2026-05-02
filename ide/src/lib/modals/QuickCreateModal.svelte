@@ -136,6 +136,16 @@
             bind:value={name}
             placeholder="Node or module name"
             aria-label="Name"
+            on:keydown={(e) => {
+              // Production-grade form ergonomics: Enter in the name field
+              // submits the default Create action so the user doesn't have
+              // to reach for the mouse. The form is a `<div>` (not a real
+              // `<form>`), so we wire this manually.
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                handleCreate();
+              }
+            }}
           />
         </label>
         <label for="qc-description-input">

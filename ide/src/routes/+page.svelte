@@ -173,6 +173,12 @@
     if (next) {
       selection.update((s) => reconcileSelectionAfterPatch(s, patch, next));
       patchEffects.set(effects);
+      // Sheaf conflicts referencing a step that the patch removed must be
+      // dropped — otherwise NodeViewConflictSection still renders a "Jump
+      // to peer →" button that no-ops because handleStepJump can't locate
+      // the peer in the graph (R3 mitigation). Filter on the post-patch
+      // graph so the UI stays in sync with reality.
+      sheafConflicts.update((conflicts) => filterConflictsByGraph(conflicts, next));
       if (clearEffectsTimer !== null) clearTimeout(clearEffectsTimer);
       clearEffectsTimer = setTimeout(() => {
         clearPatchEffects();
@@ -180,6 +186,22 @@
       }, CLEAR_DELAY_MS);
     }
     return effects;
+  }
+
+  // Helper: a sheaf conflict is alive iff both its endpoints still exist as
+  // step ids in the current graph. Anything else is stale state from a
+  // pre-patch sheaf run and must be discarded.
+  function filterConflictsByGraph(conflicts, g) {
+    if (!g) return conflicts;
+    const stepIds = new Set();
+    for (const m of g.modules) {
+      for (const fn_ of m.functions) {
+        for (const step of (fn_.steps ?? [])) {
+          stepIds.add(step.id);
+        }
+      }
+    }
+    return conflicts.filter((c) => stepIds.has(c.nodeA) && stepIds.has(c.nodeB));
   }
 
   function schedulePatchFlush(patch) {
@@ -337,6 +359,9 @@
       await loadAndCloseWelcome(dir);
     } catch (err) {
       console.warn('[welcome] open failed:', err);
+      // Surface the failure in the modal instead of leaving the user staring
+      // at an unchanged Welcome panel. Mirrors the QuickCreate pattern.
+      welcomeNotice.set(`Couldn't open project: ${err instanceof Error ? err.message : String(err)}`);
     }
   }
 
@@ -351,6 +376,7 @@
       await loadAndCloseWelcome(path);
     } catch (err) {
       console.warn('[welcome] tutorial failed:', err);
+      welcomeNotice.set(`Couldn't load tutorial: ${err instanceof Error ? err.message : String(err)}`);
     }
   }
 
@@ -408,6 +434,19 @@
       isAgentRunning.set(true);
     } catch (err) {
       console.warn('[quick-create-ai] runAgent failed:', err);
+      // The QuickCreate modal already closed (above) so the user has no
+      // surface to see the failure. Drop a system-style assistant message
+      // into the chat log so the failure is at least visible — same shape
+      // the agent-complete error path uses.
+      const message = err instanceof Error ? err.message : String(err);
+      chatMessages.update((arr) => [
+        ...arr,
+        {
+          id: `qc-ai-err-${++routeMsgSeq}`,
+          role: 'assistant',
+          text: `Could not start the agent: ${message}`,
+        },
+      ]);
     }
   }
 

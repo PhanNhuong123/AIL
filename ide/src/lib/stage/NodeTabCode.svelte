@@ -17,6 +17,7 @@
     <button
       class="lang-btn"
       class:active={$nodeCodeLang === 'python'}
+      aria-pressed={$nodeCodeLang === 'python'}
       disabled={!hasPy}
       on:click={() => { nodeCodeLang.set('python'); }}
       data-testid="node-code-lang-py"
@@ -24,6 +25,7 @@
     <button
       class="lang-btn"
       class:active={$nodeCodeLang === 'typescript'}
+      aria-pressed={$nodeCodeLang === 'typescript'}
       disabled={!hasTs}
       on:click={() => { nodeCodeLang.set('typescript'); }}
       data-testid="node-code-lang-ts"

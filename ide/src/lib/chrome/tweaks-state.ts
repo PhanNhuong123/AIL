@@ -18,15 +18,18 @@
  */
 
 import { get } from 'svelte/store';
-import { theme, density, accent } from '$lib/stores';
-import type { Theme, Density } from '$lib/stores';
+import { theme, density, accent, activeLens } from '$lib/stores';
+import type { Theme, Density, Lens } from '$lib/stores';
 
 const STORAGE_KEY = 'ail3_tweaks_v1';
+
+const VALID_LENSES = ['structure', 'rules', 'verify', 'data', 'tests'] as const;
 
 interface PersistedTweaks {
   theme?: Theme;
   density?: Density;
   accent?: string;
+  lens?: Lens;
 }
 
 let initialized = false;
@@ -45,6 +48,9 @@ export function initTweaksState(): void {
         if (parsed.theme === 'dark' || parsed.theme === 'light') theme.set(parsed.theme);
         if (parsed.density === 'compact' || parsed.density === 'cozy' || parsed.density === 'comfortable') density.set(parsed.density);
         if (typeof parsed.accent === 'string' && /^#[0-9a-fA-F]{3,8}$/.test(parsed.accent)) accent.set(parsed.accent);
+        if (typeof parsed.lens === 'string' && (VALID_LENSES as readonly string[]).includes(parsed.lens)) {
+          activeLens.set(parsed.lens as Lens);
+        }
       }
     } catch {
       // Corrupt JSON or quota error — silently fall back to defaults.
@@ -65,6 +71,7 @@ export function initTweaksState(): void {
         theme: get(theme),
         density: get(density),
         accent: get(accent),
+        lens: get(activeLens),
       };
       localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
     } catch {
@@ -75,6 +82,7 @@ export function initTweaksState(): void {
   pendingUnsubs.push(theme.subscribe((t) => { applyThemeClass(t); persist(); }));
   pendingUnsubs.push(density.subscribe(() => persist()));
   pendingUnsubs.push(accent.subscribe((a) => { applyAccent(a); persist(); }));
+  pendingUnsubs.push(activeLens.subscribe(() => persist()));
 }
 
 function applyThemeClass(t: Theme): void {
@@ -108,4 +116,5 @@ export function resetTweaksState(): void {
   theme.set('dark');
   density.set('comfortable');
   accent.set('#2997ff');
+  activeLens.set('verify');
 }

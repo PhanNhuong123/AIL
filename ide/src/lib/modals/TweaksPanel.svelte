@@ -133,11 +133,12 @@
       </div>
 
       <div class="tweaks-section">
-        <span class="tweaks-section-label">Density</span>
-        <div class="tweaks-segmented">
+        <span class="tweaks-section-label" id="tweaks-density-label">Density</span>
+        <div class="tweaks-segmented" role="group" aria-labelledby="tweaks-density-label">
           <button
             type="button"
             class:active={$density === 'compact'}
+            aria-pressed={$density === 'compact'}
             data-testid="tweaks-density-compact"
             on:click={() => setDensity('compact')}
           >
@@ -146,6 +147,7 @@
           <button
             type="button"
             class:active={$density === 'cozy'}
+            aria-pressed={$density === 'cozy'}
             data-testid="tweaks-density-cozy"
             on:click={() => setDensity('cozy')}
           >
@@ -154,6 +156,7 @@
           <button
             type="button"
             class:active={$density === 'comfortable'}
+            aria-pressed={$density === 'comfortable'}
             data-testid="tweaks-density-comfortable"
             on:click={() => setDensity('comfortable')}
           >

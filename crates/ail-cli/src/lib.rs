@@ -61,9 +61,9 @@ pub fn run() -> Result<(), CliError> {
             run_build(&cwd, &args)
         }
 
-        Command::Verify { file, from_db } => {
+        Command::Verify { file, from_db, format } => {
             let file_path = file.as_deref();
-            run_verify(&cwd, file_path, from_db.as_deref())
+            run_verify(&cwd, file_path, from_db.as_deref(), &format)
         }
 
         Command::Context {
@@ -186,6 +186,10 @@ pub enum Command {
         /// Load the project from this `.ail.db` database instead of auto-detecting.
         #[arg(long, value_name = "PATH")]
         from_db: Option<PathBuf>,
+
+        /// Output format: `text` (default human-readable) or `json` (machine-readable).
+        #[arg(long, value_name = "FORMAT", default_value = "text")]
+        format: String,
     },
 
     /// Print a CIC context packet for a task or named node.

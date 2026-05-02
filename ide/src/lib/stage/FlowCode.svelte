@@ -23,12 +23,14 @@
         <button
           class="lang-btn"
           class:active={lang === 'python'}
+          aria-pressed={lang === 'python'}
           on:click={() => { lang = 'python'; }}
           disabled={!hasPy}
         >py</button>
         <button
           class="lang-btn"
           class:active={lang === 'typescript'}
+          aria-pressed={lang === 'typescript'}
           on:click={() => { lang = 'typescript'; }}
           disabled={!hasTs}
         >ts</button>

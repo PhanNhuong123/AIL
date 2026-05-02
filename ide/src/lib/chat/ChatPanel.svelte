@@ -145,6 +145,7 @@
       mode={$chatMode}
       {placeholder}
       draft={$chatDraft}
+      isRunning={$isAgentRunning}
       on:modechange={handleModeChange}
       on:draftchange={handleDraftChange}
       on:send={handleSend}

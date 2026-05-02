@@ -27,10 +27,13 @@ use super::sheaf::short_id;
 /// `file` is accepted but ignored in v2.0 — the full project is always verified.
 /// `from_db` forces the SQLite backend; without it, the backend is auto-detected
 /// from the project configuration.
+/// `format` is `"text"` (default human-readable) or `"json"` (machine-readable
+/// envelope `{ "ok": bool, "node_count": u, "edge_count": u, "errors"?: [str] }`).
 pub fn run_verify(
     root: &Path,
     _file: Option<&Path>,
     from_db: Option<&Path>,
+    format: &str,
 ) -> Result<(), CliError> {
     let backend = resolve_backend(root, from_db)?;
     let graph = load_graph(&backend)?;
@@ -61,15 +64,21 @@ pub fn run_verify(
 
     match ail_contract::verify(typed) {
         Ok(_) => {
-            println!("Verified OK — {node_count} nodes, {edge_count} edges.");
+            match format {
+                "json" => {
+                    println!(
+                        "{{\"ok\":true,\"node_count\":{node_count},\"edge_count\":{edge_count}}}"
+                    );
+                }
+                _ => {
+                    println!("Verified OK — {node_count} nodes, {edge_count} edges.");
+                }
+            }
             Ok(())
         }
         Err(errs) => {
-            let base = errs
-                .iter()
-                .map(|e| e.to_string())
-                .collect::<Vec<_>>()
-                .join("\n");
+            let lines: Vec<String> = errs.iter().map(|e| e.to_string()).collect();
+            let base = lines.join("\n");
 
             #[cfg(feature = "z3-verify")]
             let body = if has_unsat_class(&errs) {
@@ -79,6 +88,20 @@ pub fn run_verify(
             };
             #[cfg(not(feature = "z3-verify"))]
             let body = base;
+
+            if format == "json" {
+                // Hand-rolled JSON to avoid adding a serde_json dep just for
+                // this surface; only escapes `"` and `\` in error strings.
+                let escape = |s: &str| s.replace('\\', "\\\\").replace('"', "\\\"");
+                let arr = lines
+                    .iter()
+                    .map(|l| format!("\"{}\"", escape(l)))
+                    .collect::<Vec<_>>()
+                    .join(",");
+                println!(
+                    "{{\"ok\":false,\"node_count\":{node_count},\"edge_count\":{edge_count},\"errors\":[{arr}]}}"
+                );
+            }
 
             Err(CliError::Pipeline { errors: body })
         }

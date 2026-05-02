@@ -392,4 +392,105 @@ describe('Outline.svelte', () => {
       expect(wrapper?.getAttribute('data-conflict')).toBeNull();
     }
   });
+
+  // Acceptance pass 2026-05-02 — production-grade a11y.
+  it('renders the tree inside a [role="tree"] container with an aria-label', async () => {
+    const { container } = render(Outline);
+    graph.set(walletFixture());
+    await tick();
+
+    const tree = container.querySelector('[role="tree"]');
+    expect(tree).not.toBeNull();
+    expect(tree?.getAttribute('aria-label')).toBe('Project outline');
+  });
+
+  it('OutlineRow exposes aria-level matching depth+1', async () => {
+    const { container } = render(Outline);
+    graph.set(walletFixture());
+    expanded.set(new Set(['project:root', 'module:m_wallet']));
+    await tick();
+
+    const project = container.querySelector('[data-kind="project"]');
+    const module = container.querySelector('[data-kind="module"]');
+    const fn = container.querySelector('[data-kind="function"]');
+    expect(project?.getAttribute('aria-level')).toBe('1');
+    expect(module?.getAttribute('aria-level')).toBe('2');
+    expect(fn?.getAttribute('aria-level')).toBe('3');
+  });
+
+  it('OutlineRow row labels carry a `title` attr so truncated names are readable on hover', async () => {
+    const { container } = render(Outline);
+    graph.set(walletFixture());
+    await tick();
+
+    const labels = container.querySelectorAll('[data-kind] .row-label');
+    expect(labels.length).toBeGreaterThan(0);
+    for (const lab of labels) {
+      // Text content should match the title — they describe the same id.
+      expect(lab.getAttribute('title')).toBe(lab.textContent);
+    }
+  });
+
+  it('Filter Esc-clears the filter input', async () => {
+    const { container } = render(Outline);
+    graph.set(walletFixture());
+    filterTerm.set('transfer');
+    await tick();
+
+    const input = container.querySelector('[data-testid="outline-filter-input"]') as HTMLInputElement;
+    input.focus();
+    await fireEvent.keyDown(input, { key: 'Escape' });
+    await tick();
+
+    expect(get(filterTerm)).toBe('');
+  });
+
+  it('Filter renders a "No matches" empty state when zero rows match', async () => {
+    const { container } = render(Outline);
+    graph.set(walletFixture());
+    filterTerm.set('xyzzy_does_not_exist');
+    await tick();
+
+    const empty = container.querySelector('[data-testid="outline-filter-no-matches"]');
+    expect(empty).not.toBeNull();
+    expect(empty?.textContent).toContain('xyzzy_does_not_exist');
+  });
+
+  it('Space on a chevron toggles expansion (matches ARIA tree pattern)', async () => {
+    const { container } = render(Outline);
+    graph.set(walletFixture());
+    expanded.set(new Set(['project:root']));
+    await tick();
+
+    const moduleRow = container.querySelector('[data-kind="module"]');
+    expect(moduleRow).not.toBeNull();
+    const chevron = moduleRow?.querySelector('.chevron') as HTMLElement | null;
+    expect(chevron).not.toBeNull();
+
+    await fireEvent.keyDown(chevron!, { key: ' ' });
+    await tick();
+    expect(get(expanded).has('module:m_wallet')).toBe(true);
+
+    await fireEvent.keyDown(chevron!, { key: ' ' });
+    await tick();
+    expect(get(expanded).has('module:m_wallet')).toBe(false);
+  });
+
+  it('ArrowRight expands a collapsed row with children; ArrowLeft collapses an expanded one', async () => {
+    const { container } = render(Outline);
+    graph.set(walletFixture());
+    expanded.set(new Set(['project:root']));
+    await tick();
+
+    const moduleRow = container.querySelector('[data-kind="module"]') as HTMLElement;
+    moduleRow.focus();
+
+    await fireEvent.keyDown(moduleRow, { key: 'ArrowRight' });
+    await tick();
+    expect(get(expanded).has('module:m_wallet')).toBe(true);
+
+    await fireEvent.keyDown(moduleRow, { key: 'ArrowLeft' });
+    await tick();
+    expect(get(expanded).has('module:m_wallet')).toBe(false);
+  });
 });

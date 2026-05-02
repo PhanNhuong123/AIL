@@ -194,4 +194,71 @@ describe('Toolbar.svelte', () => {
     expect(o.dependencies).toBe(false);
     expect(o.tests).toBe(false);
   });
+
+  // Acceptance pass 2026-05-02 — bare-id breadcrumb click. The Toolbar
+  // mirrors the TitleBar: real-parser ids have no `kind:` prefix, so the
+  // pre-fix `slice(0, indexOf(':'))` truncated the last char of the id and
+  // produced a malformed selection kind. handleCrumbClick now reads `kind`
+  // off the resolved breadcrumb meta, the same fix already landed in
+  // TitleBar.svelte::handleCrumbClick.
+  it('bare-id crumb click sets the correct selection kind', async () => {
+    // Build a real-shape graph (bare ids — no `module:`/`function:`/`step:`).
+    const realGraph = {
+      project: {
+        id: 'wallet_service',
+        name: 'wallet_service',
+        description: '',
+        nodeCount: 4,
+        moduleCount: 1,
+        fnCount: 1,
+        status: 'ok' as const,
+      },
+      clusters: [{ id: 'default', name: 'wallet_service', color: '#2997ff' }],
+      modules: [
+        {
+          id: 'src',
+          name: 'src',
+          description: 'src',
+          cluster: 'default',
+          clusterName: 'wallet_service',
+          clusterColor: '#2997ff',
+          status: 'ok' as const,
+          nodeCount: 2,
+          functions: [
+            {
+              id: 'src.transfer_money',
+              name: 'transfer_money',
+              status: 'ok' as const,
+              steps: [],
+            },
+          ],
+        },
+      ],
+      externals: [],
+      relations: [],
+      types: [],
+      errors: [],
+      issues: [],
+      detail: {},
+    };
+    graph.set(realGraph as any);
+    path.set(['wallet_service', 'src', 'src.transfer_money']);
+    selection.set({ kind: 'function', id: 'src.transfer_money' });
+
+    const { container } = render(Toolbar);
+    await tick();
+
+    const crumb1 = container.querySelector('[data-testid="toolbar-crumb-1"]');
+    expect(crumb1).not.toBeNull();
+    fireEvent.click(crumb1!);
+    await tick();
+
+    expect(get(path)).toEqual(['wallet_service', 'src']);
+    expect(get(selection)).toEqual({ kind: 'module', id: 'src' });
+
+    const crumb0 = container.querySelector('[data-testid="toolbar-crumb-0"]');
+    fireEvent.click(crumb0!);
+    await tick();
+    expect(get(selection)).toEqual({ kind: 'project', id: 'wallet_service' });
+  });
 });

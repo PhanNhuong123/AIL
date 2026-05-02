@@ -78,7 +78,7 @@
         on:mouseenter={() => (hoveredId = mp.id)}
         on:mouseleave={() => (hoveredId = null)}
         on:click={() => handleClick(mp.id)}
-        on:keydown={(e) => { if (e.key === 'Enter') handleClick(mp.id); }}
+        on:keydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleClick(mp.id); } }}
         role="button"
         tabindex="0"
       >

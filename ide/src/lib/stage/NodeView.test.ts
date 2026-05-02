@@ -305,4 +305,30 @@ describe('NodeView.svelte', () => {
 
     expect(container.querySelector('[data-testid="node-view-conflict-section"]')).toBeNull();
   });
+
+  // Acceptance pass 2026-05-02 — production-grade tab semantics. The side
+  // panel had buttons but no role="tab" / role="tabpanel", so screen
+  // readers heard them as plain buttons.
+  it('exposes tablist + tab + tabpanel ARIA semantics on the side panel', async () => {
+    const detail = nodeDetailFixture();
+    const { container } = render(NodeView, {
+      props: { stepId: 'step:s_transfer', detail },
+    });
+    await tick();
+
+    const tablist = container.querySelector('[data-testid="node-view-tabs"]');
+    expect(tablist?.getAttribute('role')).toBe('tablist');
+    expect(tablist?.getAttribute('aria-label')).toBe('Node detail');
+
+    const codeTab = container.querySelector('[data-testid="node-tab-btn-code"]');
+    expect(codeTab?.getAttribute('role')).toBe('tab');
+    expect(codeTab?.getAttribute('aria-controls')).toBe('node-tab-panel-code');
+    // Exactly one tab has aria-selected=true at any time.
+    const selected = container.querySelectorAll('[role="tab"][aria-selected="true"]');
+    expect(selected.length).toBe(1);
+
+    const panel = container.querySelector('[role="tabpanel"]');
+    expect(panel).not.toBeNull();
+    expect(panel?.getAttribute('aria-labelledby')?.startsWith('node-tab-btn-')).toBe(true);
+  });
 });

@@ -73,8 +73,19 @@ pub fn validate_kind(kind: &str) -> Result<&'static str, String> {
 pub fn render_skeleton(kind: &str, name: &str, description: &str) -> String {
     let mut out = String::new();
     if !description.trim().is_empty() {
-        out.push_str("// ");
-        out.push_str(description.trim());
+        // Each line of the user-supplied description becomes its own
+        // `// ` comment. Previously a description with embedded newlines
+        // produced a leading `// line-1` followed by `line-2` (no comment
+        // marker), which the parser rejects. Splitting + prefixing each
+        // line keeps every emitted line a valid comment regardless of how
+        // the user typed the description.
+        for (i, line) in description.trim().lines().enumerate() {
+            if i > 0 {
+                out.push('\n');
+            }
+            out.push_str("// ");
+            out.push_str(line);
+        }
         out.push('\n');
         out.push('\n');
     }

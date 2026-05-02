@@ -230,4 +230,29 @@ describe('TweaksPanel sidecar section', () => {
     expect(agentStatus.textContent).toContain('spawn failed');
     expect(agentStatus.getAttribute('data-state')).toBe('fail');
   });
+
+  // Acceptance pass 2026-05-02 — story B in audit: density seg-control was
+  // the only toggle in the IDE without aria-pressed. Lens pills, chat
+  // mode, kind picker, and the gear all use it; this brings density in
+  // line so screen readers can announce the active option.
+  it('density seg-control buttons reflect the active option via aria-pressed', async () => {
+    tweaksPanelOpen.set(true);
+    const { container } = render(TweaksPanel);
+    await tick();
+
+    const compact = container.querySelector('[data-testid="tweaks-density-compact"]');
+    const cozy = container.querySelector('[data-testid="tweaks-density-cozy"]');
+    const comfy = container.querySelector('[data-testid="tweaks-density-comfortable"]');
+
+    // Default = comfortable
+    expect(compact?.getAttribute('aria-pressed')).toBe('false');
+    expect(cozy?.getAttribute('aria-pressed')).toBe('false');
+    expect(comfy?.getAttribute('aria-pressed')).toBe('true');
+
+    await fireEvent.click(compact!);
+    await tick();
+
+    expect(compact?.getAttribute('aria-pressed')).toBe('true');
+    expect(comfy?.getAttribute('aria-pressed')).toBe('false');
+  });
 });

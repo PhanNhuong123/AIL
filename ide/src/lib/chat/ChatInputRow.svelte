@@ -5,6 +5,10 @@
   export let mode = 'edit' as ChatMode;
   export let placeholder = '' as string;
   export let draft = '' as string;
+  // When true, the agent is mid-run. Send + Enter must no-op visibly so
+  // the user gets feedback that another turn is in flight rather than
+  // silently swallowing keystrokes (acceptance review story F4 / F19).
+  export let isRunning = false as boolean;
 
   const dispatch = createEventDispatcher<{
     modechange: { mode: ChatMode };
@@ -24,12 +28,13 @@
 
   function onKeyDown(e) {
     const ev = e as KeyboardEvent;
-    if (ev.key === 'Enter') {
+    if (ev.key === 'Enter' && !isRunning) {
       dispatch('send', { text: draft });
     }
   }
 
   function onSendClick() {
+    if (isRunning) return;
     dispatch('send', { text: draft });
   }
 </script>
@@ -76,6 +81,8 @@
     type="button"
     class="cp-send-btn"
     data-testid="chat-send-btn"
+    disabled={isRunning}
+    aria-disabled={isRunning}
     on:click={onSendClick}
-  >Send</button>
+  >{isRunning ? '…' : 'Send'}</button>
 </div>

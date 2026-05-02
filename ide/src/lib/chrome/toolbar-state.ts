@@ -68,6 +68,48 @@ function pushHistory(): void {
   history.update(h => ({ back: [...h.back, JSON.stringify(cur)], forward: [] }));
 }
 
+/**
+ * Resolve the kind of a path segment by looking it up against the graph.
+ * Supports both fixture-style `kind:id` segments and the real ail-ui-bridge
+ * parser's bare ids (`wallet_service`, `src`, `src.transfer_money`,
+ * `src.transfer_money.new_balance`, types and errors).
+ *
+ * Returns `'none'` only when the segment cannot be located anywhere in the
+ * graph — same behaviour as `breadcrumbs()` skipping unknown segments.
+ */
+function _kindForSegment(seg: string): SelectionKind {
+  const colonIdx = seg.indexOf(':');
+  if (colonIdx !== -1) {
+    const prefix = seg.slice(0, colonIdx);
+    if (
+      prefix === 'project' ||
+      prefix === 'module' ||
+      prefix === 'function' ||
+      prefix === 'step' ||
+      prefix === 'type' ||
+      prefix === 'error'
+    ) {
+      return prefix as SelectionKind;
+    }
+  }
+  // Bare id — consult the graph to infer kind.
+  const g = get(graph);
+  if (!g) return 'none';
+  if (g.project.id === seg) return 'project';
+  if (g.modules.some((m) => m.id === seg)) return 'module';
+  for (const m of g.modules) {
+    for (const fn_ of m.functions) {
+      if (fn_.id === seg) return 'function';
+      for (const step of fn_.steps ?? []) {
+        if (step.id === seg) return 'step';
+      }
+    }
+  }
+  if (g.types?.some((t) => t.id === seg)) return 'type';
+  if (g.errors?.some((e) => e.id === seg)) return 'error';
+  return 'none';
+}
+
 /** Restore selection from the last segment of a path array. */
 function _restoreSelectionFromPath(p: string[]): void {
   if (p.length === 0) {
@@ -75,13 +117,19 @@ function _restoreSelectionFromPath(p: string[]): void {
     return;
   }
   const last = p[p.length - 1];
-  const colonIdx = last.indexOf(':');
-  if (colonIdx === -1) {
+  const kind = _kindForSegment(last);
+  if (kind === 'none') {
     selection.set({ kind: 'none', id: null });
     return;
   }
-  const kind = last.slice(0, colonIdx) as SelectionKind;
   selection.set({ kind, id: last });
+}
+
+function _restoreZoomFromPath(parsed: string[]): void {
+  if (parsed.length === 0) return;
+  const kind = _kindForSegment(parsed[parsed.length - 1]);
+  if (kind === 'none') return;
+  zoomLevel.set(stageLevelForKind(kind));
 }
 
 export function goBack(): void {
@@ -93,15 +141,7 @@ export function goBack(): void {
   const parsed: string[] = JSON.parse(prev);
   path.set(parsed);
   _restoreSelectionFromPath(parsed);
-  // Restore zoom level from path
-  if (parsed.length > 0) {
-    const last = parsed[parsed.length - 1];
-    const colonIdx = last.indexOf(':');
-    if (colonIdx !== -1) {
-      const kind = last.slice(0, colonIdx) as SelectionKind;
-      zoomLevel.set(stageLevelForKind(kind));
-    }
-  }
+  _restoreZoomFromPath(parsed);
 }
 
 export function goForward(): void {
@@ -113,15 +153,7 @@ export function goForward(): void {
   const parsed: string[] = JSON.parse(next);
   path.set(parsed);
   _restoreSelectionFromPath(parsed);
-  // Restore zoom level from path
-  if (parsed.length > 0) {
-    const last = parsed[parsed.length - 1];
-    const colonIdx = last.indexOf(':');
-    if (colonIdx !== -1) {
-      const kind = last.slice(0, colonIdx) as SelectionKind;
-      zoomLevel.set(stageLevelForKind(kind));
-    }
-  }
+  _restoreZoomFromPath(parsed);
 }
 
 /**
@@ -254,17 +286,18 @@ export function zoomOut(): void {
   const newPath = curPath.slice(0, -1);
 
   if (newPath.length === 0) {
-    // Nothing left — navigate to project root
+    // Nothing left — navigate to project root. Use the real graph's
+    // project id so this works for both fixture (`project:root`) and the
+    // real parser's bare ids (`wallet_service`).
     const g = get(graph);
     if (!g) return;
-    navigateTo(['project:root'], 'project', 'project:root', 0);
+    const pid = g.project.id;
+    navigateTo([pid], 'project', pid, 0);
     return;
   }
 
   const parentSeg = newPath[newPath.length - 1];
-  const colonIdx = parentSeg.indexOf(':');
-  if (colonIdx === -1) return;
-  const kind = parentSeg.slice(0, colonIdx) as SelectionKind;
-  const newLevel = stageLevelForKind(kind);
-  navigateTo(newPath, kind, parentSeg, newLevel);
+  const kind = _kindForSegment(parentSeg);
+  if (kind === 'none') return;
+  navigateTo(newPath, kind, parentSeg, stageLevelForKind(kind));
 }

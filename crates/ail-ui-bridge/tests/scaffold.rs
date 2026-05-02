@@ -134,6 +134,37 @@ fn render_skeleton_module_with_description() {
     assert!(out.contains("module wallet {"));
 }
 
+/// Acceptance pass 2026-05-02 (story A): a description containing newlines
+/// must produce a comment block where every emitted line carries `// ` so
+/// the parser does not see a bare second line. Previously the single
+/// `out.push_str("// ")` only covered the first line and the second was
+/// emitted as a non-comment, breaking parses of any project scaffolded
+/// with a multi-line description in QuickCreate.
+#[test]
+fn render_skeleton_multiline_description_keeps_comment_marker_on_each_line() {
+    let out = render_skeleton(
+        "module",
+        "wallet",
+        "Wallet service skeleton.\nSecond paragraph with details.",
+    );
+    assert!(
+        out.starts_with("// Wallet service skeleton.\n// Second paragraph with details.\n\n"),
+        "expected each line to start with `// `, got: {out:?}"
+    );
+    // No bare line directly above the `module wallet {` opener.
+    assert!(out.contains("\n\nmodule wallet {"));
+}
+
+#[test]
+fn render_skeleton_three_line_description_keeps_comment_marker_on_each_line() {
+    let out = render_skeleton("module", "wallet", "line one\nline two\nline three");
+    let expected_prefix = "// line one\n// line two\n// line three\n\n";
+    assert!(
+        out.starts_with(expected_prefix),
+        "expected `{expected_prefix}`, got: {out:?}"
+    );
+}
+
 #[test]
 fn render_skeleton_function_emits_function_block() {
     let out = render_skeleton("function", "deposit", "");

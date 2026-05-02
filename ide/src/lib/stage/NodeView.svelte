@@ -67,12 +67,19 @@
 
     <!-- Right: tabs -->
     <div class="node-view-right">
-      <!-- Tab strip -->
-      <div class="node-view-tabs" data-testid="node-view-tabs">
+      <!-- Tab strip — full ARIA tab semantics so keyboard + screen-reader
+           users can navigate the side panel. The tab body becomes the
+           controlled tabpanel. -->
+      <div class="node-view-tabs" role="tablist" aria-label="Node detail" data-testid="node-view-tabs">
         {#each TABS as tab}
           <button
             class="node-tab-btn"
             class:active={$nodeViewActiveTab === tab.id}
+            role="tab"
+            id="node-tab-btn-{tab.id}"
+            aria-selected={$nodeViewActiveTab === tab.id}
+            aria-controls="node-tab-panel-{tab.id}"
+            tabindex={$nodeViewActiveTab === tab.id ? 0 : -1}
             on:click={() => { nodeViewActiveTab.set(tab.id as NodeTab); }}
             data-testid="node-tab-btn-{tab.id}"
           >
@@ -82,7 +89,13 @@
       </div>
 
       <!-- Tab body -->
-      <div class="node-view-tab-body">
+      <div
+        class="node-view-tab-body"
+        role="tabpanel"
+        id="node-tab-panel-{$nodeViewActiveTab}"
+        aria-labelledby="node-tab-btn-{$nodeViewActiveTab}"
+        tabindex="0"
+      >
         {#if $nodeViewActiveTab === 'code'}
           <NodeTabCode {detail} />
         {:else if $nodeViewActiveTab === 'proof'}

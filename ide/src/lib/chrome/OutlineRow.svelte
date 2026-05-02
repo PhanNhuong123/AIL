@@ -42,15 +42,30 @@
   role="treeitem"
   aria-selected={selected}
   aria-expanded={hasChildren ? expanded : undefined}
+  aria-level={depth + 1}
   tabindex="0"
   on:click={handleRowClick}
-  on:keydown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleRowClick(); }}
+  on:keydown={(e) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      // Space on a row with children toggles expansion (matches the
+      // ARIA treeview pattern); on a leaf row it activates selection.
+      if (e.key === ' ' && hasChildren && onToggle) onToggle();
+      else handleRowClick();
+    } else if (e.key === 'ArrowRight' && hasChildren && !expanded && onToggle) {
+      e.preventDefault();
+      onToggle();
+    } else if (e.key === 'ArrowLeft' && hasChildren && expanded && onToggle) {
+      e.preventDefault();
+      onToggle();
+    }
+  }}
 >
   <span
     class="chevron"
     class:hidden={!hasChildren}
     on:click={handleToggleClick}
-    on:keydown={(e) => { if (e.key === 'Enter') handleToggleClick(e); }}
+    on:keydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleToggleClick(e); } }}
     role="button"
     tabindex="-1"
     aria-label={expanded ? 'Collapse' : 'Expand'}
@@ -62,7 +77,7 @@
     <Icon name={iconName} size={13} />
   </span>
 
-  <span class="row-label">{name}</span>
+  <span class="row-label" title={name}>{name}</span>
 
   <span class="dot dot-{status}" aria-label="status: {status}"></span>
 </div>

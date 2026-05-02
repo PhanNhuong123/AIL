@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { get } from 'svelte/store';
-import { theme, density, accent } from '$lib/stores';
+import { theme, density, accent, activeLens } from '$lib/stores';
 import { initTweaksState, resetTweaksState } from './tweaks-state';
 
 beforeEach(() => {
@@ -81,5 +81,28 @@ describe('tweaks-state', () => {
     initTweaksState();
     // Default accent stays — invalid persisted value is ignored.
     expect(get(accent)).toBe('#2997ff');
+  });
+
+  // Acceptance pass 2026-05-02 — story B4 caught that activeLens was the
+  // odd-one-out: theme / density / accent persisted, lens did not. Now
+  // tweaks-state owns lens persistence too, so a user who picks "rules"
+  // doesn't get yanked back to "verify" on every reload.
+  it('lens persists to localStorage and re-hydrates on next init', () => {
+    initTweaksState();
+    activeLens.set('rules');
+    const parsed = JSON.parse(localStorage.getItem('ail3_tweaks_v1')!);
+    expect(parsed.lens).toBe('rules');
+
+    resetTweaksState();
+    expect(get(activeLens)).toBe('verify'); // reset returns to default
+    localStorage.setItem('ail3_tweaks_v1', JSON.stringify({ lens: 'rules' }));
+    initTweaksState();
+    expect(get(activeLens)).toBe('rules');
+  });
+
+  it('rejects unknown lens values on hydrate', () => {
+    localStorage.setItem('ail3_tweaks_v1', JSON.stringify({ lens: 'galaxy-brain' }));
+    initTweaksState();
+    expect(get(activeLens)).toBe('verify');
   });
 });

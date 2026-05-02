@@ -33,7 +33,7 @@
         type="button"
         class="conflict-jump-btn"
         data-testid="conflict-jump-{p.peerId}"
-        aria-label={'Jump to peer step ' + p.peerId.slice(0, 8)}
+        aria-label={'Jump to peer step ' + p.peerId}
         on:click={() => onJump(p.peerId)}
       >Jump to peer →</button>
     </article>
