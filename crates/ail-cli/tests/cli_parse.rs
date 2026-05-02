@@ -114,19 +114,31 @@ fn cli_parse_build_target_typescript() {
 #[test]
 fn cli_parse_verify_no_file() {
     let cmd = parse(&["ail", "verify"]);
-    let Command::Verify { file, from_db: _ } = cmd else {
+    let Command::Verify {
+        file,
+        from_db: _,
+        format,
+    } = cmd
+    else {
         panic!("expected Verify");
     };
     assert!(file.is_none());
+    assert_eq!(format, "text");
 }
 
 #[test]
 fn cli_parse_verify_with_file() {
     let cmd = parse(&["ail", "verify", "src/main.ail"]);
-    let Command::Verify { file, from_db: _ } = cmd else {
+    let Command::Verify {
+        file,
+        from_db: _,
+        format,
+    } = cmd
+    else {
         panic!("expected Verify");
     };
     assert_eq!(file, Some(PathBuf::from("src/main.ail")));
+    assert_eq!(format, "text");
 }
 
 #[test]
