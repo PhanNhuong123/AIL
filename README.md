@@ -18,7 +18,8 @@
   <img alt="MCP integration" src="https://img.shields.io/badge/MCP-agent%20tools-7c3aed?style=flat-square">
   <img alt="Python emitter" src="https://img.shields.io/badge/Python-emitter-3776ab?style=flat-square&logo=python&logoColor=white">
   <img alt="TypeScript emitter" src="https://img.shields.io/badge/TypeScript-emitter-3178c6?style=flat-square&logo=typescript&logoColor=white">
-  <img alt="v3.0.0" src="https://img.shields.io/badge/v3.0.0-coverage%20%2B%20agent-111827?style=flat-square">
+  <img alt="Tauri IDE" src="https://img.shields.io/badge/Tauri-IDE-24c8db?style=flat-square&logo=tauri&logoColor=white">
+  <img alt="v4.0 in development" src="https://img.shields.io/badge/v4.0-IDE%20%2B%20sheaf-111827?style=flat-square">
 </p>
 
 </div>
@@ -152,20 +153,27 @@ This matters because it's easy to get wrong:
 ```
 ail/
 ├── crates/
-│   ├── ail-graph/       PSSD graph + CIC engine + search + validation
+│   ├── ail-graph/       PSSD graph + CIC engine + validation
+│   ├── ail-db/          SQLite-backed graph store + caching layer
 │   ├── ail-types/       Type system + constraint expressions + type checker
-│   ├── ail-contract/    Static checks + Z3 encoding + verification pipeline
+│   ├── ail-contract/    Static checks + Z3 encoding + sheaf consistency
 │   ├── ail-text/        PEG parser (17 syntax patterns + synonyms) + renderer
+│   ├── ail-search/      Embedding search + concept indexing
+│   ├── ail-coverage/    Semantic coverage scoring (SCFT)
 │   ├── ail-emit/        Python / TypeScript / Rust generators + test gen
 │   ├── ail-mcp/         MCP server — connect Claude, Cursor, any AI agent
-│   ├── ail-cli/         CLI (verify, build, search, context)
-│   └── ail-runtime-py/  Python runtime (pre/post/keep validators)
+│   ├── ail-cli/         CLI (verify · build · search · context · coverage · sheaf · agent)
+│   ├── ail-ui-bridge/   Tauri command surface for the desktop IDE
+│   └── ail-runtime-py/  Python runtime (pre/post/keep validators) — MIT
+├── agents/              LangGraph-driven AI agent (5 providers)
+├── ide/                 Tauri v2 + SvelteKit desktop IDE (v4.0)
+└── examples/            Tutorial / example projects (e.g. wallet_service)
 ```
 
 Pipeline enforced by Rust's type system:
 
 ```
-AilGraph → ValidGraph → TypedGraph → VerifiedGraph → Python / TS / Rust
+.ail → AilGraph → ValidGraph → TypedGraph → VerifiedGraph → Python / TS / Rust
 ```
 
 You cannot emit unverified code. The compiler won't let you.
@@ -253,9 +261,9 @@ and provider-swap walkthrough.
 
 ## Status
 
-**v0.1 in active development.** Built in Rust. Verified by Z3. Designed to run under the AI tools you already use.
+**Active development.** Built in Rust. Verified by Z3. Designed to run under the AI tools you already use.
 
-**Currently:** v3.0.0 — Semantic Coverage + AI Agent Foundation
+**Currently:** v4.0 in progress — Tauri IDE · Sheaf consistency · Reviewer/Verifier lenses
 
 | Component | Status |
 |-----------|--------|
@@ -271,8 +279,14 @@ and provider-swap walkthrough.
 | Embedding search | ✅ v2.0 |
 | MCP write tools (5 tools) | ✅ v2.0 |
 | Semantic coverage (SCFT) | ✅ v3.0 |
-| AI Agent Foundation | ✅ v3.0 |
-| AIL IDE (visual canvas) | 🔜 v4.0 |
+| AI Agent Foundation (LangGraph · 5 providers) | ✅ v3.0 |
+| Z3 0.20 (vendored, no libclang/bindgen) | ✅ v4.0 |
+| Tauri IDE shell (TitleBar · Outline · Stage · ChatPanel) | 🚧 v4.0 |
+| FlowView · NodeView · SystemView · ModuleView | 🚧 v4.0 |
+| Reviewer + Verifier lenses on canvas | 🚧 v4.0 |
+| Sheaf consistency (Čech nerve · H1 obstruction · `ail sheaf`) | 🚧 v4.0 |
+| Python sidecar freeze + Tauri packaging | 🚧 v4.0 |
+| Vietnamese project wiki | ✅ |
 
 ---
 
@@ -283,7 +297,7 @@ and provider-swap walkthrough.
 | ~~**v1.0**~~ | ~~Core engine~~ | ~~Parse · Graph · CIC · Z3 · Python emit · MCP read~~ |
 | ~~**v2.0**~~ | ~~Foundation~~ | ~~SQLite · TypeScript emit · Embedding search · Path-sensitive CIC · MCP write~~ |
 | ~~**v3.0**~~ | ~~Semantic coverage + Agent foundation~~ | ~~`ail coverage` · `ail agent` · LangGraph · 5 providers · `[agent]` TOML~~ |
-| **v4.0** | IDE & Full Agent | Tauri visual IDE · AI Chat on canvas · Agent runs on canvas · Sheaf consistency |
+| **v4.0** 🚧 | IDE & Sheaf consistency | Tauri visual IDE · FlowView/NodeView · Reviewer/Verifier lenses · `ail sheaf` (Čech nerve + H1 obstruction) · Python sidecar pipeline |
 | **v5.0** | Intelligence | Entropy analysis · Interactive debug · Advanced agent workflows |
 | **v6.0** | Runtime | Runtime tracing · `.ailmap` crash → node · Production monitoring |
 | **v7.0+** | Scale & Ecosystem | Rust emitter · Collaboration · SDK · Plugin system · Full launch |
@@ -292,7 +306,7 @@ and provider-swap walkthrough.
 
 ## Tech stack
 
-Rust · Z3 · petgraph · pest · SQLite · MCP · Tauri (IDE, v1.0)
+Rust · Z3 (vendored 4.16) · petgraph · pest · SQLite · MCP · Tauri v2 + SvelteKit 5 (IDE) · LangGraph (agent)
 
 ---
 
