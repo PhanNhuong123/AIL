@@ -1,10 +1,10 @@
-//! `ail-ui-bridge` — JSON serialization bridge from `VerifiedGraph` to the
-//! AIL Tauri IDE.
+//! `ail-ui-bridge` — JSON serialization bridge from `VerifiedGraph` (or
+//! `TypedGraph`) to the AIL Tauri IDE.
 //!
-//! This crate is read-only over `VerifiedGraph`. It serializes the verified
-//! graph into stable JSON shapes consumed by the SvelteKit frontend, rolls
-//! up node status (worst-child), derives stable path-like node IDs, and
-//! emits incremental `GraphPatchJson` diffs.
+//! This crate is read-only over graph types. It serializes graphs into stable
+//! JSON shapes consumed by the SvelteKit frontend, rolls up node status
+//! (worst-child), derives stable path-like node IDs, and emits incremental
+//! `GraphPatchJson` diffs.
 //!
 //! ## Features
 //!
@@ -13,7 +13,11 @@
 //!
 //! ## Key entry points
 //!
-//! - [`pipeline::load_verified_from_path`] — run the 4-stage pipeline.
+//! - [`pipeline::load_typed_from_path`] — run the 3-stage pipeline (parse +
+//!   validate + type_check); used by `load_project` and watcher cycles.
+//! - [`pipeline::load_verified_from_path`] — run the full 4-stage pipeline
+//!   (adds contract verification); used by `verify_project`.
+//! - [`serialize::serialize_typed_graph`] — serialize a `TypedGraph` to [`types::GraphJson`].
 //! - [`serialize::serialize_graph`] — serialize a `VerifiedGraph` to [`types::GraphJson`].
 //! - [`serialize::diff_graph`] — compute an incremental diff between two graphs.
 //! - [`lens::compute_lens_metrics`] — compute per-lens metrics for a scope.
@@ -56,8 +60,9 @@ pub use commands::{
 
 pub use errors::BridgeError;
 pub use lens::compute_lens_metrics;
+pub use pipeline::load_typed_from_path;
 pub use pipeline::load_verified_from_path;
-pub use serialize::{diff_graph, serialize_graph};
+pub use serialize::{diff_graph, serialize_graph, serialize_typed_graph};
 pub use types::{
     agent::{
         AgentCancelResult, AgentCompletePayload, AgentMessagePayload, AgentMode, AgentPreview,

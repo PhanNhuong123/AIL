@@ -122,7 +122,7 @@ fn build_scaffolded_files_not_overwritten() {
 #[test]
 fn verify_ok_on_valid_project() {
     let fixture = wallet_fixture_path();
-    let result = run_verify(&fixture, None, None);
+    let result = run_verify(&fixture, None, None, "text");
     assert!(
         result.is_ok(),
         "verify failed on wallet fixture: {result:?}"
@@ -175,7 +175,7 @@ fn t173_ail_verify_unsat_appends_sheaf_localization() {
     )
     .unwrap();
 
-    let result = run_verify(tmp.path(), None, None);
+    let result = run_verify(tmp.path(), None, None, "text");
     assert!(
         result.is_err(),
         "verify must fail on contradictory contracts"
@@ -224,7 +224,7 @@ fn t173_ail_verify_non_unsat_class_does_not_augment() {
     )
     .unwrap();
 
-    let result = run_verify(tmp.path(), None, None);
+    let result = run_verify(tmp.path(), None, None, "text");
     // The project may pass or fail depending on Z3's postcondition check.
     // If it fails, the body must NOT contain "Sheaf localization".
     if let Err(e) = result {

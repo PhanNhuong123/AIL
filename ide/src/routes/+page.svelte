@@ -162,9 +162,12 @@
   // Patch debounce helpers (task 16.2, updated 16.3)
   // ---------------------------------------------------------------------------
 
-  // applyPatchAndAnimate is the SOLE writer of graph + selection + patchEffects
-  // (invariant 16.2-A). Returns the computed PatchEffects so callers can pass
-  // addedIds + modifiedIds to the verifier scheduler (16.3).
+  // applyPatchAndAnimate is the sole writer of `graph`/`selection`/`patchEffects`
+  // for incremental watcher patches (invariant 16.2-A). Initial hydration of `graph`
+  // is performed by `loadAndCloseWelcome` from the `loadProject` IPC response;
+  // this function applies subsequent diff patches on top of that hydrated state.
+  // Returns the computed PatchEffects so callers can pass addedIds + modifiedIds
+  // to the verifier scheduler (16.3).
   // Note: no parameter/return type annotations — esrap rejects them (16.2-E).
   function applyPatchAndAnimate(patch) {
     graph.update((g) => (g ? applyGraphPatch(g, patch) : g));
@@ -331,7 +334,8 @@
   // is the single Tauri import surface (ide/src/lib/CLAUDE.md).
 
   async function loadAndCloseWelcome(path) {
-    await loadProject(path);
+    const result = await loadProject(path);
+    graph.set(result);
     welcomeModalOpen.set(false);
     quickCreateModalOpen.set(false);
     setWelcomeDismissed(true);
@@ -723,6 +727,7 @@
       resetReviewerState();
       watchedProjectId = newId;
       startWatchProject().catch((e) => console.warn('[watcher] start failed', e));
+      runVerifyNow([]);
     }
   }
 

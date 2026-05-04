@@ -122,10 +122,10 @@ fn cli_e2e_wallet_verify_from_db_matches_filesystem() {
     let src = project.join("src");
     let db = project.join("project.ail.db");
 
-    run_verify(&project, None, None).expect("filesystem verify should pass");
+    run_verify(&project, None, None, "text").expect("filesystem verify should pass");
 
     run_migrate(&src, &db, false).expect("migrate should succeed");
-    run_verify(&project, None, Some(&db)).expect("SQLite verify should pass");
+    run_verify(&project, None, Some(&db), "text").expect("SQLite verify should pass");
 }
 
 /// 12.1-c: `ail build --from-db` emits Python output functionally equivalent

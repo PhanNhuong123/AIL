@@ -2,6 +2,7 @@ use std::collections::BTreeMap;
 
 use ail_contract::VerifiedGraph;
 use ail_graph::{compute_context_packet_for_backend, GraphBackend, NodeId, Pattern};
+use ail_types::TypedGraph;
 
 use crate::ids::IdMap;
 use crate::rollup::{rollup, rollup_from_contracts};
@@ -29,7 +30,26 @@ const DEFAULT_CLUSTER_COLOR: &str = "#2997ff";
 /// - `Define`/`Describe`-with-name children become `TypeRefJson`.
 /// - `Error` children become `ErrorRefJson`.
 pub fn serialize_graph(graph: &VerifiedGraph, project_name: &str) -> GraphJson {
-    let backend = graph.graph();
+    serialize_graph_from_backend(graph.graph(), project_name)
+}
+
+/// Serialize a `TypedGraph` (3-stage pipeline, no contract verification) into
+/// a `GraphJson` for the IDE frontend.
+///
+/// Produces the same structural JSON as [`serialize_graph`]. Because contract
+/// verification has not run, all node statuses are `Ok` (via
+/// `rollup_from_contracts(false)`). The `issues` field will be empty. The
+/// verifier scheduler will overwrite status fields in a subsequent
+/// `run_verifier` call.
+pub fn serialize_typed_graph(graph: &TypedGraph, project_name: &str) -> GraphJson {
+    serialize_graph_from_backend(graph.graph(), project_name)
+}
+
+/// Shared serialization body — takes any `GraphBackend` reference.
+///
+/// Both [`serialize_graph`] and [`serialize_typed_graph`] are 1-line wrappers
+/// that call this with `graph.graph()`.
+fn serialize_graph_from_backend(backend: &dyn GraphBackend, project_name: &str) -> GraphJson {
     let id_map = IdMap::build(backend);
 
     let cluster = ClusterJson {

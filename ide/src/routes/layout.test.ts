@@ -18,6 +18,12 @@ vi.mock('@tauri-apps/api/event', () => ({
     return Promise.resolve(un);
   }),
 }));
+// Stub out the Tauri dialog plugin so openProjectDialog() can resolve in jsdom.
+// dialogResult is set per-test to control what the dialog "returns".
+let dialogResult: string | null = '/test/project';
+vi.mock('@tauri-apps/plugin-dialog', () => ({
+  open: vi.fn(() => Promise.resolve(dialogResult)),
+}));
 
 import { render, fireEvent } from '@testing-library/svelte';
 import { tick } from 'svelte';
@@ -1126,6 +1132,54 @@ describe('+page.svelte — Welcome auto-open', () => {
     render(Page);
     await tick();
 
+    expect(get(welcomeModalOpen)).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// loadAndCloseWelcome hydrates graph store (bug fix: was discarding return value)
+// ---------------------------------------------------------------------------
+
+describe('+page.svelte — loadAndCloseWelcome hydrates graph store', () => {
+  type TauriWindow = Window & { isTauri?: boolean };
+
+  beforeEach(() => {
+    (window as TauriWindow).isTauri = true;
+  });
+
+  afterEach(() => {
+    delete (window as TauriWindow).isTauri;
+  });
+
+  it('graph store is set to loadProject return value after opening a project', async () => {
+    // Arrange: welcome modal open, dialog returns a path, load_project returns a graph.
+    localStorage.removeItem('ail3_welcome_dismissed_v1');
+    graph.set(null);
+    welcomeModalOpen.set(true);
+
+    const fixtureGraph = emptyGraph('p-loaded');
+    // Route all invoke calls: load_project returns the fixture; everything else resolves undefined.
+    invoke.mockImplementation((cmd: string) => {
+      if (cmd === 'load_project') return Promise.resolve(fixtureGraph);
+      return Promise.resolve(undefined);
+    });
+    dialogResult = '/test/project';
+
+    const { container } = render(Page);
+    await tick();
+
+    // Act: click the "Open an existing" card in the Welcome modal.
+    const openCard = container.querySelector('[data-testid="welcome-card-open"]') as HTMLElement | null;
+    expect(openCard).not.toBeNull();
+    fireEvent.click(openCard!);
+
+    // The async chain has multiple awaits (import dialog → open → loadProject →
+    // graph.set). Use vi.waitFor to flush all microtasks reliably instead of
+    // counting tick()s.
+    await vi.waitFor(() => {
+      expect(get(graph)).toEqual(fixtureGraph);
+    });
+    // Welcome modal must be closed after successful load.
     expect(get(welcomeModalOpen)).toBe(false);
   });
 });

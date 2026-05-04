@@ -14,8 +14,8 @@ use tauri::{AppHandle, Runtime, State};
 use crate::errors::BridgeError;
 use crate::flowchart::build_flowchart;
 use crate::ids::IdMap;
-use crate::pipeline::{load_verified_from_path, read_project_name};
-use crate::serialize::serialize_graph;
+use crate::pipeline::{load_typed_from_path, load_verified_from_path, read_project_name};
+use crate::serialize::serialize_typed_graph;
 use crate::types::flowchart::FlowchartJson;
 use crate::types::graph_json::GraphJson;
 use crate::types::lens_stats::{Lens, LensStats};
@@ -177,9 +177,9 @@ pub(crate) fn resolve_project_layout(supplied: &Path) -> (PathBuf, PathBuf) {
 #[tauri::command]
 pub fn load_project(path: String, state: State<'_, BridgeState>) -> Result<GraphJson, BridgeError> {
     let (root, parse_dir) = resolve_project_layout(&PathBuf::from(&path));
-    let verified = load_verified_from_path(&parse_dir)?;
+    let typed = load_typed_from_path(&parse_dir)?;
     let name = read_project_name(&root);
-    let graph_json = serialize_graph(&verified, &name);
+    let graph_json = serialize_typed_graph(&typed, &name);
 
     let mut inner = state.lock().map_err(|_| BridgeError::InvalidInput {
         reason: "state lock poisoned".to_string(),
@@ -320,9 +320,9 @@ pub fn get_flowchart(
         })?;
 
     let (_, parse_dir) = resolve_project_layout(root);
-    let verified = load_verified_from_path(&parse_dir)?;
-    let id_map = IdMap::build(verified.graph());
-    build_flowchart(verified.graph(), &id_map, &function_id)
+    let typed = load_typed_from_path(&parse_dir)?;
+    let id_map = IdMap::build(typed.graph());
+    build_flowchart(typed.graph(), &id_map, &function_id)
 }
 
 /// Re-run the full pipeline and return a verification result.
@@ -396,8 +396,8 @@ pub fn save_flowchart(
         })?;
 
     let (_, parse_dir) = resolve_project_layout(root);
-    let verified = load_verified_from_path(&parse_dir)?;
-    let id_map = IdMap::build(verified.graph());
+    let typed = load_typed_from_path(&parse_dir)?;
+    let id_map = IdMap::build(typed.graph());
     if id_map.get_id(&function_id).is_none() {
         return Err(BridgeError::NodeNotFound { id: function_id });
     }

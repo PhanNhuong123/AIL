@@ -25,8 +25,8 @@ use tauri::{AppHandle, Emitter, Manager, Runtime};
 use crate::commands::BridgeState;
 use crate::errors::BridgeError;
 use crate::events::GRAPH_UPDATED;
-use crate::pipeline::{load_verified_from_path, read_project_name};
-use crate::serialize::{diff_graph_at, serialize_graph};
+use crate::pipeline::{load_typed_from_path, read_project_name};
+use crate::serialize::{diff_graph_at, serialize_typed_graph};
 use crate::types::graph_json::GraphJson;
 use crate::types::patch::GraphPatchJson;
 
@@ -122,8 +122,8 @@ fn is_editor_temp(name: &str) -> bool {
 /// protocol. Errors are logged and swallowed — the user is mid-edit and
 /// transient parse failures should not surface as bridge errors.
 fn dispatch_cycle<R: Runtime>(app: &AppHandle<R>, parse_dir: &Path, generation: u64) {
-    // 1. Pipeline off-lock.
-    let verified = match load_verified_from_path(parse_dir) {
+    // 1. Pipeline off-lock (3-stage: parse + validate + type_check, no verify).
+    let typed = match load_typed_from_path(parse_dir) {
         Ok(v) => v,
         Err(e) => {
             log::warn!("[watcher] pipeline failed: {e}");
@@ -139,7 +139,7 @@ fn dispatch_cycle<R: Runtime>(app: &AppHandle<R>, parse_dir: &Path, generation: 
         .map(Path::to_path_buf)
         .unwrap_or_else(|| parse_dir.to_path_buf());
     let name = read_project_name(&root);
-    let next_graph = serialize_graph(&verified, &name);
+    let next_graph = serialize_typed_graph(&typed, &name);
 
     let patch: GraphPatchJson = {
         let state = app.state::<BridgeState>();
@@ -226,13 +226,13 @@ pub fn run_diff_cycle(
     project_name: &str,
     timestamp: u64,
 ) -> Option<GraphPatchJson> {
-    let verified = match load_verified_from_path(parse_dir) {
+    let typed = match load_typed_from_path(parse_dir) {
         Ok(v) => v,
         Err(e) => {
             log::warn!("[watcher] pipeline failed: {e}");
             return None;
         }
     };
-    let next = serialize_graph(&verified, project_name);
+    let next = serialize_typed_graph(&typed, project_name);
     Some(diff_graph_at(prev, &next, timestamp))
 }

@@ -142,6 +142,21 @@ fn cli_parse_verify_with_file() {
 }
 
 #[test]
+fn cli_parse_verify_format_json() {
+    let cmd = parse(&["ail", "verify", "--format", "json"]);
+    let Command::Verify {
+        file,
+        from_db: _,
+        format,
+    } = cmd
+    else {
+        panic!("expected Verify");
+    };
+    assert!(file.is_none());
+    assert_eq!(format, "json");
+}
+
+#[test]
 fn cli_parse_serve() {
     let cmd = parse(&["ail", "serve"]);
     assert!(matches!(cmd, Command::Serve));

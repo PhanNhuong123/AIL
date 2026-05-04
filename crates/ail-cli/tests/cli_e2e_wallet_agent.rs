@@ -126,7 +126,7 @@ fn ail_verify_passes_after_agent_like_writes() {
     run_migrate(&src, &db_path, false).expect("migrate must succeed on wallet_service");
 
     // 2. Baseline verify: must pass on unmodified wallet (filesystem backend).
-    run_verify(&project, None, None).expect("baseline verify must pass");
+    run_verify(&project, None, None, "text").expect("baseline verify must pass");
 
     // 3. Open the DB and attach 3 children under transfer_money.
     let mut db = SqliteGraph::open(&db_path).expect("DB open must succeed");
@@ -136,7 +136,7 @@ fn ail_verify_passes_after_agent_like_writes() {
 
     // 4. Verify again with the filesystem backend: must still pass.
     //    The verifier re-parses `.ail` sources — DB mutations are transparent.
-    run_verify(&project, None, None).expect("post-write verify must pass");
+    run_verify(&project, None, None, "text").expect("post-write verify must pass");
 }
 
 /// 15.2-2: Proves that the seeded Leaf coverage row is marked stale
