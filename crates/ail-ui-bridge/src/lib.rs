@@ -27,9 +27,11 @@ pub mod errors;
 pub mod events;
 pub mod flowchart;
 pub mod ids;
+pub mod layout;
 pub mod lens;
 pub mod pipeline;
 pub mod rollup;
+pub mod save_registry;
 pub mod serialize;
 pub mod types;
 
@@ -59,7 +61,11 @@ pub use commands::{
 };
 
 pub use errors::BridgeError;
+pub use layout::{load_layout, merge_and_save, save_layout, LayoutError, LAYOUT_FILE, SIDECAR_DIR};
 pub use lens::compute_lens_metrics;
+pub use save_registry::{
+    save_registry, SaveContext, SaveRegistry, SaveSource, SessionId, ECHO_WINDOW, MAX_AGE,
+};
 pub use pipeline::load_typed_from_path;
 pub use pipeline::load_verified_from_path;
 pub use serialize::{diff_graph, serialize_graph, serialize_typed_graph};

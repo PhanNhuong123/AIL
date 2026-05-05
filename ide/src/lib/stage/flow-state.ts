@@ -50,6 +50,12 @@ export const flowFocusedNodeId: Writable<string | null>          = writable(null
 export const flowDraftEdge: Writable<DraftEdge | null>           = writable(null);
 export const createdEdges: Writable<FlowEdgeJson[]>              = writable([]);
 
+// v4.1 edit-mode toggle. `false` (default) = drag, port circles, and
+// inline edits are enabled. `true` = read-only canvas (the v4.0 ship-mode
+// behaviour). Driven by the `E` keyboard shortcut and the lock toggle in
+// the zoom controls.
+export const editLocked: Writable<boolean>                       = writable(false);
+
 // ---------------------------------------------------------------------------
 // Pure helpers
 // ---------------------------------------------------------------------------
@@ -99,11 +105,21 @@ export function setNodePos(
 
 /**
  * Seed positions from FlowNodeJson array (call when loading a new flowchart).
+ *
+ * `layoutOverrides` carries previously persisted drag positions from the
+ * project's sidecar layout. When an entry matches a node id, its `x`/`y`
+ * replace the FlowNodeJson defaults so reload preserves the user's last
+ * drag. Pass `null`/`undefined` (or call with one argument) for the legacy
+ * v4.0 read-only behaviour.
  */
-export function seedPositions(nodes: FlowNodeJson[]): void {
+export function seedPositions(
+  nodes: FlowNodeJson[],
+  layoutOverrides?: Record<string, { x: number; y: number }> | null,
+): void {
   const m = new Map<string, { x: number; y: number }>();
   for (const n of nodes) {
-    m.set(n.id, { x: n.x, y: n.y });
+    const override = layoutOverrides?.[n.id];
+    m.set(n.id, override ? { x: override.x, y: override.y } : { x: n.x, y: n.y });
   }
   flowNodePositions.set(m);
 }

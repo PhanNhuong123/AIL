@@ -137,6 +137,46 @@ AIL generates verified Python — with runtime guards, type annotations, and tes
 
 ---
 
+## v4.0 — Chat-Driven IDE
+
+> **"Talk to design. Watch it build."**
+
+The v4.0 desktop IDE makes the constraint graph **visible**. You describe intent in chat, the AI agent writes `.ail`, the canvas re-renders live, the verifier proves what it can, and the sheaf engine localises any conflicts onto the exact two nodes that disagree.
+
+### What v4.0 does
+
+- **Chat-driven editing.** Open the desktop app, point it at a project, ask the agent to add/refine nodes, preview the patch, hit **Apply**. The watcher debounces to 250 ms; the verifier auto-runs at 1000 ms with run-id guards so a fast typist never sees stale results.
+- **Live verification on the canvas.** Every Do-node carries a verify pill — **✓ Verified · ✗ Counterexample · ? Solver inconclusive · ⏱ Solver timeout** — so you read the Z3 verdict where the code lives, not in a terminal.
+- **Sheaf consistency on failure.** When verification fails, the sheaf engine builds a Čech nerve over the broken nodes and surfaces the two-node conflicts directly in NodeView. You see the contradiction, not just the symptom.
+- **Reviewer + Coverage lenses.** The reviewer drops insight messages into chat after each successful verify; coverage markers light up the Outline so you can see what the spec doesn't yet say.
+
+### What v4.0 is NOT (yet)
+
+v4.0 is **honest about what's not in the box**. The graph is read-only on the canvas — selection, pan, and zoom only. Direct manipulation lives in v4.1.
+
+- ❌ No node drag-to-reposition (canvas is read-only).
+- ❌ No port-drag to wire edges.
+- ❌ No inline rule editing.
+- ❌ No "+ Add rule" or "Run test" buttons (test-runner stub returned dishonest `passed: true`; both tabs are unmounted).
+
+### Coming in v4.1
+
+- Direct flowchart edit — drag persists position, port-drag creates edges, undo/redo.
+- Inline rule editing — click a rule, edit, re-verify on blur.
+- Manual node creation from the canvas (not just chat).
+- Real test runner wired into the Test tab.
+
+### 90-second demo flow
+
+1. **0–10s** — Open `wallet_service`. System view renders clusters and modules.
+2. **10–25s** — Drill into Billing → `transfer` → `check_balance`. Verify lens shows the counterexample pill.
+3. **25–45s** — Chat: *"Why is check_balance failing?"* Agent explains, highlights the rule conflict.
+4. **45–65s** — Chat: *"Suggest a fix."* Preview card appears in chat. **Apply.**
+5. **65–80s** — Canvas patches live. The pill flips to **✓ Verified**. The Outline coverage dot turns green.
+6. **80–90s** — Sheaf insight: *"All conflicts resolved."* End card.
+
+---
+
 ## What AIL is not
 
 This matters because it's easy to get wrong:
@@ -297,7 +337,8 @@ and provider-swap walkthrough.
 | ~~**v1.0**~~ | ~~Core engine~~ | ~~Parse · Graph · CIC · Z3 · Python emit · MCP read~~ |
 | ~~**v2.0**~~ | ~~Foundation~~ | ~~SQLite · TypeScript emit · Embedding search · Path-sensitive CIC · MCP write~~ |
 | ~~**v3.0**~~ | ~~Semantic coverage + Agent foundation~~ | ~~`ail coverage` · `ail agent` · LangGraph · 5 providers · `[agent]` TOML~~ |
-| **v4.0** 🚧 | IDE & Sheaf consistency | Tauri visual IDE · FlowView/NodeView · Reviewer/Verifier lenses · `ail sheaf` (Čech nerve + H1 obstruction) · Python sidecar pipeline |
+| **v4.0** 🚧 | Chat-driven IDE & Sheaf consistency | Tauri desktop IDE (read-only canvas) · chat-driven node creation · live verify pill (sat/unsat/unknown/timeout) · Reviewer + Coverage lenses · `ail sheaf` (Čech nerve + H1 obstruction) · Python sidecar pipeline |
+| **v4.1** | Direct manipulation | Drag-to-reposition · port-drag edges · inline rule editing · manual node creation from canvas · real test runner |
 | **v5.0** | Intelligence | Entropy analysis · Interactive debug · Advanced agent workflows |
 | **v6.0** | Runtime | Runtime tracing · `.ailmap` crash → node · Production monitoring |
 | **v7.0+** | Scale & Ecosystem | Rust emitter · Collaboration · SDK · Plugin system · Full launch |

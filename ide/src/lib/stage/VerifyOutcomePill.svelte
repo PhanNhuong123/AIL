@@ -12,21 +12,28 @@
 
   // No return-type or parameter-type annotations: Svelte 5 + esrap rejects
   // them on script-local helpers (invariant 16.2-E).
+  // v4.0 outcome semantics (mirrors the Rust enum):
+  //   sat     → ✓ Verified (postcondition entailed)
+  //   unsat   → ✗ Counterexample found
+  //   unknown → ? Solver inconclusive
+  //   timeout → ⏱ Solver timeout
+  //   fail    → ✗ Failing (legacy pre-v4.0 payloads with no solver classification)
   function computeTone(ok, outcome) {
-    if (ok) return 'ok';
+    if (ok || outcome === 'sat') return 'ok';
     if (outcome === 'timeout' || outcome === 'unknown') return 'warn';
     return 'fail';
   }
 
   function computeLabel(ok, outcome) {
-    if (ok) return 'verified';
+    if (ok || outcome === 'sat') return 'verified';
+    if (outcome === 'unsat') return 'counterexample';
     if (outcome === 'timeout') return 'timeout';
     if (outcome === 'unknown') return 'unknown';
     return 'failing';
   }
 
   function computeGlyph(ok, outcome) {
-    if (ok) return '✓';
+    if (ok || outcome === 'sat') return '✓';
     if (outcome === 'timeout') return '⏱';
     if (outcome === 'unknown') return '?';
     return '✗';

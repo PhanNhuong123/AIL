@@ -54,12 +54,32 @@ pub struct InheritedRule {
     pub from: String,
 }
 
+/// Per-node Z3 solver verdict surfaced in the IDE verify pill.
+///
+/// Naming follows the user-facing convention from the v4.0 ship checklist:
+/// `Sat` = postcondition entailed (✓ Verified); `Unsat` = counterexample
+/// found; `Unknown` = solver gave up; `Timeout` = 30s limit hit. Mirrors the
+/// frontend `VerifyOutcome` union in `ide/src/lib/types.ts` exactly.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum VerifyOutcome {
+    Sat,
+    Unsat,
+    Unknown,
+    Timeout,
+}
+
 /// Formal verification result for this node.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct VerificationDetail {
     pub ok: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub counterexample: Option<CounterexampleDetail>,
+    /// Z3 solver verdict for this node. `None` when verification did not run
+    /// (typed-only path) or when the node is structural (not a `Do` node with
+    /// contracts). Frontend renders the verify pill from `(ok, outcome)`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub outcome: Option<VerifyOutcome>,
 }
 
 /// A counterexample produced by the Z3 solver when verification fails.

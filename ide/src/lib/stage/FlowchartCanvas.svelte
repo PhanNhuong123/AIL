@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onMount } from 'svelte';
   import type { FlowchartJson } from '$lib/types';
   import {
     flowViewport,
@@ -7,6 +8,7 @@
     flowDraftEdge,
     createdEdges,
     seedPositions,
+    editLocked,
   } from './flow-state';
   import type { DraftEdge } from './flow-state';
   import { reduce, emptyState, hitTest } from './flow-interaction';
@@ -15,11 +17,25 @@
   import FlowchartEdge from './FlowchartEdge.svelte';
   import FlowchartZoomControls from './FlowchartZoomControls.svelte';
   import { get } from 'svelte/store';
+  import { isTauri, saveFlowchart } from '$lib/bridge';
 
   export let flowchart = { nodes: [], edges: [] } as FlowchartJson;
+  /**
+   * Path-like id of the function this canvas is rendering. When non-empty,
+   * the component persists drag-derived positions into the project's
+   * sidecar layout via `saveFlowchart`. Empty in tests/fixtures so the
+   * persist call is suppressed.
+   */
+  export let functionId = '' as string;
+  /**
+   * Per-project layout overrides keyed by flowchart node id. Passed in from
+   * `Stage.svelte` so this component never imports `$lib/stores` directly
+   * (keeps test fixtures isolated from the route-owned `projectLayout`).
+   */
+  export let layoutOverrides = null as Record<string, { x: number; y: number }> | null;
 
-  // Seed positions when flowchart changes
-  $: { seedPositions(flowchart.nodes); }
+  // Seed positions when flowchart changes; overlay any saved drag positions.
+  $: { seedPositions(flowchart.nodes, layoutOverrides); }
 
   // Build node bounds for hit-testing from current positions
   function getNodeBounds() {
@@ -58,6 +74,7 @@
       selectedNodeId: get(flowSelectedNodeId),
       draftEdge: get(flowDraftEdge),
       createdEdges: get(createdEdges),
+      readOnly: get(editLocked),
     };
     iState = reduce(iState, ev);
     flowViewport.set(iState.viewport);
@@ -66,6 +83,66 @@
     flowDraftEdge.set(iState.draftEdge);
     createdEdges.set(iState.createdEdges);
   }
+
+  // ── Drag-persist (v4.1) ────────────────────────────────────────────────────
+  // Schedule a debounced save after a node finishes a drag. Multiple drags
+  // within the window collapse into a single saveFlowchart call so a long
+  // gesture across several nodes only hits the bridge once.
+  const DRAG_SAVE_DEBOUNCE_MS = 250;
+  let dragSaveTimer = null as ReturnType<typeof setTimeout> | null;
+  let pendingSave = false;
+
+  function scheduleDragSave() {
+    // Suppress saves when the canvas does not know which function it belongs
+    // to (test fixtures, isolated mounts) or when running outside Tauri.
+    if (!functionId || !isTauri()) return;
+    pendingSave = true;
+    if (dragSaveTimer !== null) clearTimeout(dragSaveTimer);
+    dragSaveTimer = setTimeout(flushDragSave, DRAG_SAVE_DEBOUNCE_MS);
+  }
+
+  function flushDragSave() {
+    dragSaveTimer = null;
+    if (!pendingSave) return;
+    pendingSave = false;
+    const positions = get(flowNodePositions);
+    const persisted = flowchart.nodes.map((n) => {
+      const pos = positions.get(n.id) ?? { x: n.x, y: n.y };
+      return { ...n, x: pos.x, y: pos.y };
+    });
+    saveFlowchart(functionId, { ...flowchart, nodes: persisted }).catch((err) => {
+      // Non-fatal: log and let the next drag retry. The optimistic UI keeps
+      // the user's positions visible regardless.
+      console.warn('[flowchart] save failed:', err);
+    });
+  }
+
+  // Edit-mode keyboard shortcut: `E` toggles read-only. Listener attaches at
+  // mount and only fires while the document is focused — typing into an
+  // input/textarea must not hijack the gesture.
+  // No parameter type annotation: Svelte 5 + esrap rejects them on
+  // script-local helpers (invariant 16.2-E).
+  onMount(() => {
+    if (typeof document === 'undefined') return;
+    function onKey(e) {
+      if (e.key !== 'e' && e.key !== 'E') return;
+      const target = e.target;
+      const tag = target?.tagName ?? '';
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || target?.isContentEditable) {
+        return;
+      }
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      editLocked.update((v) => !v);
+    }
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      if (dragSaveTimer !== null) {
+        clearTimeout(dragSaveTimer);
+        flushDragSave();
+      }
+    };
+  });
 
   function onWheel(e) {
     e.preventDefault();
@@ -84,7 +161,7 @@
     const { svgX, svgY } = svgCoordsFromEvent(e);
     const bounds = getNodeBounds();
     const selId = iState.selectedNodeId;
-    const hit = hitTest(bounds, selId, svgX, svgY);
+    const hit = hitTest(bounds, selId, svgX, svgY, get(editLocked));
 
     if (hit.hit === 'port') {
       dispatch({ type: 'mousedown-port', nodeId: hit.nodeId, port: hit.port, tipX: svgX, tipY: svgY });
@@ -105,15 +182,19 @@
 
   function onMouseUp(e) {
     if (iState.mode === 'idle') return;
+    const wasDraggingNode = iState.mode === 'dragging-node';
     const { svgX, svgY } = svgCoordsFromEvent(e);
     const bounds = getNodeBounds();
-    const hit = hitTest(bounds, null, svgX, svgY);
+    const hit = hitTest(bounds, null, svgX, svgY, get(editLocked));
     if (hit.hit === 'node') {
       dispatch({ type: 'mouseup-node', nodeId: hit.nodeId });
     } else {
       dispatch({ type: 'mouseup-background' });
     }
     iState = { ...iState, positions: get(flowNodePositions), draftEdge: get(flowDraftEdge) };
+    // After a node-drag commits its final delta on mouseup, schedule a
+    // sidecar layout save so the position survives reload.
+    if (wasDraggingNode) scheduleDragSave();
   }
 
   $: vp = $flowViewport;
@@ -196,19 +277,26 @@
       <!-- Nodes -->
       {#each flowchart.nodes as node (node.id)}
         {@const pos = nodePos(node)}
-        <FlowchartShape
-          kind={node.kind}
-          id={node.id}
-          label={node.label}
-          x={pos.x}
-          y={pos.y}
-          w={NODE_W}
-          h={NODE_H}
-          status={node.status}
-          selected={selectedId === node.id}
-        />
-        <!-- Port circles when this node is selected (invariant 15.8-B) -->
-        {#if selectedId === node.id}
+        <g>
+          {#if $editLocked}
+            <title>Read-only — press E or click the lock to enable editing</title>
+          {/if}
+          <FlowchartShape
+            kind={node.kind}
+            id={node.id}
+            label={node.label}
+            x={pos.x}
+            y={pos.y}
+            w={NODE_W}
+            h={NODE_H}
+            status={node.status}
+            selected={selectedId === node.id}
+          />
+        </g>
+        <!-- Port circles render only when a node is selected AND the canvas
+             is in edit mode. Read-only mode hides them so port-drag-create
+             cannot fire from a stale-coordinate click. -->
+        {#if selectedId === node.id && !$editLocked}
           <circle cx={pos.x + NODE_W / 2} cy={pos.y}              r="5" class="port-circle" data-testid="port-top-{node.id}"/>
           <circle cx={pos.x + NODE_W}     cy={pos.y + NODE_H / 2} r="5" class="port-circle" data-testid="port-right-{node.id}"/>
           <circle cx={pos.x + NODE_W / 2} cy={pos.y + NODE_H}     r="5" class="port-circle" data-testid="port-bottom-{node.id}"/>

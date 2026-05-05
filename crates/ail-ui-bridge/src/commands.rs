@@ -377,33 +377,81 @@ pub fn compute_lens_metrics(
     ))
 }
 
-/// Validate that `function_id` resolves to a function node. Persistence is
-/// deferred to a later phase (see canonical v4 roadmap).
+/// Persist drag-derived node coordinates for `function_id` into the project's
+/// sidecar layout (`<project>/.ail/layout.json`).
+///
+/// Phase 19: layout persistence is sidecar-only — AIL grammar deliberately
+/// has no layout annotation, so positions never enter the source-of-truth
+/// `.ail` text. The chart's `nodes` (id, x, y) are merged into the existing
+/// layout JSON; absent nodes are left untouched. `function_id` validation
+/// keeps stale UI calls from poisoning the file.
 #[tauri::command]
 pub fn save_flowchart(
     function_id: String,
-    _chart: FlowchartJson,
+    chart: FlowchartJson,
     state: State<'_, BridgeState>,
 ) -> Result<(), BridgeError> {
-    let inner = state.lock().map_err(|_| BridgeError::InvalidInput {
-        reason: "state lock poisoned".to_string(),
-    })?;
-    let root = inner
-        .project_path
-        .as_ref()
-        .ok_or_else(|| BridgeError::InvalidInput {
-            reason: "no project loaded".to_string(),
-        })?;
+    use std::collections::HashMap;
+    use crate::layout::merge_and_save;
+    use crate::types::layout::LayoutEntry;
 
-    let (_, parse_dir) = resolve_project_layout(root);
+    let project_root;
+    {
+        let inner = state.lock().map_err(|_| BridgeError::InvalidInput {
+            reason: "state lock poisoned".to_string(),
+        })?;
+        project_root = inner
+            .project_path
+            .as_ref()
+            .ok_or_else(|| BridgeError::InvalidInput {
+                reason: "no project loaded".to_string(),
+            })?
+            .clone();
+    }
+
+    let (_, parse_dir) = resolve_project_layout(&project_root);
     let typed = load_typed_from_path(&parse_dir)?;
     let id_map = IdMap::build(typed.graph());
     if id_map.get_id(&function_id).is_none() {
         return Err(BridgeError::NodeNotFound { id: function_id });
     }
 
-    // Persistence is deferred to a later phase (see canonical v4 roadmap).
+    let mut updates: HashMap<String, LayoutEntry> = HashMap::new();
+    for node in chart.nodes {
+        // Trust the frontend's flowchart node id; missing or unknown ids are
+        // tolerated (the sidecar can hold orphan entries — they will be
+        // ignored on read by any frontend that no longer has the node).
+        updates.insert(node.id, LayoutEntry { x: node.x, y: node.y });
+    }
+    let session_id = format!("flowchart:{function_id}");
+    merge_and_save(&project_root, updates, session_id).map_err(|e| BridgeError::InvalidInput {
+        reason: format!("layout save failed: {e}"),
+    })?;
     Ok(())
+}
+
+/// Read the project's sidecar layout. Returns the default empty layout when
+/// the project has not yet persisted any drag positions.
+#[tauri::command]
+pub fn load_project_layout(
+    state: State<'_, BridgeState>,
+) -> Result<crate::types::layout::ProjectLayout, BridgeError> {
+    let project_root;
+    {
+        let inner = state.lock().map_err(|_| BridgeError::InvalidInput {
+            reason: "state lock poisoned".to_string(),
+        })?;
+        project_root = inner
+            .project_path
+            .as_ref()
+            .ok_or_else(|| BridgeError::InvalidInput {
+                reason: "no project loaded".to_string(),
+            })?
+            .clone();
+    }
+    crate::layout::load_layout(&project_root).map_err(|e| BridgeError::InvalidInput {
+        reason: format!("layout load failed: {e}"),
+    })
 }
 
 /// Return the Tauri command handler list for registration in `src-tauri/main.rs`.
@@ -428,6 +476,7 @@ pub fn get_handler<R: tauri::Runtime>(
         get_flowchart,
         verify_project,
         save_flowchart,
+        load_project_layout,
         compute_lens_metrics,
         start_watch_project,
         crate::agent::run_agent,
@@ -452,6 +501,7 @@ pub fn get_handler<R: tauri::Runtime>(
         get_flowchart,
         verify_project,
         save_flowchart,
+        load_project_layout,
         compute_lens_metrics,
         start_watch_project,
         crate::agent::run_agent,

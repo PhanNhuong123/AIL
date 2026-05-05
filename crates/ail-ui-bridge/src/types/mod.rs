@@ -1,6 +1,7 @@
 pub mod agent;
 pub mod flowchart;
 pub mod graph_json;
+pub mod layout;
 pub mod lens_stats;
 pub mod node_detail;
 pub mod patch;
@@ -20,10 +21,11 @@ pub use graph_json::{
     ClusterJson, ErrorRefJson, ExternalJson, FunctionJson, GraphJson, IssueJson, ModuleJson,
     ProjectJson, RelationJson, StepJson, TypeRefJson,
 };
+pub use layout::{LayoutEntry, ProjectLayout};
 pub use lens_stats::{Lens, LensStats};
 pub use node_detail::{
     CodeBlob, CounterexampleDetail, InheritedRule, NodeDetail, ReceivesEntry, ReturnsEntry,
-    RuleEntry, RuleSource, VerificationDetail,
+    RuleEntry, RuleSource, VerificationDetail, VerifyOutcome,
 };
 pub use patch::{FunctionPatchEntry, FunctionRemoval, GraphPatchJson, StepPatchEntry, StepRemoval};
 pub use reviewer_result::{CoverageCompletePayload, ReviewerCancelResult};

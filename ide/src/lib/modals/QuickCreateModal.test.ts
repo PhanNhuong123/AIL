@@ -3,11 +3,27 @@ import { render, fireEvent } from '@testing-library/svelte';
 import { tick } from 'svelte';
 import { get } from 'svelte/store';
 import QuickCreateModal from './QuickCreateModal.svelte';
-import { quickCreateModalOpen, quickCreateNotice } from '$lib/stores';
+import { graph, quickCreateModalOpen, quickCreateNotice } from '$lib/stores';
+import type { GraphJson } from '$lib/types';
+
+function fakeGraph(name = 'Wallet App'): GraphJson {
+  return {
+    project: { id: 'p_1', name, description: '', nodeCount: 0, moduleCount: 0, fnCount: 0, status: 'ok' },
+    clusters: [],
+    modules: [],
+    externals: [],
+    relations: [],
+    types: [],
+    errors: [],
+    issues: [],
+    detail: {},
+  };
+}
 
 beforeEach(() => {
   quickCreateModalOpen.set(false);
   quickCreateNotice.set('');
+  graph.set(null);
 });
 
 describe('QuickCreateModal.svelte', () => {
@@ -117,6 +133,82 @@ describe('QuickCreateModal.svelte', () => {
     await tick();
 
     expect(container.querySelector('[data-testid="qc-notice"]')).toBeNull();
+  });
+
+  // -------------------------------------------------------------------------
+  // v4.0 — "Add to {project}" mode when a project is open
+  // -------------------------------------------------------------------------
+
+  it('header shows "Add to {projectName}" when a project is open', async () => {
+    graph.set(fakeGraph('Wallet App'));
+    quickCreateModalOpen.set(true);
+    const { container } = render(QuickCreateModal);
+    await tick();
+
+    const title = container.querySelector('[data-testid="qc-title"]');
+    expect(title?.textContent?.trim()).toBe('Add to Wallet App');
+  });
+
+  it('header shows "Quick Create" when no project is open', async () => {
+    graph.set(null);
+    quickCreateModalOpen.set(true);
+    const { container } = render(QuickCreateModal);
+    await tick();
+
+    const title = container.querySelector('[data-testid="qc-title"]');
+    expect(title?.textContent?.trim()).toBe('Quick Create');
+  });
+
+  it('kinds narrow to function/type/error when a project is open', async () => {
+    graph.set(fakeGraph());
+    quickCreateModalOpen.set(true);
+    const { container } = render(QuickCreateModal);
+    await tick();
+
+    expect(container.querySelector('[data-testid="qc-kind-btn-function"]')).not.toBeNull();
+    expect(container.querySelector('[data-testid="qc-kind-btn-type"]')).not.toBeNull();
+    expect(container.querySelector('[data-testid="qc-kind-btn-error"]')).not.toBeNull();
+    // Project-scope kinds are hidden in add-mode.
+    expect(container.querySelector('[data-testid="qc-kind-btn-module"]')).toBeNull();
+    expect(container.querySelector('[data-testid="qc-kind-btn-rule"]')).toBeNull();
+    expect(container.querySelector('[data-testid="qc-kind-btn-test"]')).toBeNull();
+  });
+
+  it('Create button is disabled with a tooltip when a project is open', async () => {
+    graph.set(fakeGraph());
+    quickCreateModalOpen.set(true);
+    const { container } = render(QuickCreateModal);
+    await tick();
+
+    const createBtn = container.querySelector('[data-testid="qc-create"]') as HTMLButtonElement;
+    expect(createBtn.disabled).toBe(true);
+    expect(createBtn.getAttribute('title')).toContain("Create with AI");
+    expect(createBtn.getAttribute('title')).toContain('v4.1');
+  });
+
+  it('Create with AI button stays enabled in add-mode', async () => {
+    graph.set(fakeGraph());
+    quickCreateModalOpen.set(true);
+    const { container } = render(QuickCreateModal);
+    await tick();
+
+    const aiBtn = container.querySelector('[data-testid="qc-create-ai"]') as HTMLButtonElement;
+    expect(aiBtn.disabled).toBe(false);
+  });
+
+  it('opening a project after kind=module switches active kind to first add-mode kind', async () => {
+    quickCreateModalOpen.set(true);
+    const { container } = render(QuickCreateModal);
+    await tick();
+
+    // Default mode: 'module' is active.
+    expect(container.querySelector('[data-testid="qc-kind-btn-module"]')?.getAttribute('aria-pressed')).toBe('true');
+
+    // Project becomes available — modal narrows the kind list.
+    graph.set(fakeGraph());
+    await tick();
+
+    expect(container.querySelector('[data-testid="qc-kind-btn-function"]')?.getAttribute('aria-pressed')).toBe('true');
   });
 
   it('close clears the quickCreateNotice store', async () => {

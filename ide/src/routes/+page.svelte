@@ -14,7 +14,7 @@
     onVerifyComplete, runVerifier, cancelVerifierRun, getNodeDetail,
     onSheafComplete, runSheafAnalysis, cancelSheafAnalysis,
     runReviewer, cancelReviewerRun, onCoverageComplete,
-    loadProject, runAgent, scaffoldProject, getTutorialPath,
+    loadProject, loadProjectLayout, runAgent, scaffoldProject, getTutorialPath,
     healthCheckCore, healthCheckAgent, openProjectDialog,
     isTauri,
   } from '$lib/bridge';
@@ -23,7 +23,7 @@
   } from '$lib/types';
   import type { GraphPatchJson, NodeDetail } from '$lib/types';
   type SelectedNodeDetailShape = { id: string; detail: NodeDetail } | null;
-  import { graph, selection, welcomeModalOpen, welcomeNotice, quickCreateModalOpen, quickCreateNotice } from '$lib/stores';
+  import { graph, selection, welcomeModalOpen, welcomeNotice, quickCreateModalOpen, quickCreateNotice, projectLayout } from '$lib/stores';
   import { sidecarHealth, sidecarChecking } from '$lib/sidecar/sidecar-state';
   import {
     chatMessages, chatPreviewCards, currentRunId, isAgentRunning,
@@ -336,6 +336,21 @@
   async function loadAndCloseWelcome(path) {
     const result = await loadProject(path);
     graph.set(result);
+    // Hydrate the per-project sidecar layout so previously persisted drag
+    // positions take precedence over the computed swim/system layout. A
+    // missing or unreadable layout is non-fatal — the canvas falls back to
+    // its computed positions.
+    if (isTauri()) {
+      try {
+        const layout = await loadProjectLayout();
+        projectLayout.set(layout);
+      } catch (err) {
+        console.warn('[layout] hydrate failed:', err);
+        projectLayout.set(null);
+      }
+    } else {
+      projectLayout.set(null);
+    }
     welcomeModalOpen.set(false);
     quickCreateModalOpen.set(false);
     setWelcomeDismissed(true);
@@ -422,13 +437,21 @@
     quickCreateModalOpen.set(false);
     welcomeModalOpen.set(false);
     setWelcomeDismissed(true);
+    // v4.0: when a project is open, agent ADDS to the open project rather than
+    // scaffolding a fresh one. selectionKind reflects the additive shape so
+    // the agent has the right context, not a stale 'project' scope.
+    const isOpenProject = get(graph)?.project != null;
+    const verb = isOpenProject ? 'Create a new' : 'Scaffold a';
     const text = description
-      ? `Scaffold a ${kind} named "${name}": ${description}`
-      : `Scaffold a ${kind} named "${name}".`;
+      ? `${verb} ${kind} named "${name}": ${description}`
+      : `${verb} ${kind} named "${name}".`;
+    const selectionKind = isOpenProject
+      ? (kind as 'function' | 'type' | 'error')
+      : 'project';
     try {
       const runId = await runAgent({
         text,
-        selectionKind: 'project',
+        selectionKind,
         selectionId: null,
         path: [],
         lens: 'structure',
@@ -452,6 +475,83 @@
         },
       ]);
     }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Phase 20 — Verify-lens action buttons (NodeTabProof.svelte)
+  //
+  // `Suggest fix` invokes the AI agent with a focused prompt built from the
+  // counterexample. `Relax rule` and `Add handler` need MCP write-back paths
+  // that arrive in v4.2; for now they surface a chat notice so the user knows
+  // the affordance is acknowledged but unwired.
+  // ---------------------------------------------------------------------------
+
+  async function handleSuggestFix(ev) {
+    const detail = ev?.detail;
+    if (!detail || !detail.stepId) return;
+    if (!isTauri()) {
+      chatMessages.update((arr) => [
+        ...arr,
+        {
+          id: `proof-fix-preview-${++routeMsgSeq}`,
+          role: 'assistant',
+          text: "Suggest fix isn't available in browser preview — launch the AIL desktop app to run the agent.",
+        },
+      ]);
+      return;
+    }
+    const violates = detail.violates ? detail.violates : 'the failing postcondition';
+    const scenario = detail.scenario ? ` Scenario: ${detail.scenario}.` : '';
+    const text = `Suggest a fix for ${detail.nodeName || detail.stepId} that addresses the counterexample. Violates: ${violates}.${scenario}`;
+    try {
+      const runId = await runAgent({
+        text,
+        selectionKind: 'step',
+        selectionId: detail.stepId,
+        path: [],
+        lens: 'verify',
+        mode: 'edit',
+      });
+      currentRunId.set(runId);
+      isAgentRunning.set(true);
+    } catch (err) {
+      console.warn('[proof] suggest-fix failed:', err);
+      const message = err instanceof Error ? err.message : String(err);
+      chatMessages.update((arr) => [
+        ...arr,
+        {
+          id: `proof-fix-err-${++routeMsgSeq}`,
+          role: 'assistant',
+          text: `Could not start the agent: ${message}`,
+        },
+      ]);
+    }
+  }
+
+  function handleRelaxRule(ev) {
+    const detail = ev?.detail;
+    if (!detail) return;
+    chatMessages.update((arr) => [
+      ...arr,
+      {
+        id: `proof-relax-${++routeMsgSeq}`,
+        role: 'assistant',
+        text: `Relax-rule for ${detail.nodeName || detail.stepId} arrives in v4.2 — the modal is wired, the MCP write-back path is the v4.2 milestone. For now, ask the agent (Suggest fix) to soften the constraint.`,
+      },
+    ]);
+  }
+
+  function handleAddHandler(ev) {
+    const detail = ev?.detail;
+    if (!detail) return;
+    chatMessages.update((arr) => [
+      ...arr,
+      {
+        id: `proof-handler-${++routeMsgSeq}`,
+        role: 'assistant',
+        text: `Add-handler scaffolding for ${detail.nodeName || detail.stepId} arrives in v4.2 once the QuickCreate direct-create branch is wired. For now, ask the agent to "add error handling for ${detail.violates || 'the counterexample'}" via Suggest fix.`,
+      },
+    ]);
   }
 
   async function handleSidecarCheckCore() {
@@ -530,6 +630,20 @@
     register(onGraphUpdated((patch) => {
       schedulePatchFlush(patch);
     }));
+
+    // Phase 20 — verify-lens action buttons. NodeTabProof dispatches bubbling
+    // CustomEvents on the document; the route shell owns the bridge calls
+    // (modals/CLAUDE.md: only routes touch the bridge).
+    if (typeof document !== 'undefined') {
+      document.addEventListener('suggestfix', handleSuggestFix as EventListener);
+      document.addEventListener('relaxrule', handleRelaxRule as EventListener);
+      document.addEventListener('addhandler', handleAddHandler as EventListener);
+      unlistens.push(() => {
+        document.removeEventListener('suggestfix', handleSuggestFix as EventListener);
+        document.removeEventListener('relaxrule', handleRelaxRule as EventListener);
+        document.removeEventListener('addhandler', handleAddHandler as EventListener);
+      });
+    }
 
     // Phase 16 task 16.1 agent listeners. Each handler guards
     // `payload.runId === currentRunId` BEFORE mutating any chat store

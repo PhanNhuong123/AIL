@@ -95,7 +95,75 @@ describe('NodeView.svelte', () => {
     expect(cex?.textContent).toContain('balance >= amount');
   });
 
-  it('test_node_view_test_run_populates_result', async () => {
+  // -------------------------------------------------------------------------
+  // Phase 20 — verify-lens action buttons (Suggest fix / Relax rule / Add
+  // handler). The buttons render only when verification.ok === false AND a
+  // counterexample is present; events bubble to document for the route shell.
+  // -------------------------------------------------------------------------
+
+  it('test_proof_action_buttons_render_when_counterexample_present', async () => {
+    const detail = nodeDetailFixture();
+    nodeViewActiveTab.set('proof');
+    const { container } = render(NodeView, {
+      props: { stepId: 'step:s_transfer', detail },
+    });
+    await tick();
+    expect(container.querySelector('[data-testid="proof-action-suggest-fix"]')).not.toBeNull();
+    expect(container.querySelector('[data-testid="proof-action-relax-rule"]')).not.toBeNull();
+    expect(container.querySelector('[data-testid="proof-action-add-handler"]')).not.toBeNull();
+  });
+
+  it('test_proof_action_buttons_absent_when_verification_ok', async () => {
+    const detail = nodeDetailFixture();
+    detail.verification = { ok: true };
+    nodeViewActiveTab.set('proof');
+    const { container } = render(NodeView, {
+      props: { stepId: 'step:s_transfer', detail },
+    });
+    await tick();
+    expect(container.querySelector('[data-testid="proof-action-suggest-fix"]')).toBeNull();
+    expect(container.querySelector('[data-testid="proof-action-relax-rule"]')).toBeNull();
+    expect(container.querySelector('[data-testid="proof-action-add-handler"]')).toBeNull();
+  });
+
+  // Svelte 5 `createEventDispatcher` only delivers events when a parent
+  // template registered `on:event=` handlers (same caveat noted in
+  // QuickCreateModal.test.ts). Isolated mounts cannot observe the dispatch
+  // directly; the bubbling wire is exercised by the route shell. Here we
+  // pin that the click does not throw and the buttons stay present —
+  // sufficient regression coverage given the dispatcher quirk.
+
+  it('test_proof_action_buttons_clickable_without_throwing', async () => {
+    const detail = nodeDetailFixture();
+    nodeViewActiveTab.set('proof');
+    const { container } = render(NodeView, {
+      props: { stepId: 'step:s_transfer', detail },
+    });
+    await tick();
+    const ids = ['proof-action-suggest-fix', 'proof-action-relax-rule', 'proof-action-add-handler'];
+    for (const id of ids) {
+      const btn = container.querySelector(`[data-testid="${id}"]`) as HTMLButtonElement;
+      expect(btn).not.toBeNull();
+      // Clicks without a registered parent dispatcher must be no-throw.
+      expect(() => fireEvent.click(btn)).not.toThrow();
+    }
+  });
+
+  it('test_proof_action_buttons_hidden_when_stepId_empty', async () => {
+    const detail = nodeDetailFixture();
+    nodeViewActiveTab.set('proof');
+    const { container } = render(NodeView, {
+      props: { stepId: '', detail },
+    });
+    await tick();
+    // Without a stepId we cannot scope the agent prompt; suppress the
+    // affordance entirely.
+    expect(container.querySelector('[data-testid="proof-action-suggest-fix"]')).toBeNull();
+  });
+
+  // v4.1: re-enable when Test tab wires real runner. v4.0 hides the Test tab
+  // because runTestStub returns hard-coded passed:true.
+  it.skip('test_node_view_test_run_populates_result', async () => {
     const detail = nodeDetailFixture();
     nodeViewActiveTab.set('test');
 
@@ -119,7 +187,9 @@ describe('NodeView.svelte', () => {
     expect(resultEl).not.toBeNull();
   });
 
-  it('test_node_view_history_tab', async () => {
+  // v4.1: re-enable with real commit history. v4.0 hides the History tab
+  // because the only data source is Alice/Bob/2026-04-20 fixture.
+  it.skip('test_node_view_history_tab', async () => {
     const detail = nodeDetailFixture();
     nodeViewActiveTab.set('history');
 
@@ -234,10 +304,11 @@ describe('NodeView.svelte', () => {
     }
   });
 
-  it('all 6 side tabs clickable and render corresponding tab body', async () => {
+  it('all 4 side tabs clickable and render corresponding tab body', async () => {
     const detail = nodeDetailFixture();
     const { container } = render(NodeView, { props: { stepId: 'step:s_transfer', detail } });
-    const tabs = ['code', 'proof', 'types', 'rules', 'test', 'history'] as const;
+    // v4.1: re-add 'test' + 'history' when those tabs wire real data sources.
+    const tabs = ['code', 'proof', 'types', 'rules'] as const;
     for (const id of tabs) {
       const btn = container.querySelector('[data-testid="node-tab-btn-' + id + '"]') as HTMLElement | null;
       expect(btn).not.toBeNull();

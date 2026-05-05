@@ -10,4 +10,4 @@ pub mod graph;
 pub mod issues;
 
 pub use diff::{diff_graph, diff_graph_at};
-pub use graph::{serialize_graph, serialize_typed_graph};
+pub use graph::{apply_verify_outcomes, serialize_graph, serialize_typed_graph, NodeVerdict};

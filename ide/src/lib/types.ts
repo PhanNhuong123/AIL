@@ -143,8 +143,28 @@ export interface FlowEdgeJson {
   style?: string;
 }
 
+// --- Layout sidecar (camelCase, mirrors Rust ProjectLayout) ---
+// AIL grammar deliberately has no `@layout(x, y)` annotation — node
+// coordinates live in `<project>/.ail/layout.json`. The frontend hydrates
+// `flowNodePositions` from this payload on project load so saved drag
+// positions survive a reload.
+export interface LayoutEntry {
+  x: number;
+  y: number;
+}
+
+export interface ProjectLayoutJson {
+  version: number;
+  nodes: Record<string, LayoutEntry>;
+}
+
 // --- Verify (camelCase) ---
-export type VerifyOutcome = 'fail' | 'timeout' | 'unknown';
+// `'sat'` and `'unsat'` are the v4.0 user-facing labels: `sat` = postcondition
+// entailed (✓ Verified), `unsat` = counterexample found. Mirrors the Rust
+// `VerifyOutcome` enum in `crates/ail-ui-bridge/src/types/node_detail.rs`.
+// `'fail'` is preserved for backward compatibility with pre-v4.0 issue payloads
+// where a generic failure was emitted without solver classification.
+export type VerifyOutcome = 'sat' | 'unsat' | 'unknown' | 'timeout' | 'fail';
 
 export interface VerifyResultJson {
   ok: boolean;

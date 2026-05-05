@@ -9,6 +9,7 @@ import {
   createdEdges,
   flowDraftEdge,
   seedPositions,
+  editLocked,
 } from './flow-state';
 import { flowFixture } from './fixtures';
 import FlowchartCanvas from './FlowchartCanvas.svelte';
@@ -19,6 +20,7 @@ beforeEach(() => {
   flowSelectedNodeId.set(null);
   createdEdges.set([]);
   flowDraftEdge.set(null);
+  editLocked.set(false);
 });
 
 describe('FlowchartCanvas.svelte', () => {
@@ -338,6 +340,107 @@ describe('FlowchartCanvas.svelte', () => {
     expect(vp.k).toBe(1);
     expect(vp.x).toBe(0);
     expect(vp.y).toBe(0);
+  });
+
+  // -----------------------------------------------------------------------
+  // Phase 19 — edit-mode toggle, layout-overrides hydration, drag-end save
+  // wiring. The actual `saveFlowchart` IPC fires only inside Tauri (gated
+  // by `isTauri()`), so these tests cover the predicates and rendering.
+  // -----------------------------------------------------------------------
+
+  it('test_editlocked_default_false_renders_ports_when_selected', async () => {
+    const { flowchart } = flowFixture();
+    const { container } = render(FlowchartCanvas, { props: { flowchart } });
+    flowSelectedNodeId.set('n_do');
+    await tick();
+    // Default editLocked=false (edit mode) → ports render for the selection.
+    expect(container.querySelector('[data-testid="port-top-n_do"]')).not.toBeNull();
+  });
+
+  it('test_editlocked_true_hides_port_circles', async () => {
+    const { flowchart } = flowFixture();
+    const { container } = render(FlowchartCanvas, { props: { flowchart } });
+    editLocked.set(true);
+    flowSelectedNodeId.set('n_do');
+    await tick();
+    expect(container.querySelector('[data-testid="port-top-n_do"]')).toBeNull();
+  });
+
+  it('test_editlocked_true_renders_readonly_tooltip', async () => {
+    const { flowchart } = flowFixture();
+    editLocked.set(true);
+    const { container } = render(FlowchartCanvas, { props: { flowchart } });
+    await tick();
+    const titles = Array.from(container.querySelectorAll('title')).map((t) => t.textContent);
+    expect(titles.some((t) => t?.includes('Read-only'))).toBe(true);
+  });
+
+  it('test_editlocked_false_omits_readonly_tooltip', async () => {
+    const { flowchart } = flowFixture();
+    editLocked.set(false);
+    const { container } = render(FlowchartCanvas, { props: { flowchart } });
+    await tick();
+    const titles = Array.from(container.querySelectorAll('title')).map((t) => t.textContent);
+    expect(titles.every((t) => !t?.includes('Read-only'))).toBe(true);
+  });
+
+  it('test_layout_overrides_seed_positions_at_mount', async () => {
+    const { flowchart } = flowFixture();
+    const overrides = { n_do: { x: 999, y: 888 } };
+    render(FlowchartCanvas, { props: { flowchart, layoutOverrides: overrides } });
+    await tick();
+    const pos = get(flowNodePositions).get('n_do');
+    expect(pos).toEqual({ x: 999, y: 888 });
+  });
+
+  it('test_layout_overrides_null_falls_back_to_flowchart_defaults', async () => {
+    const { flowchart } = flowFixture();
+    render(FlowchartCanvas, { props: { flowchart, layoutOverrides: null } });
+    await tick();
+    const node = flowchart.nodes.find((n) => n.id === 'n_do')!;
+    const pos = get(flowNodePositions).get('n_do');
+    expect(pos).toEqual({ x: node.x, y: node.y });
+  });
+
+  it('test_e_keypress_toggles_editlocked', async () => {
+    const { flowchart } = flowFixture();
+    render(FlowchartCanvas, { props: { flowchart } });
+    expect(get(editLocked)).toBe(false);
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'E' }));
+    await tick();
+    expect(get(editLocked)).toBe(true);
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'e' }));
+    await tick();
+    expect(get(editLocked)).toBe(false);
+  });
+
+  it('test_e_keypress_inside_input_does_not_toggle', async () => {
+    const { flowchart } = flowFixture();
+    render(FlowchartCanvas, { props: { flowchart } });
+    const input = document.createElement('input');
+    document.body.appendChild(input);
+    input.focus();
+    expect(get(editLocked)).toBe(false);
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'e', bubbles: true }));
+    await tick();
+    expect(get(editLocked)).toBe(false);
+    document.body.removeChild(input);
+  });
+
+  it('test_e_with_modifier_does_not_toggle', async () => {
+    const { flowchart } = flowFixture();
+    render(FlowchartCanvas, { props: { flowchart } });
+    expect(get(editLocked)).toBe(false);
+    document.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'e', ctrlKey: true }),
+    );
+    await tick();
+    expect(get(editLocked)).toBe(false);
+    document.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'e', metaKey: true }),
+    );
+    await tick();
+    expect(get(editLocked)).toBe(false);
   });
 
   it('test_flowchart_zoom_buttons_preserve_external_state', async () => {

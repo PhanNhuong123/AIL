@@ -5,7 +5,9 @@ use ail_ui_bridge::pipeline::{load_verified_from_path, read_project_name};
 use ail_ui_bridge::serialize::issues::collect_issues;
 use ail_ui_bridge::serialize::serialize_graph;
 use ail_ui_bridge::types::graph_json::{GraphJson, IssueJson, ProjectJson};
-use ail_ui_bridge::types::node_detail::{CounterexampleDetail, NodeDetail, VerificationDetail};
+use ail_ui_bridge::types::node_detail::{
+    CounterexampleDetail, NodeDetail, VerificationDetail, VerifyOutcome,
+};
 use ail_ui_bridge::types::status::Status;
 
 fn wallet_root() -> PathBuf {
@@ -136,6 +138,7 @@ fn test_issues_populated_when_detail_has_failing_node() {
                     effect: "negative balance".to_string(),
                     violates: "balance >= 0".to_string(),
                 }),
+                outcome: Some(VerifyOutcome::Unsat),
             },
             code: None,
         },
@@ -156,6 +159,7 @@ fn test_issues_populated_when_detail_has_failing_node() {
             verification: VerificationDetail {
                 ok: true,
                 counterexample: None,
+                outcome: None,
             },
             code: None,
         },

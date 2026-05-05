@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { FunctionJson, FlowchartJson, NodeDetail } from '$lib/types';
   import { flowMode, flowFocusedNodeId, flowSelectedNodeId } from './flow-state';
+  import { projectLayout } from '$lib/stores';
   import FlowSwim from './FlowSwim.svelte';
   import FlowchartCanvas from './FlowchartCanvas.svelte';
   import FlowCode from './FlowCode.svelte';
@@ -10,6 +11,11 @@
   export let fn        = null as FunctionJson | null;
   export let flowchart = null as FlowchartJson | null;
   export let detail    = null as NodeDetail | null;
+
+  // Hand the flowchart canvas the per-project layout entries so previously
+  // persisted drag positions take precedence over the swim/system layout
+  // defaults. Null until `loadProjectLayout` resolves on project open.
+  $: layoutOverrides = $projectLayout?.nodes ?? null;
 
   function setMode(m) {
     flowMode.set(m);
@@ -76,7 +82,11 @@
     {#if $flowMode === 'Swim'}
       <FlowSwim flowchart={flowchart ?? { nodes: [], edges: [] }} {fn} />
     {:else if $flowMode === 'Flowchart'}
-      <FlowchartCanvas flowchart={flowchart ?? { nodes: [], edges: [] }} />
+      <FlowchartCanvas
+        flowchart={flowchart ?? { nodes: [], edges: [] }}
+        functionId={fn?.id ?? ''}
+        {layoutOverrides}
+      />
     {:else}
       <FlowCode {fn} {detail} />
     {/if}

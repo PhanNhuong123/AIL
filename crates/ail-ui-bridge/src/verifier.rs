@@ -19,8 +19,13 @@
 //!   The pipeline (`load_verified_from_path`) is sync/blocking and MUST NOT
 //!   be called while holding the `BridgeState` mutex.
 //!
-//! - **16.3-C (outcome = None)**: `VerifyFailureJson.outcome` is always `None`
-//!   in the MVP. Classification is deferred to a future task.
+//! - **16.3-C (outcome classification, v4.0)**: `VerifyFailureJson.outcome` and
+//!   `VerificationDetail.outcome` carry per-node Z3 verdicts. When the verified
+//!   pipeline fails, the verifier re-runs the typed pipeline and
+//!   `verify_contracts` directly, classifies each `VerifyError` into a
+//!   [`VerifyOutcome`], and overlays the verdicts onto the typed-graph JSON via
+//!   [`apply_verify_outcomes`]. Requires the `z3-verify` feature; without it
+//!   the failure path keeps the legacy "no detail" behaviour.
 
 #![cfg(feature = "tauri-commands")]
 
@@ -37,6 +42,17 @@ use crate::pipeline::load_verified_from_path;
 use crate::serialize::{diff_graph, serialize_graph};
 use crate::types::graph_json::GraphJson;
 use crate::types::verify_result::{VerifyCancelResult, VerifyCompletePayload, VerifyFailureJson};
+
+#[cfg(feature = "z3-verify")]
+use std::collections::HashMap;
+#[cfg(feature = "z3-verify")]
+use ail_contract::{verify_contracts, VerifyError};
+#[cfg(feature = "z3-verify")]
+use crate::pipeline::load_typed_from_path;
+#[cfg(feature = "z3-verify")]
+use crate::serialize::{apply_verify_outcomes, serialize_typed_graph, NodeVerdict};
+#[cfg(feature = "z3-verify")]
+use crate::types::node_detail::{CounterexampleDetail, VerifyOutcome};
 
 // ---------------------------------------------------------------------------
 // Pure helpers — public and testable without a Tauri runtime
@@ -177,8 +193,8 @@ fn patch_is_empty(patch: &crate::types::patch::GraphPatchJson) -> bool {
 }
 
 /// Build `VerifyFailureJson` items from `GraphJson.issues` where severity is
-/// `"fail"`. `outcome` is always `None` in the Phase 16.3 MVP (invariant
-/// 16.3-C).
+/// `"fail"`. `outcome` is forwarded from the issue (populated by
+/// [`apply_verify_outcomes`] when a Z3 verdict is available; `None` otherwise).
 fn failures_from_graph(graph: &GraphJson) -> Vec<VerifyFailureJson> {
     graph
         .issues
@@ -190,9 +206,160 @@ fn failures_from_graph(graph: &GraphJson) -> Vec<VerifyFailureJson> {
             stage: issue.stage.clone(),
             severity: issue.severity.clone(),
             source: issue.source.clone(),
-            outcome: None,
+            outcome: issue.outcome.clone(),
         })
         .collect()
+}
+
+/// Classify a single [`VerifyError`] into a [`NodeVerdict`].
+///
+/// Mapping (per `crates/ail-contract/src/errors/verify_error.rs`):
+/// - `AIL-C013 SolverTimeout` → `Timeout`.
+/// - `AIL-C014 EncodingFailed`, `AIL-C010 UnsatTypeConstraints` → `Unknown`
+///   (no usable counterexample to surface).
+/// - `AIL-C011 ContradictoryPreconditions`, `AIL-C012 PostconditionNotEntailed`,
+///   `AIL-C015 PromotedFactContradiction` → `Unsat` with the Z3 model captured
+///   in `CounterexampleDetail`.
+#[cfg(feature = "z3-verify")]
+fn classify_verify_error(err: &VerifyError) -> NodeVerdict {
+    match err {
+        VerifyError::SolverTimeout { contract_expr, .. } => NodeVerdict {
+            outcome: VerifyOutcome::Timeout,
+            counterexample: Some(CounterexampleDetail {
+                scenario: String::new(),
+                effect: format!("solver timed out checking `{contract_expr}`"),
+                violates: contract_expr.clone(),
+            }),
+        },
+        VerifyError::EncodingFailed { inner, .. } => NodeVerdict {
+            outcome: VerifyOutcome::Unknown,
+            counterexample: Some(CounterexampleDetail {
+                scenario: String::new(),
+                effect: format!("contract encoding failed: {inner}"),
+                violates: String::new(),
+            }),
+        },
+        VerifyError::UnsatTypeConstraints { .. } => NodeVerdict {
+            outcome: VerifyOutcome::Unknown,
+            counterexample: Some(CounterexampleDetail {
+                scenario: String::new(),
+                effect: "parameter types are mutually contradictory".to_string(),
+                violates: String::new(),
+            }),
+        },
+        VerifyError::ContradictoryPreconditions {
+            counterexample, ..
+        } => NodeVerdict {
+            outcome: VerifyOutcome::Unsat,
+            counterexample: Some(CounterexampleDetail {
+                scenario: counterexample.clone(),
+                effect: "preconditions are jointly contradictory".to_string(),
+                violates: String::new(),
+            }),
+        },
+        VerifyError::PostconditionNotEntailed {
+            contract_expr,
+            counterexample,
+            ..
+        } => NodeVerdict {
+            outcome: VerifyOutcome::Unsat,
+            counterexample: Some(CounterexampleDetail {
+                scenario: counterexample.clone(),
+                effect: format!("postcondition `{contract_expr}` is not entailed"),
+                violates: contract_expr.clone(),
+            }),
+        },
+        VerifyError::PromotedFactContradiction {
+            counterexample, ..
+        } => NodeVerdict {
+            outcome: VerifyOutcome::Unsat,
+            counterexample: Some(CounterexampleDetail {
+                scenario: counterexample.clone(),
+                effect: "promoted fact from check node contradicts preconditions".to_string(),
+                violates: String::new(),
+            }),
+        },
+    }
+}
+
+/// Severity ordering used to merge multiple errors that affect the same node.
+/// Higher = retained when collapsing. Timeout wins over counterexamples wins
+/// over Unknown so the surfaced verdict reflects the most actionable issue.
+#[cfg(feature = "z3-verify")]
+fn outcome_priority(outcome: VerifyOutcome) -> u8 {
+    match outcome {
+        VerifyOutcome::Timeout => 3,
+        VerifyOutcome::Unsat => 2,
+        VerifyOutcome::Unknown => 1,
+        VerifyOutcome::Sat => 0,
+    }
+}
+
+/// Build a path-keyed `NodeVerdict` map from a list of `VerifyError`s and an
+/// `IdMap` covering the typed graph. Multiple errors on the same node are
+/// collapsed via [`outcome_priority`].
+#[cfg(feature = "z3-verify")]
+fn build_verdict_map(
+    errors: &[VerifyError],
+    id_map: &crate::ids::IdMap,
+) -> HashMap<String, NodeVerdict> {
+    let mut out: HashMap<String, NodeVerdict> = HashMap::new();
+    for err in errors {
+        let node_id = match err {
+            VerifyError::UnsatTypeConstraints { node_id }
+            | VerifyError::ContradictoryPreconditions { node_id, .. }
+            | VerifyError::PostconditionNotEntailed { node_id, .. }
+            | VerifyError::SolverTimeout { node_id, .. }
+            | VerifyError::EncodingFailed { node_id, .. }
+            | VerifyError::PromotedFactContradiction { node_id, .. } => *node_id,
+        };
+        let path = id_map.get_path(node_id).to_string();
+        if path.is_empty() {
+            continue;
+        }
+        let candidate = classify_verify_error(err);
+        match out.get(&path) {
+            Some(existing)
+                if outcome_priority(existing.outcome) >= outcome_priority(candidate.outcome) =>
+            {
+                // Keep the higher-priority verdict already recorded.
+            }
+            _ => {
+                out.insert(path, candidate);
+            }
+        }
+    }
+    out
+}
+
+/// Re-run the typed pipeline + `verify_contracts` and produce a
+/// `(GraphJson, failures)` pair with per-node Z3 verdicts overlaid.
+///
+/// Used as the failure-path fallback for `run_verifier` so the IDE can render
+/// the specific reason a node failed instead of a generic "verification
+/// failed". Returns `None` if the typed pipeline itself fails (parse/validate/
+/// type-check error) — that case stays in the legacy "no fresh graph" branch.
+#[cfg(feature = "z3-verify")]
+fn build_failed_graph_with_outcomes(
+    project_path: &std::path::Path,
+    parse_dir: &std::path::Path,
+) -> Option<GraphJson> {
+    let typed = match load_typed_from_path(parse_dir) {
+        Ok(t) => t,
+        Err(e) => {
+            log::warn!("[verifier] typed pipeline failed during outcome classification: {e}");
+            return None;
+        }
+    };
+
+    let errors = verify_contracts(&typed);
+    let id_map = crate::ids::IdMap::build(typed.graph());
+    let verdicts = build_verdict_map(&errors, &id_map);
+
+    let name = crate::pipeline::read_project_name(project_path);
+    let mut graph = serialize_typed_graph(&typed, &name);
+    apply_verify_outcomes(&mut graph, &verdicts);
+    Some(graph)
 }
 
 // ---------------------------------------------------------------------------
@@ -266,9 +433,16 @@ pub async fn run_verifier<R: Runtime>(
                 (true, Some(g))
             }
             Err(_e) => {
-                #[cfg(feature = "tauri-commands")]
                 log::warn!("[verifier] pipeline error: {_e}");
-                (false, None)
+                // v4.0: when verify fails, re-run the typed pipeline + Z3
+                // classifier so the per-node `VerificationDetail.outcome`
+                // reaches the IDE. Falls back to no fresh graph if the typed
+                // pipeline itself fails (parse/validate/type-check error).
+                #[cfg(feature = "z3-verify")]
+                let fallback = build_failed_graph_with_outcomes(&project_path, &parse_dir);
+                #[cfg(not(feature = "z3-verify"))]
+                let fallback = None;
+                (false, fallback)
             }
         };
 

@@ -1,12 +1,26 @@
 <script lang="ts">
   import { createEventDispatcher, onMount } from 'svelte';
   import { get } from 'svelte/store';
-  import { quickCreateModalOpen, quickCreateNotice } from '$lib/stores';
+  import { graph, quickCreateModalOpen, quickCreateNotice } from '$lib/stores';
   import { focusTrap } from './focus-trap';
+
+  // v4.0: when a project is open, scaffolding a fresh project rời rạc is
+  // misleading. The modal switches into "Add to {project}" mode — kinds
+  // narrow to additive shapes only, the raw Create button is disabled, and
+  // Create with AI is the only ship-truthful path.
+  const KINDS_DEFAULT = ['module', 'function', 'rule', 'test'];
+  const KINDS_ADD = ['function', 'type', 'error'];
+
+  $: openProject = $graph?.project ?? null;
+  $: hasOpenProject = openProject !== null;
+  $: kinds = hasOpenProject ? KINDS_ADD : KINDS_DEFAULT;
 
   // Component-local form state — reset on every close
   let kind = 'module';
-  const KINDS = ['module', 'function', 'rule', 'test'];
+  // Re-anchor `kind` whenever the kind set narrows past the current value
+  // (e.g. user opens a project after selecting "module", which is no longer
+  // available). Defaults to first available kind for the current mode.
+  $: if (!kinds.includes(kind)) kind = kinds[0];
   let name = '';
   let description = '';
 
@@ -26,7 +40,9 @@
   function close() {
     name = '';
     description = '';
-    kind = 'module';
+    // Reset `kind` to the first option available for the *current* mode so a
+    // re-open never lands on a button that has just been narrowed away.
+    kind = (hasOpenProject ? KINDS_ADD : KINDS_DEFAULT)[0];
     // Clear the notice so a stale "unavailable in browser preview" message
     // doesn't flash on the next re-open. Mirror of WelcomeModal.close().
     quickCreateNotice.set('');
@@ -103,7 +119,13 @@
       on:click|stopPropagation
     >
       <header class="modal-header">
-        <span class="modal-title">Quick Create</span>
+        <span class="modal-title" data-testid="qc-title">
+          {#if hasOpenProject}
+            Add to {openProject?.name ?? 'project'}
+          {:else}
+            Quick Create
+          {/if}
+        </span>
         <button
           class="modal-close-btn"
           data-testid="qc-close"
@@ -116,7 +138,7 @@
 
       <div class="qc-form">
         <div class="qc-kind-row" data-testid="qc-kind-row" role="group" aria-label="Kind">
-          {#each KINDS as k}
+          {#each kinds as k}
             <button
               type="button"
               class="qc-kind-btn"
@@ -138,12 +160,15 @@
             aria-label="Name"
             on:keydown={(e) => {
               // Production-grade form ergonomics: Enter in the name field
-              // submits the default Create action so the user doesn't have
-              // to reach for the mouse. The form is a `<div>` (not a real
-              // `<form>`), so we wire this manually.
+              // submits the default action so the user doesn't have to reach
+              // for the mouse. The form is a `<div>` (not a real `<form>`),
+              // so we wire this manually. v4.0: when a project is open the
+              // raw Create button is disabled, so Enter routes to Create
+              // with AI instead.
               if (e.key === 'Enter') {
                 e.preventDefault();
-                handleCreate();
+                if (hasOpenProject) handleCreateAI();
+                else handleCreate();
               }
             }}
           />
@@ -162,7 +187,14 @@
 
       <div class="qc-actions">
         <button data-testid="qc-cancel" on:click={handleCancel}>Cancel</button>
-        <button data-testid="qc-create" on:click={handleCreate}>Create</button>
+        <button
+          data-testid="qc-create"
+          on:click={handleCreate}
+          disabled={hasOpenProject}
+          title={hasOpenProject
+            ? "Direct creation arrives in v4.1 — use 'Create with AI' for now"
+            : ''}
+        >Create</button>
         <button
           class="primary"
           data-testid="qc-create-ai"

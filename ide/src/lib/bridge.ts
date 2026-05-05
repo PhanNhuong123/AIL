@@ -15,6 +15,7 @@ import type {
   CoverageCompletePayload, ReviewerCancelResult, ReviewerScopeRequest,
   HealthCheckPayload,
   ProjectScaffoldRequest, ProjectScaffoldResult,
+  ProjectLayoutJson,
 } from './types';
 
 // Tauri WebView detection. Outside Tauri (e.g., browsing localhost:1420
@@ -65,6 +66,14 @@ export const verifyProject  = () => {
 export const saveFlowchart  = (functionId: string, chart: FlowchartJson) => {
   if (!isTauri()) return Promise.reject(new Error(BRIDGE_BROWSER_PREVIEW_MESSAGE));
   return invoke<void>('save_flowchart', { functionId, chart });
+};
+
+// Read the per-project sidecar layout (`<project>/.ail/layout.json`). Returns
+// the default empty layout when the project has not yet persisted any drag
+// positions. Browser preview rejects identically to the other invoke wrappers.
+export const loadProjectLayout = () => {
+  if (!isTauri()) return Promise.reject(new Error(BRIDGE_BROWSER_PREVIEW_MESSAGE));
+  return invoke<ProjectLayoutJson>('load_project_layout');
 };
 
 export const computeLensMetrics = (lens: Lens, scopeId: string | null) => {

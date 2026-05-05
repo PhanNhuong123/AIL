@@ -1,5 +1,5 @@
 import { writable, type Writable } from 'svelte/store';
-import type { GraphJson, Lens } from './types';
+import type { GraphJson, Lens, ProjectLayoutJson } from './types';
 
 export type SelectionKind = 'project' | 'module' | 'function' | 'step' | 'type' | 'error' | 'none';
 export interface Selection      { kind: SelectionKind; id: string | null; }
@@ -9,6 +9,11 @@ export type Theme               = 'dark' | 'light';
 export type Density             = 'comfortable' | 'compact' | 'cozy';
 
 export const graph: Writable<GraphJson | null>  = writable(null);
+// Per-project sidecar layout (`<project>/.ail/layout.json`). Null until the
+// frontend has issued a `loadProjectLayout` invoke. Components that seed
+// positions read this store so previously persisted drag positions survive
+// a reload.
+export const projectLayout: Writable<ProjectLayoutJson | null> = writable(null);
 export const selection: Writable<Selection>     = writable({ kind: 'none', id: null });
 export const overlays: Writable<Overlays>       = writable({ rules: false, verification: true, dataflow: false, dependencies: false, tests: false });
 export const path: Writable<string[]>           = writable([]);

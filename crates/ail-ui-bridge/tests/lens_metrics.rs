@@ -105,6 +105,7 @@ fn graph_with_typed_fn() -> GraphJson {
             verification: VerificationDetail {
                 ok: true,
                 counterexample: None,
+                outcome: None,
             },
             code: None,
         },
@@ -129,6 +130,7 @@ fn graph_with_typed_fn() -> GraphJson {
             verification: VerificationDetail {
                 ok: true,
                 counterexample: None,
+                outcome: None,
             },
             code: None,
         },
@@ -275,7 +277,7 @@ fn test_lens_scope_unknown_returns_zero() {
 /// `counterexamples == 1`, `unproven == 1`, `proven == 0` in Verify lens.
 #[test]
 fn test_lens_verify_counterexample_reaches_counter() {
-    use ail_ui_bridge::types::node_detail::{NodeDetail, VerificationDetail};
+    use ail_ui_bridge::types::node_detail::{NodeDetail, VerificationDetail, VerifyOutcome};
 
     let mut detail = BTreeMap::new();
     detail.insert(
@@ -296,6 +298,7 @@ fn test_lens_verify_counterexample_reaches_counter() {
                     effect: "overdraft".to_string(),
                     violates: "balance >= 0".to_string(),
                 }),
+                outcome: Some(VerifyOutcome::Unsat),
             },
             code: None,
         },

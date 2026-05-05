@@ -4,6 +4,7 @@ import type { InteractionState, InteractionEvent } from './flow-interaction';
 
 describe('flow-interaction (pure reducer)', () => {
   it('test_reducer_idle_mousedown_node_transitions_to_dragging_node', () => {
+    // v4.1 default: edit mode (state.readOnly = false) → mousedown enters drag.
     const s0 = emptyState();
     const event: InteractionEvent = {
       type: 'mousedown-node',
@@ -17,6 +18,35 @@ describe('flow-interaction (pure reducer)', () => {
     expect(s1.activeNodeId).toBe('n_do');
     expect(s1.dragOriginX).toBe(100);
     expect(s1.dragOriginY).toBe(150);
+  });
+
+  it('test_reducer_readonly_mousedown_node_select_only', () => {
+    // Read-only mode contract: mousedown-node must select but stay idle.
+    const s0: InteractionState = { ...emptyState(), readOnly: true };
+    const s1 = reduce(s0, {
+      type: 'mousedown-node',
+      nodeId: 'n_do',
+      svgX: 100,
+      svgY: 150,
+    });
+    expect(s1.mode).toBe('idle');
+    expect(s1.selectedNodeId).toBe('n_do');
+    expect(s1.activeNodeId).toBeNull();
+  });
+
+  it('test_reducer_readonly_mousedown_port_is_noop', () => {
+    // Ports are not rendered in read-only; a synthetic event must not
+    // transition into dragging-port either.
+    const s0: InteractionState = { ...emptyState(), readOnly: true };
+    const s1 = reduce(s0, {
+      type: 'mousedown-port',
+      nodeId: 'n_do',
+      port: 'right',
+      tipX: 100,
+      tipY: 100,
+    });
+    expect(s1.mode).toBe('idle');
+    expect(s1.draftEdge).toBeNull();
   });
 
   it('test_reducer_idle_wheel_pans_viewport', () => {
@@ -146,14 +176,23 @@ describe('zoom reducer events (task 15.8)', () => {
 });
 
 describe('hitTest', () => {
-  it('returns port hit before node hit when node is selected', () => {
+  it('returns port hit before node hit when node is selected (edit mode)', () => {
     const nodes = [{ id: 'n1', x: 100, y: 100, w: 80, h: 40 }];
-    // Port 'right' is at (180, 120) for this node
+    // Port 'right' is at (180, 120) for this node. v4.1 default readOnly=false
+    // → port detection is on.
     const result = hitTest(nodes, 'n1', 179, 120);
     expect(result.hit).toBe('port');
     if (result.hit === 'port') {
       expect(result.port).toBe('right');
     }
+  });
+
+  it('falls through to node hit when readOnly=true even with port-area click', () => {
+    const nodes = [{ id: 'n1', x: 100, y: 100, w: 80, h: 40 }];
+    // Same coordinates as above, but readOnly=true → port detection skipped,
+    // resolves to a node-body hit instead.
+    const result = hitTest(nodes, 'n1', 179, 120, true);
+    expect(result.hit).toBe('node');
   });
 
   it('returns node hit when click is inside the body', () => {

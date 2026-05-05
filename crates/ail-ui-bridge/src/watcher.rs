@@ -26,6 +26,7 @@ use crate::commands::BridgeState;
 use crate::errors::BridgeError;
 use crate::events::GRAPH_UPDATED;
 use crate::pipeline::{load_typed_from_path, read_project_name};
+use crate::save_registry::save_registry;
 use crate::serialize::{diff_graph_at, serialize_typed_graph};
 use crate::types::graph_json::GraphJson;
 use crate::types::patch::GraphPatchJson;
@@ -64,6 +65,16 @@ pub(crate) fn start_watcher<R: Runtime>(
             if !events.iter().any(is_relevant_ail_change) {
                 return;
             }
+            // Phase 18 echo suppression: when every relevant `.ail` path was
+            // recorded in the save-registry within ECHO_WINDOW, the changes
+            // we just observed are our own writes round-tripping through
+            // the file system. Skip dispatch so the optimistic UI does not
+            // re-render its own work. External edits (or stale UI saves
+            // past the window) still flow through normally.
+            if all_paths_are_echo(&events, |p| save_registry().was_recently_saved(p)) {
+                log::trace!("[watcher] suppressed echo dispatch ({} events)", events.len());
+                return;
+            }
             dispatch_cycle(&app_cb, &parse_dir_cb, generation);
         },
     )
@@ -79,6 +90,38 @@ pub(crate) fn start_watcher<R: Runtime>(
         })?;
 
     Ok(debouncer)
+}
+
+/// Returns the relevant `.ail` paths from a debounced event batch — i.e. the
+/// paths that would otherwise drive a `dispatch_cycle`. Public for testing.
+pub fn extract_relevant_ail_paths(events: &[DebouncedEvent]) -> Vec<PathBuf> {
+    events
+        .iter()
+        .filter(|ev| is_relevant_ail_change(ev))
+        .flat_map(|ev| ev.event.paths.iter().cloned())
+        .filter(|p| path_is_ail_source(p))
+        .collect()
+}
+
+/// Echo predicate over a path list. Returns `true` when the list is
+/// non-empty AND every path passes `is_recent`. Pure helper exported for
+/// unit tests so callers do not need to construct synthetic
+/// `DebouncedEvent` values.
+pub fn paths_all_recent<F>(paths: &[PathBuf], is_recent: F) -> bool
+where
+    F: Fn(&Path) -> bool,
+{
+    !paths.is_empty() && paths.iter().all(|p| is_recent(p.as_path()))
+}
+
+/// Echo predicate over a debounced batch. Composes
+/// [`extract_relevant_ail_paths`] with [`paths_all_recent`].
+pub fn all_paths_are_echo<F>(events: &[DebouncedEvent], is_recent: F) -> bool
+where
+    F: Fn(&Path) -> bool,
+{
+    let paths = extract_relevant_ail_paths(events);
+    paths_all_recent(&paths, is_recent)
 }
 
 /// Event filter: accept create / modify / remove on an `.ail` file that is

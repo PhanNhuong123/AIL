@@ -1,6 +1,8 @@
 use ail_ui_bridge::pipeline::{load_verified_from_path, read_project_name};
 use ail_ui_bridge::serialize::serialize_graph;
-use ail_ui_bridge::types::node_detail::{CounterexampleDetail, NodeDetail, VerificationDetail};
+use ail_ui_bridge::types::node_detail::{
+    CounterexampleDetail, NodeDetail, VerificationDetail, VerifyOutcome,
+};
 use ail_ui_bridge::types::status::Status;
 use std::path::{Path, PathBuf};
 
@@ -113,6 +115,7 @@ fn test_detail_has_counterexample() {
                 effect: "balance goes negative".to_string(),
                 violates: "sender_balance >= amount".to_string(),
             }),
+            outcome: Some(VerifyOutcome::Unsat),
         },
         code: None,
     };

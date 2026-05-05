@@ -15,7 +15,8 @@
 
 use std::path::{Path, PathBuf};
 
-use ail_ui_bridge::watcher::{path_is_ail_source, run_diff_cycle};
+use ail_ui_bridge::save_registry::{save_registry, SaveContext, SaveRegistry};
+use ail_ui_bridge::watcher::{path_is_ail_source, paths_all_recent, run_diff_cycle};
 
 #[path = "support/mod.rs"]
 mod support;
@@ -140,6 +141,77 @@ fn run_diff_cycle_reports_removals_against_populated_prev() {
         second.modules_removed.contains(&"ghost_module".to_string()),
         "ghost_module must appear in modules_removed"
     );
+}
+
+// ---------------------------------------------------------------------------
+// Phase 18 echo-suppression tests — paths_all_recent + save_registry wiring.
+// `DebouncedEvent` cannot be constructed without a real notify backend, so
+// the `all_paths_are_echo` extraction-side path is exercised at runtime by
+// the closure in `start_watcher`. Here we cover the recoverable predicate
+// and the registry interaction that the closure depends on.
+// ---------------------------------------------------------------------------
+
+#[test]
+fn paths_all_recent_empty_returns_false() {
+    // Empty path list must not be treated as "all echoes" — otherwise an
+    // empty event batch would suppress dispatch and starve the IDE.
+    assert!(!paths_all_recent(&[], |_| true));
+}
+
+#[test]
+fn paths_all_recent_single_recent_returns_true() {
+    let paths = vec![PathBuf::from("/x/a.ail")];
+    assert!(paths_all_recent(&paths, |_| true));
+}
+
+#[test]
+fn paths_all_recent_one_external_returns_false() {
+    let paths = vec![PathBuf::from("/x/a.ail"), PathBuf::from("/x/b.ail")];
+    // `/x/b.ail` is treated as external by the predicate.
+    assert!(!paths_all_recent(&paths, |p| p
+        .to_str()
+        .map(|s| s.ends_with("a.ail"))
+        .unwrap_or(false)));
+}
+
+#[test]
+fn paths_all_recent_all_external_returns_false() {
+    let paths = vec![PathBuf::from("/x/a.ail"), PathBuf::from("/x/b.ail")];
+    assert!(!paths_all_recent(&paths, |_| false));
+}
+
+#[test]
+fn save_registry_singleton_round_trips_recent_check() {
+    // Use a unique path so the global registry doesn't collide with other
+    // tests running in parallel. The singleton is process-wide.
+    let path = PathBuf::from("/test-only/echo-roundtrip-9b3a.ail");
+    let reg = save_registry();
+    reg.record(&path, SaveContext::ui("watcher-roundtrip"));
+    assert!(reg.was_recently_saved(&path));
+}
+
+#[test]
+fn save_registry_with_local_instance_isolates_state() {
+    // A local SaveRegistry is the right abstraction for tests that care about
+    // exact state — the singleton is shared and best avoided when possible.
+    let reg = SaveRegistry::new();
+    let p = Path::new("/iso/foo.ail");
+    assert!(!reg.was_recently_saved(p));
+    reg.record(p, SaveContext::ui("isolated"));
+    assert!(reg.was_recently_saved(p));
+}
+
+#[test]
+fn paths_all_recent_uses_registry_predicate() {
+    let reg = SaveRegistry::new();
+    reg.record("/p/saved.ail", SaveContext::ui("s"));
+    let paths = vec![PathBuf::from("/p/saved.ail")];
+    assert!(paths_all_recent(&paths, |p| reg.was_recently_saved(p)));
+    let mixed = vec![
+        PathBuf::from("/p/saved.ail"),
+        PathBuf::from("/p/external.ail"),
+    ];
+    assert!(!paths_all_recent(&mixed, |p| reg.was_recently_saved(p)));
 }
 
 #[test]

@@ -22,6 +22,13 @@ html.sb-collapsed .app-root { --sb-w: 44px; }
 
 /* ============================================================
  * Context Panel (task 16.7)
+ *
+ * CARRYOVER (v4.0): the legacy ContextPanel was removed when NodeView
+ * absorbed the side-tabbed detail surface. These classes are no longer
+ * referenced by any component and are retained as styling material for
+ * the v4.1 inline-edit surfaces. Do not remount a ContextPanel against
+ * these classes (per ide/src/styles/CLAUDE.md). Candidate for removal
+ * once v4.1 lands its own naming.
  * ============================================================ */
 
 .ctx-header {
@@ -187,24 +194,6 @@ html.sb-collapsed .app-root { --sb-w: 44px; }
   color: var(--accent);
   margin-bottom: 4px;
   font-style: italic;
-}
-
-.ctx-add-rule-btn {
-  display: inline-flex;
-  align-items: center;
-  height: 24px;
-  padding: 0 8px;
-  margin-top: 4px;
-  background: transparent;
-  border: 1px dashed var(--line-2);
-  color: var(--ink-3);
-  font-size: 11px;
-  cursor: pointer;
-  border-radius: var(--radius-sm);
-}
-.ctx-add-rule-btn:hover {
-  color: var(--accent);
-  border-color: var(--accent);
 }
 
 /* Test tab */

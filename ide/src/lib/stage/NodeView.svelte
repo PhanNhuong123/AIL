@@ -5,7 +5,6 @@
   import {
     nodeViewActiveTab,
     resetTestResultForStep,
-    HISTORY_FIXTURE,
   } from './node-view-state';
   import type { NodeTab } from './node-view-state';
   import NodeDetailCard from './NodeDetailCard.svelte';
@@ -15,8 +14,8 @@
   import NodeTabProof from './NodeTabProof.svelte';
   import NodeTabTypes from './NodeTabTypes.svelte';
   import NodeTabRules from './NodeTabRules.svelte';
-  import NodeTabTest from './NodeTabTest.svelte';
-  import NodeTabHistory from './NodeTabHistory.svelte';
+  // NodeTabTest + NodeTabHistory unmounted in v4.0 (Test stub + Alice/Bob fixture
+  // are dishonest for ship). Files retained for v4.1 wire-up.
   import { sheafConflicts } from '$lib/sheaf/sheaf-state';
 
   export let stepId = '' as string;
@@ -29,8 +28,6 @@
     { id: 'proof',   label: 'Proof'   },
     { id: 'types',   label: 'Types'   },
     { id: 'rules',   label: 'Rules'   },
-    { id: 'test',    label: 'Test'    },
-    { id: 'history', label: 'History' },
   ];
 
   // INVARIANT 16.6-B: Only reset nodeTestResult on stepId change.
@@ -96,18 +93,14 @@
         aria-labelledby="node-tab-btn-{$nodeViewActiveTab}"
         tabindex="0"
       >
-        {#if $nodeViewActiveTab === 'code'}
-          <NodeTabCode {detail} />
-        {:else if $nodeViewActiveTab === 'proof'}
-          <NodeTabProof {detail} />
+        {#if $nodeViewActiveTab === 'proof'}
+          <NodeTabProof {detail} {stepId} />
         {:else if $nodeViewActiveTab === 'types'}
           <NodeTabTypes {detail} />
         {:else if $nodeViewActiveTab === 'rules'}
           <NodeTabRules {detail} />
-        {:else if $nodeViewActiveTab === 'test'}
-          <NodeTabTest {stepId} />
         {:else}
-          <NodeTabHistory entries={HISTORY_FIXTURE} />
+          <NodeTabCode {detail} />
         {/if}
       </div>
     </div>

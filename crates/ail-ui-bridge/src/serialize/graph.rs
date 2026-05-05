@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+use std::collections::HashMap;
 
 use ail_contract::VerifiedGraph;
 use ail_graph::{compute_context_packet_for_backend, GraphBackend, NodeId, Pattern};
@@ -11,10 +12,19 @@ use crate::types::graph_json::{
     StepJson, TypeRefJson,
 };
 use crate::types::node_detail::{
-    InheritedRule, NodeDetail, ReceivesEntry, ReturnsEntry, RuleEntry, RuleSource,
-    VerificationDetail,
+    CounterexampleDetail, InheritedRule, NodeDetail, ReceivesEntry, ReturnsEntry, RuleEntry,
+    RuleSource, VerificationDetail, VerifyOutcome,
 };
 use crate::types::status::Status;
+
+/// Per-node verdict produced by Z3 verification. Used to overlay verdicts onto
+/// a typed-only `GraphJson` via [`apply_verify_outcomes`] so the frontend can
+/// render the verify pill without requiring a successful `VerifiedGraph`.
+#[derive(Debug, Clone)]
+pub struct NodeVerdict {
+    pub outcome: VerifyOutcome,
+    pub counterexample: Option<CounterexampleDetail>,
+}
 
 const DEFAULT_CLUSTER_ID: &str = "default";
 const DEFAULT_CLUSTER_COLOR: &str = "#2997ff";
@@ -368,6 +378,7 @@ pub(crate) fn build_node_detail(
             verification: VerificationDetail {
                 ok: status != Status::Fail,
                 counterexample: None,
+                outcome: None,
             },
             code: None,
         };
@@ -451,9 +462,97 @@ pub(crate) fn build_node_detail(
         verification: VerificationDetail {
             ok: status != Status::Fail,
             counterexample: None,
+            outcome: None,
         },
         code: None,
     }
+}
+
+/// Apply per-node Z3 verdicts to an already-serialized `GraphJson`.
+///
+/// Used by the verifier path to layer Z3 outcomes on top of a typed-only
+/// `GraphJson` produced by [`serialize_typed_graph`]. For each entry in
+/// `verdicts`:
+/// - The matching `NodeDetail.verification` is overwritten with the verdict's
+///   outcome, counterexample, and `ok` (`Sat` ⇒ true, others ⇒ false).
+/// - The matching node's `Status` is set to `Fail` for non-`Sat` outcomes so
+///   parent rollups (function/module/project) reflect the failure.
+/// - `graph.issues` is rebuilt from the updated detail map so the issues list
+///   carries `outcome` strings consistent with per-node verdicts.
+///
+/// Path keys in `verdicts` must match the `id` fields used in `graph.detail`,
+/// `graph.modules[].id`, `graph.modules[].functions[].id`, and
+/// `graph.modules[].functions[].steps[].id` — the same path-like IDs produced
+/// by [`crate::ids::IdMap`].
+pub fn apply_verify_outcomes(graph: &mut GraphJson, verdicts: &HashMap<String, NodeVerdict>) {
+    if verdicts.is_empty() {
+        return;
+    }
+
+    // Update per-node detail entries.
+    for (path, verdict) in verdicts {
+        if let Some(node_detail) = graph.detail.get_mut(path) {
+            let ok = matches!(verdict.outcome, VerifyOutcome::Sat);
+            node_detail.verification = VerificationDetail {
+                ok,
+                counterexample: verdict.counterexample.clone(),
+                outcome: Some(verdict.outcome),
+            };
+            if !ok {
+                node_detail.status = Status::Fail;
+            }
+        }
+    }
+
+    // Override per-node status surfaced in the structural arrays so parent
+    // rollups (function/module/project) reflect the failure.
+    for module in graph.modules.iter_mut() {
+        let mut module_failed = false;
+        for func in module.functions.iter_mut() {
+            let mut fn_failed = false;
+            if let Some(verdict) = verdicts.get(&func.id) {
+                if !matches!(verdict.outcome, VerifyOutcome::Sat) {
+                    func.status = Status::Fail;
+                    fn_failed = true;
+                }
+            }
+            if let Some(steps) = func.steps.as_mut() {
+                for step in steps.iter_mut() {
+                    if let Some(verdict) = verdicts.get(&step.id) {
+                        if !matches!(verdict.outcome, VerifyOutcome::Sat) {
+                            step.status = Status::Fail;
+                            fn_failed = true;
+                        }
+                    }
+                }
+            }
+            if fn_failed {
+                func.status = Status::Fail;
+                module_failed = true;
+            }
+        }
+        if let Some(verdict) = verdicts.get(&module.id) {
+            if !matches!(verdict.outcome, VerifyOutcome::Sat) {
+                module_failed = true;
+            }
+        }
+        if module_failed {
+            module.status = Status::Fail;
+        }
+    }
+
+    // Project-level rollup.
+    let project_failed = graph
+        .modules
+        .iter()
+        .any(|m| matches!(m.status, Status::Fail));
+    if project_failed {
+        graph.project.status = Status::Fail;
+    }
+
+    // Rebuild issues from the now-updated detail map so `IssueJson.outcome`
+    // matches the per-node verdicts.
+    graph.issues = crate::serialize::issues::collect_issues(&graph.detail);
 }
 
 /// Collect `Ed` cross-references from a node as `RelationJson` entries.
